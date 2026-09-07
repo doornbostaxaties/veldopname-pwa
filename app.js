@@ -10,7 +10,7 @@
 // CONFIG
 // ----------------------------------------------------------------------------------------------
 const CLOUD_WEBHOOK = 'https://hook.eu1.make.com/3u02rxsgeup34uq1dgqum8m694i5kgay'; // zelfde als taxatieweb-opname.user.js
-const LIJST_WEBHOOK = 'https://hook.eu1.make.com/aft999v1fte9kf1oh6i8jnqkywm372xb'; // Veldopname PWA - Taxatielijst ophalen
+const LIJST_WEBHOOK = 'https://hook.eu1.make.com/n5uu657on1wsnnnzj7ul485uqpy2u479'; // Veldopname PWA - Taxatielijst ophalen (nieuwe hook 07-09-2026 — oude had een volle wachtrij door de credit-runaway hieronder)
 const VOORONDERZOEK_WEBHOOK = 'https://hook.eu1.make.com/6z71b143w3nnerxjm7o5pqcx4gx4tr88'; // Veldopname PWA - Vooronderzoek ophalen
 // Zet de foto (OneDrive-map "Taxaties/Taxatieopname-foto's/[adres]" binnen de werkvoorraad-drive)
 // + een record in Airtable-tabel "Opname Foto's" (bestand als attachment via de tijdelijke
@@ -399,6 +399,9 @@ window.addEventListener('offline', () => { state.online = false; werkStatusbalkB
 function navigeer(route) {
   state.route = route;
   render();
+  // Alleen bij binnenkomst op de lijst zelf verversen, NIET vanuit renderLijstScherm() (zie de
+  // uitleg bij laadTaxatielijst() hieronder over de credit-runaway die dat veroorzaakte).
+  if (route.naam === 'lijst') laadTaxatielijst();
 }
 window.addEventListener('hashchange', () => {
   const m = location.hash.match(/^#\/opname\/([^/]+)\/([a-z]+)$/);
@@ -496,7 +499,16 @@ function werkStatusbalkBij() {
 // ----------------------------------------------------------------------------------------------
 // SCHERM: Taxatielijst
 // ----------------------------------------------------------------------------------------------
+// LET OP (credit-runaway gevonden 07-09-2026): renderLijstScherm() riep dit eerder onvoorwaardelijk
+// bij ELKE render aan, en deze functie riep aan het eind zélf weer render() aan zodra de fetch
+// klaar was — dat vormde een oneindige render→fetch→render-lus zolang het lijstscherm open stond,
+// die binnen enkele uren de hele maand-Make-quota opsoupeerde. Nu alleen nog aangeroepen vanuit
+// navigeer()/init() (bij binnenkomst op de lijst), nooit meer vanuit een render-functie zelf, plus
+// een expliciete bezig-vlag als laatste vangnet tegen overlappende aanroepen.
+let taxatielijstOphalenBezig = false;
 async function laadTaxatielijst() {
+  if (taxatielijstOphalenBezig) return;
+  taxatielijstOphalenBezig = true;
   try {
     const resp = await fetch(LIJST_WEBHOOK, { method: 'POST' });
     if (!resp.ok) throw new Error('lijst ophalen mislukt');
@@ -512,7 +524,7 @@ async function laadTaxatielijst() {
     // geen verbinding: laat zien wat we nog in IndexedDB hebben staan (lokaal geopende taxaties)
     const lokaal = await VeldopnameDB.alleTaxaties();
     state.taxatielijst = lokaal.map(t => ({ rapport_id: t.rapport_id, adres: t.adres, plaats: t.plaats, afspraak_datumtijd: t.afspraak_datumtijd }));
-  }
+  } finally { taxatielijstOphalenBezig = false; }
   if (state.route.naam === 'lijst') render();
 }
 
@@ -577,7 +589,6 @@ function renderLijstScherm() {
       ));
     });
   }
-  laadTaxatielijst();
   return wrap;
 }
 
@@ -1266,7 +1277,7 @@ function renderMacrosTab() {
   await laadMacros();
   const m = location.hash.match(/^#\/opname\/([^/]+)\/([a-z]+)$/);
   if (m) laadOpname(decodeURIComponent(m[1]), m[2]);
-  else render();
+  else { render(); laadTaxatielijst(); }
   verstuurFotoWachtrij(); // eventuele foto's die vorige keer nog niet weg konden, alsnog proberen
 
   if ('serviceWorker' in navigator) {
