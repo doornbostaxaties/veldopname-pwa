@@ -126,10 +126,22 @@ h1, h2, h3, p { margin: 0; }
 .knop {
   font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: var(--navy);
   border: none; border-radius: 10px; padding: 11px 14px; cursor: pointer; text-align: center;
+  display: inline-block; text-decoration: none; box-sizing: border-box;
 }
 .knop.spook { color: var(--navy); background: var(--navy-100); }
 .knop.klein { padding: 7px 10px; font-size: 12.5px; border-radius: 9px; }
 .knop:disabled { opacity: .5; }
+
+/* --- Onderzoek --- */
+.onderzoek-koprij { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.funda-knop { background: #00a651; width: 100%; margin-bottom: 10px; }
+.onderzoek-rij {
+  display: flex; justify-content: space-between; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid var(--divider); font-size: 13px;
+}
+.onderzoek-rij:last-child { border-bottom: none; }
+.onderzoek-label { color: var(--text-dim); }
+.onderzoek-waarde { font-weight: 600; text-align: right; }
 
 /* --- Indeling --- */
 .ruimte-kaart {
@@ -219,7 +231,8 @@ h1, h2, h3, p { margin: 0; }
 /* Eigen suggestie-dropdown (koppelDatalist) — vervangt native <datalist>, die op iOS Safari niet
    scrolt. position:fixed want links/breedte worden per veld uitgerekend t.o.v. de viewport. */
 .eigen-suggesties {
-  position: fixed; z-index: 40; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  position: fixed; z-index: 40; overflow-y: scroll; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; touch-action: pan-y;
   background: var(--surface); border: 1px solid var(--divider); border-radius: 10px;
   box-shadow: 0 8px 24px rgba(4,42,67,.18);
 }

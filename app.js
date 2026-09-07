@@ -11,6 +11,7 @@
 // ----------------------------------------------------------------------------------------------
 const CLOUD_WEBHOOK = 'https://hook.eu1.make.com/3u02rxsgeup34uq1dgqum8m694i5kgay'; // zelfde als taxatieweb-opname.user.js
 const LIJST_WEBHOOK = 'https://hook.eu1.make.com/aft999v1fte9kf1oh6i8jnqkywm372xb'; // Veldopname PWA - Taxatielijst ophalen
+const VOORONDERZOEK_WEBHOOK = 'https://hook.eu1.make.com/6z71b143w3nnerxjm7o5pqcx4gx4tr88'; // Veldopname PWA - Vooronderzoek ophalen
 // TODO: nog te bouwen Make-scenario (foto's opslaan in Airtable-tabel "Opname Foto's" incl.
 // bestandsupload) — tot die tijd blijven foto's lokaal + in de wachtrij staan (nooit verloren,
 // wel nog niet naar de cloud/Q/R).
@@ -167,6 +168,8 @@ const state = {
   taxatie: null, // huidig geladen taxatie (zelfde vorm als leegTaxatie())
   fotos: [], // foto's van de huidige taxatie (uit IndexedDB), inclusief nog-niet-verzonden
   taxatielijst: [], // cache voor het homescherm
+  vooronderzoekLijst: null, // null = nog niet opgehaald; daarna array records uit Airtable-tabel "Vooronderzoek"
+  vooronderzoekLaadFout: false,
   online: navigator.onLine,
   wachtrijAantal: 0,
   macros: standaardMacros(), // wordt bij init() overschreven met de bewaarde versie, indien aanwezig
@@ -197,6 +200,15 @@ function verbergEigenSuggesties() {
   eigenSuggestiesLijst.style.display = 'none';
   actieveSuggestieInput = null;
 }
+
+// Sluit de dropdown zodra er ELDERS gescrold wordt (bv. de ruimtes-lijst in Indeling) — anders blijft
+// hij op zijn oude, vastgeklikte positie hangen terwijl het invoerveld er onderdoor wegscrolt, wat
+// aanvoelt als "scrollen werkt niet lekker". 'scroll' bubbelt niet naar window, maar met
+// capture:true vangt dit elke scroll op elk scrollbaar element in de pagina op — behalve op de
+// dropdown zelf, anders zou intern scrollen 'm meteen weer sluiten.
+window.addEventListener('scroll', (e) => {
+  if (actieveSuggestieInput && e.target !== eigenSuggestiesLijst) verbergEigenSuggesties();
+}, true);
 
 // macroSleutel: één sleutel ('ruimtes'), meerdere tegelijk (['sanitair','toevoegingen']), of een
 // FUNCTIE die dat teruggeeft (nodig zodra de relevante lijst kan wijzigen ná het bouwen van het
@@ -504,6 +516,34 @@ async function laadTaxatielijst() {
   if (state.route.naam === 'lijst') render();
 }
 
+// ----------------------------------------------------------------------------------------------
+// VOORONDERZOEK — leest de Airtable-tabel "Vooronderzoek" (gevuld door de Research-agent) uit, zodat
+// Arno tijdens de opname bestemming/bouwjaar/WOZ/kadaster/Funda-link paraat heeft zonder over te
+// schakelen naar een ander scherm. Eén keer per sessie de hele (kleine) tabel opgehaald en lokaal
+// gefilterd op adres — zelfde eenvoudige aanpak als laadTaxatielijst() hierboven, geen aparte
+// zoek-aanroep per taxatie nodig.
+async function laadVooronderzoekLijst() {
+  state.vooronderzoekLaadFout = false;
+  try {
+    const resp = await fetch(VOORONDERZOEK_WEBHOOK, { method: 'POST' });
+    if (!resp.ok) throw new Error('vooronderzoek ophalen mislukt');
+    const json = await resp.json();
+    state.vooronderzoekLijst = json.records || [];
+  } catch (e) {
+    state.vooronderzoekLijst = [];
+    state.vooronderzoekLaadFout = true;
+  }
+  if (state.route.naam === 'opname' && state.route.tab === 'onderzoek') render();
+}
+
+// Match op adres_volledig ("straat, postcode plaats") dat begint met de straatnaam+huisnummer uit de
+// taxatie — case-insensitive, whitespace genegeerd.
+function vindVooronderzoek(adres) {
+  if (!adres || !state.vooronderzoekLijst) return null;
+  const zoek = adres.trim().toLowerCase();
+  return state.vooronderzoekLijst.find(r => (r.fields.adres_volledig || '').trim().toLowerCase().startsWith(zoek)) || null;
+}
+
 function formatAfspraak(iso) {
   if (!iso) return 'Nog geen afspraak bekend';
   const d = new Date(iso);
@@ -547,6 +587,7 @@ function renderLijstScherm() {
 const TABS = [
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
+  { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'macros', icon: '⚙️', label: "Macro's" },
@@ -564,6 +605,7 @@ function renderOpnameScherm() {
   const inhoud = el('div', { class: 'inhoud' });
   if (state.route.tab === 'meting') inhoud.appendChild(renderMetingTab());
   else if (state.route.tab === 'indeling') inhoud.appendChild(renderIndelingTab());
+  else if (state.route.tab === 'onderzoek') inhoud.appendChild(renderOnderzoekTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
@@ -1037,6 +1079,77 @@ async function verstuurFotoWachtrij() {
 }
 
 // --- Aantekeningen ---
+// --- Onderzoek (vooronderzoeksdata + Funda-link) ---
+let vooronderzoekOphalenBezig = false;
+const ONDERZOEK_VELDEN = [
+  { veld: 'bestemming', label: 'Bestemming' },
+  { veld: 'bouwjaar', label: 'Bouwjaar' },
+  { veld: 'gebruiksoppervlakte_m2', label: 'Gebruiksoppervlakte', suffix: ' m²' },
+  { veld: 'perceeloppervlakte_m2', label: 'Perceeloppervlakte', suffix: ' m²' },
+  { veld: 'kadastrale_aanduiding', label: 'Kadastrale aanduiding' },
+  { veld: 'wijk', label: 'Wijk' },
+  { veld: 'buurt', label: 'Buurt' },
+  { veld: 'gemeente', label: 'Gemeente' },
+  { veld: 'woz_waarde', label: 'WOZ-waarde', format: (n) => '€ ' + Number(n).toLocaleString('nl-NL') },
+  { veld: 'woz_peildatum', label: 'WOZ-peildatum' },
+  { veld: 'cv_ketel_eigendom', label: 'C.V.-ketel' },
+  { veld: 'cv_ketel_bouwjaar', label: 'C.V.-ketel bouwjaar' },
+  { veld: 'zonnepanelen_aanwezig', label: 'Zonnepanelen', format: (v) => v ? 'Ja' : 'Nee' },
+];
+
+function renderOnderzoekTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+  const kopRij = el('div', { class: 'onderzoek-koprij' },
+    el('p', { class: 'macro-uitleg', style: 'margin:0;' }, 'Vooronderzoeksdata van de Research-agent.'),
+    el('button', {
+      class: 'knop spook klein', onclick: () => { if (!vooronderzoekOphalenBezig) { vooronderzoekOphalenBezig = true; laadVooronderzoekLijst().then(() => { vooronderzoekOphalenBezig = false; }); render(); } },
+    }, '⟳ Vernieuwen'),
+  );
+  wrap.appendChild(kopRij);
+
+  if (state.vooronderzoekLijst === null) {
+    if (!vooronderzoekOphalenBezig) { vooronderzoekOphalenBezig = true; laadVooronderzoekLijst().then(() => { vooronderzoekOphalenBezig = false; }); }
+    wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Laden…'));
+    return wrap;
+  }
+  if (state.vooronderzoekLaadFout) {
+    wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Kon vooronderzoeksdata niet ophalen (geen verbinding?). Probeer het opnieuw met "Vernieuwen".'));
+    return wrap;
+  }
+
+  const record = vindVooronderzoek(t.adres);
+  if (!record) {
+    wrap.appendChild(el('p', { class: 'macro-uitleg' }, `Nog geen vooronderzoek gevonden voor "${t.adres || '(adres onbekend)'}". Nog niet compleet, of pas net gestart door de Research-agent? Probeer "Vernieuwen".`));
+    return wrap;
+  }
+  const f = record.fields;
+
+  if (f.funda_url) {
+    wrap.appendChild(el('a', { href: f.funda_url, target: '_blank', rel: 'noopener', class: 'knop funda-knop' }, '🏠 Bekijk op Funda ↗'));
+  } else {
+    wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Geen Funda-link bekend (niet gevonden, of de woning stond niet online).'));
+  }
+
+  if (f.status_onderzoek) {
+    const ok = f.status_onderzoek === 'COMPLEET';
+    wrap.appendChild(el('span', { class: 'sync-pil ' + (ok ? 'ok' : 'wachtend') }, f.status_onderzoek));
+  }
+
+  const kaart = el('div', { class: 'macro-groep' });
+  ONDERZOEK_VELDEN.forEach(({ veld, label, suffix, format }) => {
+    const waarde = f[veld];
+    if (waarde === undefined || waarde === null || waarde === '') return;
+    const tekst = format ? format(waarde) : (waarde + (suffix || ''));
+    kaart.appendChild(el('div', { class: 'onderzoek-rij' },
+      el('span', { class: 'onderzoek-label' }, label),
+      el('span', { class: 'onderzoek-waarde' }, String(tekst)),
+    ));
+  });
+  wrap.appendChild(kaart);
+  return wrap;
+}
+
 function renderAantekeningenTab() {
   const t = state.taxatie;
   const veld = el('textarea', {
