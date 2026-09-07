@@ -86,6 +86,10 @@ const VeldopnameDB = (() => {
       Object.assign(bestaand, wijzigingen);
       return wrap(s.put(bestaand));
     },
+    async haalFoto(id) {
+      const s = await store('fotos', 'readonly');
+      return wrap(s.get(id));
+    },
     async fotosVoorTaxatie(rapportId) {
       const s = await store('fotos', 'readonly');
       const index = s.index('rapport_id');

@@ -12,10 +12,10 @@
 const CLOUD_WEBHOOK = 'https://hook.eu1.make.com/3u02rxsgeup34uq1dgqum8m694i5kgay'; // zelfde als taxatieweb-opname.user.js
 const LIJST_WEBHOOK = 'https://hook.eu1.make.com/aft999v1fte9kf1oh6i8jnqkywm372xb'; // Veldopname PWA - Taxatielijst ophalen
 const VOORONDERZOEK_WEBHOOK = 'https://hook.eu1.make.com/6z71b143w3nnerxjm7o5pqcx4gx4tr88'; // Veldopname PWA - Vooronderzoek ophalen
-// TODO: nog te bouwen Make-scenario (foto's opslaan in Airtable-tabel "Opname Foto's" incl.
-// bestandsupload) — tot die tijd blijven foto's lokaal + in de wachtrij staan (nooit verloren,
-// wel nog niet naar de cloud/Q/R).
-const FOTO_WEBHOOK = null;
+// Zet de foto (OneDrive-map "Taxaties/Taxatieopname-foto's/[adres]" binnen de werkvoorraad-drive)
+// + een record in Airtable-tabel "Opname Foto's" (bestand als attachment via de tijdelijke
+// pre-authenticated downloadUrl uit de OneDrive-upload — geen permanente publieke deellink nodig).
+const FOTO_WEBHOOK = 'https://hook.eu1.make.com/w9oljmdhr4l9s7atf8kf38net3e7dhod'; // Veldopname PWA - Foto upload
 
 // Zelfde 19 categorieën als QR_CATEGORIEEN in taxatieweb-opname.user.js (v0.54.0) — dezelfde lijst
 // als Taxatieweb's eigen Q/R-categorieselectie, plus "Anders" als vangnet.
@@ -390,7 +390,7 @@ async function verwerkWachtrij() {
   werkStatusbalkBij();
 }
 
-window.addEventListener('online', () => { state.online = true; verwerkWachtrij(); werkStatusbalkBij(); });
+window.addEventListener('online', () => { state.online = true; verwerkWachtrij(); verstuurFotoWachtrij(); werkStatusbalkBij(); });
 window.addEventListener('offline', () => { state.online = false; werkStatusbalkBij(); });
 
 // ----------------------------------------------------------------------------------------------
@@ -1053,12 +1053,30 @@ function openLightbox(foto) {
   document.body.appendChild(overlay);
 }
 
+// Verkleint een foto vóór opslag/verzending (max. lange zijde 1600px, JPEG kwaliteit 0.82) — een
+// telefoonfoto is vaak 10+ MB, wat het IndexedDB-gebruik onnodig opblaast en de webhook-upload traag/
+// foutgevoelig maakt op locatie met wisselend bereik. Valt terug op het origineel bij problemen (bv.
+// een HEIC-variant die createImageBitmap niet aankan).
+async function verkleinFoto(file, maxAfmeting = 1600, kwaliteit = 0.82) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const schaal = Math.min(1, maxAfmeting / Math.max(bitmap.width, bitmap.height));
+    if (schaal >= 1) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * schaal);
+    canvas.height = Math.round(bitmap.height * schaal);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const verkleind = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', kwaliteit));
+    return verkleind || file;
+  } catch (e) { return file; }
+}
+
 async function verwerkGekozenFoto(file, ruimteNaam) {
   if (!file) return;
   const categorie = ruimteNaam ? (bepaalQRCategorieVoorRuimte(ruimteNaam) || 'Anders') : 'Anders';
   const foto = {
     rapport_id: state.taxatie.rapport_id,
-    blob: file,
+    blob: await verkleinFoto(file),
     ruimte_label: ruimteNaam || null,
     categorie,
     gemaaktOp: new Date().toISOString(),
@@ -1073,9 +1091,53 @@ async function verwerkGekozenFoto(file, ruimteNaam) {
   verstuurFotoWachtrij();
 }
 
+// Blob → kale base64 (zonder de "data:image/jpeg;base64," voorloop) voor de JSON-webhook-body.
+function fotoNaarBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const lezer = new FileReader();
+    lezer.onload = () => resolve(String(lezer.result).split(',')[1] || '');
+    lezer.onerror = () => reject(lezer.error);
+    lezer.readAsDataURL(blob);
+  });
+}
+
+// Namen mogen geen \ / : * ? " < > | bevatten in een OneDrive/SharePoint-pad of -bestandsnaam.
+function veiligVoorPad(tekst) {
+  return String(tekst || '').replace(/[\\/:*?"<>|]/g, '-').trim();
+}
+
+let fotoWachtrijBezig = false;
 async function verstuurFotoWachtrij() {
-  if (!FOTO_WEBHOOK || !state.online) return; // nog geen Make-scenario gebouwd — blijft lokaal/wachtend staan
-  // (volgt zodra de foto-upload-scenario bestaat: item per item versturen, status bijwerken naar 'verzonden')
+  if (!FOTO_WEBHOOK || !state.online || fotoWachtrijBezig) return;
+  fotoWachtrijBezig = true;
+  try {
+    const items = (await VeldopnameDB.alleWachtrijItems()).filter((i) => i.type === 'foto');
+    let watGewijzigd = false;
+    for (const item of items) {
+      try {
+        const foto = await VeldopnameDB.haalFoto(item.fotoId);
+        if (!foto || foto.status === 'verzonden') { await VeldopnameDB.verwijderWachtrijItem(item.id); continue; }
+        const taxatie = await VeldopnameDB.haalTaxatie(foto.rapport_id);
+        const adres = veiligVoorPad((taxatie && taxatie.adres) || foto.rapport_id);
+        const bestandNaam = `${veiligVoorPad(foto.categorie)}-${foto.id}-${Date.now()}.jpg`;
+        const payload = {
+          rapport_id: foto.rapport_id, adres, ruimte_label: foto.ruimte_label || '',
+          categorie: foto.categorie, opgenomen_op: foto.gemaaktOp,
+          bestand_naam: bestandNaam, bestand_base64: await fotoNaarBase64(foto.blob),
+        };
+        const resp = await fetch(FOTO_WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error('upload mislukt (' + resp.status + ')');
+        await VeldopnameDB.werkFotoBij(foto.id, { status: 'verzonden' });
+        await VeldopnameDB.verwijderWachtrijItem(item.id);
+        const inState = state.fotos.find((f) => f.id === foto.id);
+        if (inState) inState.status = 'verzonden';
+        watGewijzigd = true;
+      } catch (e) { /* blijft in de wachtrij staan, volgende poging bij eerstvolgende online-event/foto */ }
+    }
+    if (watGewijzigd && state.route.naam === 'opname' && state.route.tab === 'fotos') render();
+  } finally { fotoWachtrijBezig = false; }
 }
 
 // --- Aantekeningen ---
@@ -1205,6 +1267,7 @@ function renderMacrosTab() {
   const m = location.hash.match(/^#\/opname\/([^/]+)\/([a-z]+)$/);
   if (m) laadOpname(decodeURIComponent(m[1]), m[2]);
   else render();
+  verstuurFotoWachtrij(); // eventuele foto's die vorige keer nog niet weg konden, alsnog proberen
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
