@@ -83,11 +83,12 @@ function woonlaagTotaal(woonlaag) {
 }
 
 // ----------------------------------------------------------------------------------------------
-// MACRO'S — Arno's eigen, over alle taxaties heen herbruikbare keuzelijsten. Bewust GLOBAAL
-// (niet per taxatie) opgeslagen, zelfde opzet als taxatieweb-opname.user.js' standaardMacros() —
-// hier bewust beperkt tot de drie lijsten die in déze app ook echt bij het toevoegen van
-// elementen gebruikt worden (verdiepingen/ruimtes/toevoegingen bij Indeling, ruimteblokken bij
-// Meting). Sanitair/keuken-subcategorieën van het origineel vallen in v1 onder "toevoegingen".
+// MACRO'S — Arno's eigen, over alle taxaties heen herbruikbare keuzelijsten. Bewust GLOBAAL (niet
+// per taxatie) opgeslagen, zelfde opzet als taxatieweb-opname.user.js' standaardMacros(). Sinds
+// v1.1: toevoegingen/sanitair/keuken zijn drie APARTE lijsten (was eerst één samengevoegde) — Arno:
+// "keuken = keuze keukenapparatuur en lijst met andere zaken, badkamer/toilet = sanitair + 2e
+// lijst". Welke lijsten een ruimte te zien krijgt, bepaalt ruimteSuggestieSleutels() hieronder aan
+// de hand van de ruimtenaam.
 function standaardMacros() {
   return {
     verdiepingen: [
@@ -104,9 +105,7 @@ function standaardMacros() {
       'Basis', 'Aanbouw', 'Erker', 'Bijkeuken', 'Zijbouw', 'Kelder', 'Garage', 'Berging', 'Carport',
       'Veranda', 'Dakkapel', 'Balkon', 'Dakterras',
     ],
-    // 1-op-1 overgenomen uit taxatieweb-opname.user.js' standaardMacros() (toevoegingen + sanitair +
-    // keuken samengevoegd tot één lijst, want dit v1-veld is nog niet in drie aparte macro-groepen
-    // opgesplitst — zie MACRO_GROEPEN hieronder).
+    // Algemene toevoegingen — bij élke ruimte gesuggereerd (kasten, ketels, deuren, airco e.d.).
     toevoegingen: [
       'meterkast', 'vaste trap naar de eerste verdieping', 'vaste trap naar de zolderverdieping',
       'HR combi-ketel', 'C.V.-ketel', 'boiler', 'airconditioning', 'trapkast', 'kelderkast',
@@ -121,17 +120,43 @@ function standaardMacros() {
       'rolluiken', 'screens', 'sauna', 'schouw', 'serre', 'uitstortgootsteen', 'verlaagd plafond',
       'vide', 'videofoon', 'vloerverwarming', 'dakramen', 'taatsdeuren', 'tuindeur', 'tuindeuren',
       'bergruimte', 'bergvliering', 'bergzolder',
-      // sanitair
+    ],
+    // Alleen bij badkamer/toiletruimte gesuggereerd (naast de algemene toevoegingen).
+    sanitair: [
       'douche', 'douchecabine', 'inloopdouche', 'ligbad', 'douche/ligbad', 'hoekbad', 'whirlpool',
       'jacuzzi', 'staand toilet', 'hangend toilet', 'urinoir', 'fonteintje', 'wastafel',
       'dubbele wastafel', 'wastafelmeubel', 'dubbel wastafelmeubel', 'designradiator',
       'handdoekradiator',
-      // keuken
+    ],
+    // Alleen bij de keuken gesuggereerd (naast de algemene toevoegingen).
+    keuken: [
       'gas 4-pits kookplaat', 'gas 5-pits kookplaat', 'keramische kookplaat', 'inductiekookplaat',
       'oven', 'magnetron', 'combi-oven', 'combi-magnetron', 'stoomoven', 'koelkast', 'vriezer',
       'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker',
     ],
   };
+}
+
+// Bepaalt welke macro-lijst(en) een ruimte als toevoeging-suggesties krijgt, op basis van de
+// ruimtenaam — Arno: "keuken = keukenapparatuur en lijst met andere zaken, badkamer/toilet =
+// sanitair + 2e lijst". Substring-match op de naam (niet exact), zodat ook "2e Badkamer" of
+// "Keuken/bijkeuken" meetellen. Algemene "toevoegingen" staat er bij elke ruimte altijd bij.
+function ruimteSuggestieSleutels(ruimteNaam) {
+  const naam = (ruimteNaam || '').toLowerCase();
+  const sleutels = ['toevoegingen'];
+  if (naam.includes('keuken')) sleutels.unshift('keuken');
+  if (naam.includes('badkamer') || naam.includes('toilet') || naam.includes('douche')) sleutels.unshift('sanitair');
+  return sleutels;
+}
+
+// Vult bewaarde macro's aan met sanitair/keuken als die nog ontbreken — data die vóór v1.1 al eens
+// bewaard is (bewaarMacros() sloeg toen nog maar 4 lijsten op) zou anders zonder deze twee komen te
+// zitten i.p.v. terug te vallen op de standaardlijst.
+function metNieuweMacroCategorieen(m) {
+  const standaard = standaardMacros();
+  if (!Array.isArray(m.sanitair)) m.sanitair = standaard.sanitair;
+  if (!Array.isArray(m.keuken)) m.keuken = standaard.keuken;
+  return m;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -150,7 +175,7 @@ const state = {
 
 async function laadMacros() {
   const bewaard = await VeldopnameDB.haalMacros();
-  state.macros = bewaard || standaardMacros();
+  state.macros = bewaard ? metNieuweMacroCategorieen(bewaard) : standaardMacros();
 }
 function bewaarMacros() {
   VeldopnameDB.bewaarMacros(state.macros);
@@ -173,12 +198,19 @@ function verbergEigenSuggesties() {
   actieveSuggestieInput = null;
 }
 
-// uitgeslotenFn: optionele functie die de al-gekozen waarden teruggeeft, om die uit de suggesties te
-// filteren (alleen toevoegingen: eenmaal gekozen "inloopdouche" heeft binnen dezelfde ruimte geen zin
-// om nogmaals te kiezen). Verdiepingen/ruimtes/ruimteblokken blijven ongefilterd — dezelfde naam mag
-// daar wél vaker voorkomen (twee ruimtes die allebei "Slaapkamer" heten).
+// macroSleutel: één sleutel ('ruimtes') of meerdere tegelijk (['sanitair','toevoegingen']) — bv. de
+// toevoeging-suggesties bij een badkamer combineren de sanitair-lijst met de algemene toevoegingen
+// (zie ruimteSuggestieSleutels()) — of een FUNCTIE die dat teruggeeft, voor het toevoeging-veld:
+// welke lijsten relevant zijn hangt af van de ruimtenaam, die kan wijzigen ná het bouwen van de
+// kaart (typen in het naam-veld rerendert de kaart niet meteen). uitgeslotenFn: optionele functie
+// die de al-gekozen waarden teruggeeft, om die uit de suggesties te filteren (alleen toevoegingen:
+// eenmaal gekozen "inloopdouche" heeft binnen dezelfde ruimte geen zin om nogmaals te kiezen).
+// Verdiepingen/ruimtes/ruimteblokken blijven ongefilterd — dezelfde naam mag daar wél vaker
+// voorkomen (twee ruimtes die allebei "Slaapkamer" heten).
 function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
-  let opties = state.macros[macroSleutel] || [];
+  const opgelost = typeof macroSleutel === 'function' ? macroSleutel() : macroSleutel;
+  const sleutels = Array.isArray(opgelost) ? opgelost : [opgelost];
+  let opties = [...new Set(sleutels.flatMap(s => state.macros[s] || []))];
   if (uitgeslotenFn) {
     const uitgesloten = uitgeslotenFn().map(x => x.toLowerCase());
     opties = opties.filter(o => !uitgesloten.includes(o.toLowerCase()));
@@ -294,7 +326,6 @@ async function cloudOpslaan(taxatie) {
   const payload = {
     actie: 'opslaan',
     rapport_id: taxatie.rapport_id,
-    adres: taxatie.adres, straat: taxatie.adres, postcode: taxatie.postcode, plaats: taxatie.plaats,
     wonen_totaal_m2: totalen.wonen, overig_inpandig_totaal_m2: totalen.overig,
     buitenruimte_totaal_m2: totalen.buiten, externe_bergruimte_totaal_m2: totalen.extern,
     aantal_woonlagen: totalen.aantalWoonlagen,
@@ -302,6 +333,15 @@ async function cloudOpslaan(taxatie) {
     data: JSON.stringify(taxatie.data),
     vergelijker_data: '{}',
   };
+  // adres/postcode/plaats alleen meesturen als we ze lokaal ECHT kennen — nooit een lege waarde
+  // sturen die het bestaande veld in Airtable zou overschrijven. Zonder deze guard overschreef een
+  // taxatie zonder lokale kopie (leegTaxatie(), bv. bij een ververste pagina midden in een opname) de
+  // eerstvolgende auto-save het bestaande adres met niets (gebeurde 07-09-2026 met "Grote
+  // Bavenkelsweg 27" tijdens het testen). laadOpname() vult adres/plaats inmiddels al aan vanuit de
+  // taxatielijst-cache, maar dit is de laatste zekerheid.
+  if (taxatie.adres) { payload.adres = taxatie.adres; payload.straat = taxatie.adres; }
+  if (taxatie.postcode) payload.postcode = taxatie.postcode;
+  if (taxatie.plaats) payload.plaats = taxatie.plaats;
   const resp = await fetch(CLOUD_WEBHOOK, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
@@ -359,7 +399,21 @@ window.addEventListener('hashchange', () => {
 async function laadOpname(rapportId, tab) {
   render(); // toon meteen laadscherm
   let lokaal = await VeldopnameDB.haalTaxatie(rapportId);
-  if (!lokaal) lokaal = leegTaxatie(rapportId);
+  if (!lokaal) {
+    lokaal = leegTaxatie(rapportId);
+    // Adres/plaats/afspraak vullen vanuit de al opgehaalde taxatielijst — anders blijft dit een
+    // helemaal lege taxatie (geen lokale kopie bestond nog, bv. eerste keer openen op dit toestel,
+    // her-install, of een ververste pagina middenin een opname op iOS Safari) en zou de eerstvolgende
+    // auto-save het bestaande adres in Airtable overschrijven met een LEGE waarde — precies wat er op
+    // 07-09-2026 gebeurde met het testrapport "Grote Bavenkelsweg 27" tijdens het testen van deze app.
+    if (state.taxatielijst.length === 0) await laadTaxatielijst();
+    const uitLijst = state.taxatielijst.find(t => t.rapport_id === rapportId);
+    if (uitLijst) {
+      lokaal.adres = uitLijst.adres || '';
+      lokaal.plaats = uitLijst.plaats || '';
+      lokaal.afspraak_datumtijd = uitLijst.afspraak_datumtijd || null;
+    }
+  }
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -809,7 +863,7 @@ function renderRuimteKaart(ruimte, verwijder) {
   });
   kaart.appendChild(chipRij);
   const invoer = el('input', { placeholder: 'Toevoeging (bv. "meterkast")' });
-  koppelDatalist(invoer, 'toevoegingen', () => ruimte.toevoegingen || []);
+  koppelDatalist(invoer, () => ruimteSuggestieSleutels(ruimte.naam), () => ruimte.toevoegingen || []);
   const bevestigToevoeging = () => {
     if (!invoer.value.trim()) return;
     if (!Array.isArray(ruimte.toevoegingen)) ruimte.toevoegingen = [];
@@ -979,7 +1033,9 @@ const MACRO_GROEPEN = [
   { sleutel: 'verdiepingen', titel: 'Verdiepingen', uitleg: 'Suggesties bij de naam van een woonlaag (Indeling).' },
   { sleutel: 'ruimtes', titel: 'Ruimtes', uitleg: 'Suggesties bij de naam van een ruimte (Indeling).' },
   { sleutel: 'ruimteblokken', titel: 'Ruimteblokken', uitleg: 'Suggesties bij de naam van een meetblok (Meting).' },
-  { sleutel: 'toevoegingen', titel: 'Toevoegingen', uitleg: 'Suggesties bij het toevoegen van een element aan een ruimte (Indeling).' },
+  { sleutel: 'toevoegingen', titel: 'Toevoegingen (algemeen)', uitleg: 'Suggesties bij het toevoegen van een element — bij élke ruimte, naast de lijst hieronder indien van toepassing.' },
+  { sleutel: 'sanitair', titel: 'Sanitair', uitleg: 'Extra suggesties bij een ruimte met "badkamer", "toilet" of "douche" in de naam.' },
+  { sleutel: 'keuken', titel: 'Keuken', uitleg: 'Extra suggesties bij een ruimte met "keuken" in de naam.' },
 ];
 
 function renderMacrosTab() {
