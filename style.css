@@ -1,0 +1,206 @@
+/* Veldopname — huisstijl Doornbos & Hemmink Taxaties (navy/goud, Poppins).
+   Zelfde tokens als taxatieweb-restyle.user.js, definitief design volgt later. */
+
+:root {
+  --bg: #eef1f3;
+  --surface: #ffffff;
+  --surface-2: #f4f6f7;
+  --surface-3: #e9ecee;
+  --text: #14181b;
+  --text-dim: #5c666d;
+  --text-faint: #8b959b;
+  --divider: #dde2e5;
+  --navy: #042a43;
+  --navy-600: #06395c;
+  --navy-100: #e6ecf0;
+  --goud: #ecb006;
+  --goud-700: #8a6c00;
+  --goud-100: #fdf0cf;
+  --ok: #1f7a45;
+  --ok-bg: #e3f4ea;
+  --pending: #b45309;
+  --pending-bg: #fdf1de;
+  --danger: #b3261e;
+  --danger-bg: #fbe9e7;
+  --font: "Poppins", system-ui, -apple-system, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+button, input, select, textarea { font-family: inherit; }
+h1, h2, h3, p { margin: 0; }
+
+#app { display: flex; flex-direction: column; height: 100dvh; }
+
+/* --- statusbalk (boven) --- */
+.statusbalk {
+  background: var(--navy);
+  color: #fff;
+  padding: calc(10px + var(--safe-top)) 14px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.statusbalk .terug {
+  background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px 4px 0;
+}
+.statusbalk h1 { font-size: 15px; font-weight: 700; flex: 1; }
+.statusbalk h1 .letter { color: var(--goud); }
+.sync-pil {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.12); white-space: nowrap;
+}
+.sync-pil.ok { background: rgba(63,188,124,.22); color: #baf3d3; }
+.sync-pil.wachtend { background: rgba(236,176,6,.22); color: var(--goud); }
+.sync-pil.offline { background: rgba(226,104,95,.22); color: #ffb3ac; }
+
+/* --- content --- */
+.inhoud { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; padding-bottom: 24px; }
+.inhoud.geen-padding { padding: 0; }
+
+/* --- tabbalk (onder, in een opname) --- */
+.tabbalk {
+  display: flex; border-top: 1px solid var(--divider); background: var(--surface); flex-shrink: 0;
+  padding-bottom: var(--safe-bottom);
+}
+.tabbalk button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 0 8px; border: none; background: none; font-size: 10.5px; font-weight: 600;
+  color: var(--text-faint); cursor: pointer;
+}
+.tabbalk button .icon { font-size: 19px; }
+.tabbalk button.actief { color: var(--navy); }
+.badge-stip {
+  position: relative;
+}
+.badge-stip::after {
+  content: ""; position: absolute; top: -2px; right: -6px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--pending);
+}
+
+/* --- taxatielijst --- */
+.taxatie-kaart {
+  background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; cursor: pointer;
+}
+.taxatie-kaart .adres { font-weight: 600; font-size: 14.5px; }
+.taxatie-kaart .plaats { font-size: 12.5px; color: var(--text-dim); }
+.taxatie-kaart .meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.taxatie-kaart .afspraak { font-size: 12.5px; font-weight: 600; color: var(--navy); }
+.lege-lijst { text-align: center; color: var(--text-dim); padding: 40px 20px; font-size: 13.5px; }
+
+.section-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint); margin: 4px 0 8px;
+}
+
+/* --- Meting --- */
+.woonlaag-kaart {
+  background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;
+}
+.woonlaag-titel { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+.woonlaag-titel input { border: none; background: none; font: inherit; font-weight: 600; font-size: 13.5px; flex: 1; }
+.woonlaag-titel .totaal { font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.blok-rij { display: grid; grid-template-columns: 1fr 60px 14px 60px 100px 28px; align-items: center; gap: 6px; }
+.blok-rij input, .blok-rij select {
+  font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--divider);
+  background: var(--surface-2); color: var(--text); width: 100%; font-variant-numeric: tabular-nums;
+}
+.blok-rij .maal { text-align: center; color: var(--text-faint); font-size: 12px; }
+.blok-rij .verwijder { border: none; background: none; color: var(--text-faint); font-size: 16px; cursor: pointer; }
+
+.knop {
+  font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: var(--navy);
+  border: none; border-radius: 10px; padding: 11px 14px; cursor: pointer; text-align: center;
+}
+.knop.spook { color: var(--navy); background: var(--navy-100); }
+.knop.klein { padding: 7px 10px; font-size: 12.5px; border-radius: 9px; }
+.knop:disabled { opacity: .5; }
+
+/* --- Indeling --- */
+.ruimte-kaart {
+  background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
+}
+.ruimte-rij-boven { display: flex; align-items: center; gap: 8px; }
+.ruimte-rij-boven input { flex: 1; border: none; background: none; font: inherit; font-weight: 600; font-size: 13.5px; }
+.camera-knop {
+  border: none; background: var(--goud-100); color: var(--goud-700); width: 32px; height: 32px;
+  border-radius: 9px; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.chip-rij { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--goud-100); color: var(--goud-700);
+  border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 12px; font-weight: 500;
+}
+.chip button { border: none; background: rgba(0,0,0,.08); color: inherit; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; cursor: pointer; }
+.chip-toevoegen { display: flex; gap: 6px; }
+.chip-toevoegen input {
+  flex: 1; font: inherit; font-size: 12.5px; padding: 7px 10px; border-radius: 999px;
+  border: 1px dashed var(--divider); background: var(--surface-2); color: var(--text);
+}
+
+/* --- Foto's --- */
+.checklist-kaart {
+  background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;
+}
+.checklist-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; }
+.checklist-item .vinkje { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--divider); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.checklist-item.klaar .vinkje { background: var(--ok); border-color: var(--ok); color: #fff; }
+.checklist-item.klaar span.naam { color: var(--text-dim); text-decoration: line-through; }
+
+.foto-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.foto-tegel { aspect-ratio: 1; border-radius: 12px; position: relative; overflow: hidden; background: var(--surface-3); }
+.foto-tegel img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-tegel .badge {
+  position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 999px;
+}
+.foto-tegel .badge.ok { background: var(--ok-bg); color: var(--ok); }
+.foto-tegel .badge.wachtend { background: var(--pending-bg); color: var(--pending); }
+.foto-tegel .label {
+  position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(4,42,67,.85));
+  color: #fff; font-size: 10.5px; font-weight: 500; padding: 14px 8px 6px;
+}
+.foto-add {
+  aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--divider); background: var(--surface);
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
+  color: var(--text-dim); font-size: 11px; font-weight: 600; cursor: pointer; position: relative;
+}
+.foto-add .plus { font-size: 24px; line-height: 1; font-weight: 400; }
+.foto-add input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* --- Aantekeningen --- */
+.aantekeningen-veld {
+  width: 100%; min-height: 60vh; border: 1px solid var(--divider); border-radius: 14px; background: var(--surface);
+  padding: 14px; font: inherit; font-size: 14px; color: var(--text); resize: vertical;
+}
+
+/* --- login/laad-scherm --- */
+.midden-scherm { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; }
+.midden-scherm .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--divider); border-top-color: var(--navy); animation: draai 0.8s linear infinite; }
+@keyframes draai { to { transform: rotate(360deg); } }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1113; --surface: #1a1f22; --surface-2: #202629; --surface-3: #262d31;
+    --text: #eef1f3; --text-dim: #a7b0b5; --text-faint: #737d83; --divider: #2e3538;
+    --navy: #0d3a59; --navy-600: #124a70; --navy-100: #16324a;
+    --goud: #f0bc2e; --goud-700: #f0bc2e; --goud-100: #3a2f0c;
+    --ok: #3fbc7c; --ok-bg: #103324; --pending: #e0a04a; --pending-bg: #3a2a10;
+    --danger: #e2685f; --danger-bg: #3a1512;
+  }
+}
