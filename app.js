@@ -87,8 +87,8 @@ function woonlaagTotaal(woonlaag) {
 // per taxatie) opgeslagen, zelfde opzet als taxatieweb-opname.user.js' standaardMacros(). Sinds
 // v1.1: toevoegingen/sanitair/keuken zijn drie APARTE lijsten (was eerst één samengevoegde) — Arno:
 // "keuken = keuze keukenapparatuur en lijst met andere zaken, badkamer/toilet = sanitair + 2e
-// lijst". Welke lijsten een ruimte te zien krijgt, bepaalt ruimteSuggestieSleutels() hieronder aan
-// de hand van de ruimtenaam.
+// lijst" — dus TWEE losse velden bij die ruimtes i.p.v. samengevoegd, zie categorieVoorRuimte()
+// hieronder.
 function standaardMacros() {
   return {
     verdiepingen: [
@@ -139,14 +139,14 @@ function standaardMacros() {
 
 // Bepaalt welke macro-lijst(en) een ruimte als toevoeging-suggesties krijgt, op basis van de
 // ruimtenaam — Arno: "keuken = keukenapparatuur en lijst met andere zaken, badkamer/toilet =
-// sanitair + 2e lijst". Substring-match op de naam (niet exact), zodat ook "2e Badkamer" of
-// "Keuken/bijkeuken" meetellen. Algemene "toevoegingen" staat er bij elke ruimte altijd bij.
-function ruimteSuggestieSleutels(ruimteNaam) {
+// sanitair + 2e lijst" — dus TWEE losse velden i.p.v. één samengevoegde lijst, 1-op-1 hetzelfde idee
+// als categorieVoorRuimte() in taxatieweb-opname.user.js. Substring-match op de naam (niet exact),
+// zodat ook "Toiletruimte" of "Bijkeuken" meetellen.
+function categorieVoorRuimte(ruimteNaam) {
   const naam = (ruimteNaam || '').toLowerCase();
-  const sleutels = ['toevoegingen'];
-  if (naam.includes('keuken')) sleutels.unshift('keuken');
-  if (naam.includes('badkamer') || naam.includes('toilet') || naam.includes('douche')) sleutels.unshift('sanitair');
-  return sleutels;
+  if (naam.includes('badkamer') || naam.includes('toilet')) return 'sanitair';
+  if (naam.includes('keuken')) return 'keuken';
+  return null;
 }
 
 // Vult bewaarde macro's aan met sanitair/keuken als die nog ontbreken — data die vóór v1.1 al eens
@@ -198,13 +198,11 @@ function verbergEigenSuggesties() {
   actieveSuggestieInput = null;
 }
 
-// macroSleutel: één sleutel ('ruimtes') of meerdere tegelijk (['sanitair','toevoegingen']) — bv. de
-// toevoeging-suggesties bij een badkamer combineren de sanitair-lijst met de algemene toevoegingen
-// (zie ruimteSuggestieSleutels()) — of een FUNCTIE die dat teruggeeft, voor het toevoeging-veld:
-// welke lijsten relevant zijn hangt af van de ruimtenaam, die kan wijzigen ná het bouwen van de
-// kaart (typen in het naam-veld rerendert de kaart niet meteen). uitgeslotenFn: optionele functie
-// die de al-gekozen waarden teruggeeft, om die uit de suggesties te filteren (alleen toevoegingen:
-// eenmaal gekozen "inloopdouche" heeft binnen dezelfde ruimte geen zin om nogmaals te kiezen).
+// macroSleutel: één sleutel ('ruimtes'), meerdere tegelijk (['sanitair','toevoegingen']), of een
+// FUNCTIE die dat teruggeeft (nodig zodra de relevante lijst kan wijzigen ná het bouwen van het
+// veld). uitgeslotenFn: optionele functie die de al-gekozen waarden teruggeeft, om die uit de
+// suggesties te filteren (alleen toevoegingen: eenmaal gekozen "inloopdouche" heeft binnen dezelfde
+// ruimte geen zin om nogmaals te kiezen).
 // Verdiepingen/ruimtes/ruimteblokken blijven ongefilterd — dezelfde naam mag daar wél vaker
 // voorkomen (twee ruimtes die allebei "Slaapkamer" heten).
 function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
@@ -862,19 +860,40 @@ function renderRuimteKaart(ruimte, verwijder) {
     ));
   });
   kaart.appendChild(chipRij);
-  const invoer = el('input', { placeholder: 'Toevoeging (bv. "meterkast")' });
-  koppelDatalist(invoer, () => ruimteSuggestieSleutels(ruimte.naam), () => ruimte.toevoegingen || []);
-  const bevestigToevoeging = () => {
-    if (!invoer.value.trim()) return;
-    if (!Array.isArray(ruimte.toevoegingen)) ruimte.toevoegingen = [];
-    ruimte.toevoegingen.push(invoer.value.trim());
-    planOpslaan(); render();
+
+  // Twee LOSSE invoervelden bij keuken/badkamer/toilet (eigen categorielijst + de algemene lijst,
+  // apart — niet samengevoegd), één veld bij overige ruimtes — zelfde opzet als
+  // renderToevoegingVeld() in taxatieweb-opname.user.js (Arno: "Bij keuken, toilet en badkamer 2
+  // keuzelijsten, namelijk de standaardlijst en respectievelijk de lijst voor de keuken en sanitair
+  // voor toilet en badkamer").
+  const maakToevoegVeld = (macroSleutel, placeholder) => {
+    const invoer = el('input', { placeholder });
+    koppelDatalist(invoer, macroSleutel, () => ruimte.toevoegingen || []);
+    const bevestigToevoeging = () => {
+      if (!invoer.value.trim()) return;
+      if (!Array.isArray(ruimte.toevoegingen)) ruimte.toevoegingen = [];
+      ruimte.toevoegingen.push(invoer.value.trim());
+      planOpslaan(); render();
+    };
+    invoer.addEventListener('keydown', (e) => { if (e.key === 'Enter') bevestigToevoeging(); });
+    // 'change' wordt door de suggestie-dropdown gedispatcht (zie koppelDatalist/toonEigenSuggesties)
+    // — zonder dit luistert een klik op een suggestie alleen naar Enter en blijft de chip onbevestigd.
+    invoer.addEventListener('change', bevestigToevoeging);
+    return invoer;
   };
-  invoer.addEventListener('keydown', (e) => { if (e.key === 'Enter') bevestigToevoeging(); });
-  // 'change' wordt door de suggestie-dropdown gedispatcht (zie koppelDatalist/toonEigenSuggesties) —
-  // zonder dit luistert een klik op een suggestie alleen naar Enter en blijft de chip onbevestigd.
-  invoer.addEventListener('change', bevestigToevoeging);
-  kaart.appendChild(el('div', { class: 'chip-toevoegen' }, invoer));
+
+  const invoerWrap = el('div', { class: 'toevoeging-invoeren' });
+  const categorie = categorieVoorRuimte(ruimte.naam);
+  if (categorie === 'sanitair') {
+    invoerWrap.appendChild(maakToevoegVeld('sanitair', 'Sanitair (bv. "inloopdouche")'));
+    invoerWrap.appendChild(maakToevoegVeld('toevoegingen', 'Standaard (bv. "meterkast")'));
+  } else if (categorie === 'keuken') {
+    invoerWrap.appendChild(maakToevoegVeld('keuken', 'Keuken (bv. "inductiekookplaat")'));
+    invoerWrap.appendChild(maakToevoegVeld('toevoegingen', 'Standaard (bv. "meterkast")'));
+  } else {
+    invoerWrap.appendChild(maakToevoegVeld('toevoegingen', 'Toevoeging (bv. "meterkast")'));
+  }
+  kaart.appendChild(el('div', { class: 'chip-toevoegen' }, invoerWrap));
 
   // verborgen input voor de camera-per-ruimte-koppeling (zie openCameraVoorRuimte)
   const cameraInput = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none;' });
