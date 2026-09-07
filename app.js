@@ -104,11 +104,32 @@ function standaardMacros() {
       'Basis', 'Aanbouw', 'Erker', 'Bijkeuken', 'Zijbouw', 'Kelder', 'Garage', 'Berging', 'Carport',
       'Veranda', 'Dakkapel', 'Balkon', 'Dakterras',
     ],
+    // 1-op-1 overgenomen uit taxatieweb-opname.user.js' standaardMacros() (toevoegingen + sanitair +
+    // keuken samengevoegd tot één lijst, want dit v1-veld is nog niet in drie aparte macro-groepen
+    // opgesplitst — zie MACRO_GROEPEN hieronder).
     toevoegingen: [
-      'meterkast', 'vaste trap naar de eerste verdieping', 'HR combi-ketel', 'C.V.-ketel', 'boiler',
-      'airconditioning', 'trapkast', 'kelderkast', 'inloopkast', 'hangend toilet', 'fonteintje',
-      'douche', 'douchecabine', 'wastafelmeubel', '4-pits gaskookplaat', 'afzuigkap',
-      'combimagnetron', 'koelkast', 'koel-vriescombinatie',
+      'meterkast', 'vaste trap naar de eerste verdieping', 'vaste trap naar de zolderverdieping',
+      'HR combi-ketel', 'C.V.-ketel', 'boiler', 'airconditioning', 'trapkast', 'kelderkast',
+      'bergkast', 'walk-in closet', 'inbouwkast', 'inloopkast', 'garderobe', 'garderobekast',
+      'kastenwand', 'schuifkastenwand', 'vaste kast', 'gas haard', 'open haard', 'houtkachel',
+      'bio ethanol haard', 'speksteenkachel', 'pelletkachel', 'sfeerhaard', 'elektrische haard',
+      'allesbrander', 'rookkanaal', 'alarminstallatie', 'centraal stofzuigsysteem', 'convectorput',
+      'wasmachine aansluiting', 'wasmachine- en drogeraansluiting', 'elektrisch zonnescherm',
+      'zonnescherm', 'zonwering', 'elektrische garagedeur', 'bar', 'bedstee', 'ensuite deuren',
+      'entresol', 'erker', 'frans balkon', 'horren', 'kamer-en-suite deuren', 'keukenblok',
+      'knieschotten', 'bergruimte achter de knieschotten', 'markiezen', 'pantry', 'rolluik',
+      'rolluiken', 'screens', 'sauna', 'schouw', 'serre', 'uitstortgootsteen', 'verlaagd plafond',
+      'vide', 'videofoon', 'vloerverwarming', 'dakramen', 'taatsdeuren', 'tuindeur', 'tuindeuren',
+      'bergruimte', 'bergvliering', 'bergzolder',
+      // sanitair
+      'douche', 'douchecabine', 'inloopdouche', 'ligbad', 'douche/ligbad', 'hoekbad', 'whirlpool',
+      'jacuzzi', 'staand toilet', 'hangend toilet', 'urinoir', 'fonteintje', 'wastafel',
+      'dubbele wastafel', 'wastafelmeubel', 'dubbel wastafelmeubel', 'designradiator',
+      'handdoekradiator',
+      // keuken
+      'gas 4-pits kookplaat', 'gas 5-pits kookplaat', 'keramische kookplaat', 'inductiekookplaat',
+      'oven', 'magnetron', 'combi-oven', 'combi-magnetron', 'stoomoven', 'koelkast', 'vriezer',
+      'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker',
     ],
   };
 }
@@ -135,23 +156,84 @@ function bewaarMacros() {
   VeldopnameDB.bewaarMacros(state.macros);
 }
 
-// Koppelt een <datalist> met macro-suggesties aan een tekstinvoerveld, met de al gekozen waarden
-// uitgesloten indien meegegeven (zelfde idee als koppelSuggesties() in taxatieweb-opname.user.js).
-// Zonder uitgeslotenFn (bv. verdiepingen/ruimtes/ruimteblokken) delen alle velden dezelfde,
-// statische lijst — daar volstaat één gedeelde <datalist> per macroSleutel. MET uitgeslotenFn
-// (toevoegingen, verschilt per ruimte) krijgt elk veld zijn EIGEN datalist met een uniek ID, anders
-// zou de laatst-getekende ruimte de uitsluitingslijst van alle andere ruimtes overschrijven.
-let datalistTeller = 0;
-function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
-  const lijstId = uitgeslotenFn ? 'dl-' + macroSleutel + '-' + (datalistTeller++) : 'dl-' + macroSleutel;
-  input.setAttribute('list', lijstId);
-  if (document.getElementById(lijstId)) { document.getElementById(lijstId).remove(); }
-  const datalist = el('datalist', { id: lijstId });
-  const uitgesloten = uitgeslotenFn ? uitgeslotenFn() : [];
-  (state.macros[macroSleutel] || []).filter(t => !uitgesloten.includes(t)).forEach(t => {
-    datalist.appendChild(el('option', { value: t }));
+// Eigen suggestie-dropdown i.p.v. native <datalist> — 1-op-1 hetzelfde idee als
+// toonEigenSuggesties()/koppelSuggesties() in taxatieweb-opname.user.js: op iOS Safari toont een
+// <input list="..."> maar de eerste ~5 opties en kan er niet in gescrold worden ("Keuzelijst iPad
+// is te kort, kan niet scrollen" — Arno's bugreport bij het origineel), dus bouwen we de lijst zelf
+// als een gepositioneerde <div> die wél normaal scrolt. Eén gedeeld element voor alle velden (i.p.v.
+// een exemplaar per input), want elke render() gooit bestaande inputs weg via innerHTML='' en zou
+// anders nooit-opgeruimde elementen achterlaten.
+const eigenSuggestiesLijst = el('div', { class: 'eigen-suggesties' });
+eigenSuggestiesLijst.style.display = 'none';
+document.body.appendChild(eigenSuggestiesLijst);
+let actieveSuggestieInput = null;
+
+function verbergEigenSuggesties() {
+  eigenSuggestiesLijst.style.display = 'none';
+  actieveSuggestieInput = null;
+}
+
+// uitgeslotenFn: optionele functie die de al-gekozen waarden teruggeeft, om die uit de suggesties te
+// filteren (alleen toevoegingen: eenmaal gekozen "inloopdouche" heeft binnen dezelfde ruimte geen zin
+// om nogmaals te kiezen). Verdiepingen/ruimtes/ruimteblokken blijven ongefilterd — dezelfde naam mag
+// daar wél vaker voorkomen (twee ruimtes die allebei "Slaapkamer" heten).
+function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
+  let opties = state.macros[macroSleutel] || [];
+  if (uitgeslotenFn) {
+    const uitgesloten = uitgeslotenFn().map(x => x.toLowerCase());
+    opties = opties.filter(o => !uitgesloten.includes(o.toLowerCase()));
+  }
+  const zoekterm = input.value.trim().toLowerCase();
+  const gefilterd = opties.filter(o => !zoekterm || o.toLowerCase().includes(zoekterm));
+  if (gefilterd.length === 0) { verbergEigenSuggesties(); return; }
+  actieveSuggestieInput = input;
+  eigenSuggestiesLijst.innerHTML = '';
+  gefilterd.forEach(optie => {
+    const item = el('div', { class: 'eigen-suggestie-item' }, optie);
+    item.addEventListener('click', () => {
+      input.value = optie;
+      // Zowel 'input' als 'change' dispatchen — de toevoeging-multiselect bevestigt een gekozen item
+      // via een 'change'-listener (net als Enter), niet via 'input'.
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      // Alleen verbergen als er ondertussen niet al een ANDER (nieuw) veld actief is geworden — de
+      // 'change'-dispatch hierboven kan het hele veld opnieuw opbouwen en een nieuw input-element
+      // focussen, wat zijn eigen 'focus'-listener (en dus een nieuwe actieveSuggestieInput) afvuurt.
+      if (actieveSuggestieInput === input) verbergEigenSuggesties();
+    });
+    eigenSuggestiesLijst.appendChild(item);
   });
-  document.body.appendChild(datalist);
+
+  // Hoogte/positie passen zich aan de daadwerkelijk zichtbare ruimte aan (visualViewport houdt
+  // rekening met het schermtoetsenbord, window.innerHeight niet) — anders viel de lijst op iPad deels
+  // onder het toetsenbord.
+  const rect = input.getBoundingClientRect();
+  const viewportHoogte = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const ruimteOnder = viewportHoogte - rect.bottom - 8;
+  const ruimteBoven = rect.top - 8;
+  const gewensteHoogte = 220;
+  eigenSuggestiesLijst.style.left = rect.left + 'px';
+  eigenSuggestiesLijst.style.width = rect.width + 'px';
+  if (ruimteOnder >= 120 || ruimteOnder >= ruimteBoven) {
+    eigenSuggestiesLijst.style.top = (rect.bottom + 2) + 'px';
+    eigenSuggestiesLijst.style.bottom = 'auto';
+    eigenSuggestiesLijst.style.maxHeight = Math.max(80, Math.min(gewensteHoogte, ruimteOnder)) + 'px';
+  } else {
+    eigenSuggestiesLijst.style.top = 'auto';
+    eigenSuggestiesLijst.style.bottom = (viewportHoogte - rect.top + 2) + 'px';
+    eigenSuggestiesLijst.style.maxHeight = Math.max(80, Math.min(gewensteHoogte, ruimteBoven)) + 'px';
+  }
+  eigenSuggestiesLijst.style.display = 'block';
+}
+
+// Koppelt een tekstveld aan een macro-lijst mét eigen, overal werkende dropdown — vervangt de eerdere
+// plain-<datalist>-aanpak (zie uitleg hierboven).
+function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
+  input.addEventListener('focus', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn));
+  input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn));
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (actieveSuggestieInput === input) verbergEigenSuggesties();
+  }, 150));
 }
 
 let opslaanTimer = null;
@@ -322,10 +404,8 @@ function el(tag, attrs, ...kinderen) {
 
 function render() {
   app.innerHTML = '';
-  // Ruim per-ruimte datalists van de vorige render op (zie koppelDatalist) — anders stapelen die
-  // ongebruikt op in document.body bij elke toetsaanslag.
-  document.querySelectorAll('datalist[id^="dl-"]').forEach(d => d.remove());
-  datalistTeller = 0;
+  // Sluit een eventueel nog open suggestie-dropdown van vóór deze render (zie koppelDatalist).
+  verbergEigenSuggesties();
   if (state.route.naam === 'lijst') { app.appendChild(renderLijstScherm()); return; }
   if (!state.taxatie) { app.appendChild(renderLaadscherm()); return; }
   app.appendChild(renderOpnameScherm());
@@ -730,12 +810,16 @@ function renderRuimteKaart(ruimte, verwijder) {
   kaart.appendChild(chipRij);
   const invoer = el('input', { placeholder: 'Toevoeging (bv. "meterkast")' });
   koppelDatalist(invoer, 'toevoegingen', () => ruimte.toevoegingen || []);
-  invoer.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' || !invoer.value.trim()) return;
+  const bevestigToevoeging = () => {
+    if (!invoer.value.trim()) return;
     if (!Array.isArray(ruimte.toevoegingen)) ruimte.toevoegingen = [];
     ruimte.toevoegingen.push(invoer.value.trim());
     planOpslaan(); render();
-  });
+  };
+  invoer.addEventListener('keydown', (e) => { if (e.key === 'Enter') bevestigToevoeging(); });
+  // 'change' wordt door de suggestie-dropdown gedispatcht (zie koppelDatalist/toonEigenSuggesties) —
+  // zonder dit luistert een klik op een suggestie alleen naar Enter en blijft de chip onbevestigd.
+  invoer.addEventListener('change', bevestigToevoeging);
   kaart.appendChild(el('div', { class: 'chip-toevoegen' }, invoer));
 
   // verborgen input voor de camera-per-ruimte-koppeling (zie openCameraVoorRuimte)
