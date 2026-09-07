@@ -15,7 +15,7 @@
 
 const VeldopnameDB = (() => {
   const DB_NAAM = 'veldopname';
-  const DB_VERSIE = 1;
+  const DB_VERSIE = 2;
   let dbPromise = null;
 
   function open() {
@@ -33,6 +33,12 @@ const VeldopnameDB = (() => {
         }
         if (!db.objectStoreNames.contains('wachtrij')) {
           db.createObjectStore('wachtrij', { keyPath: 'id', autoIncrement: true });
+        }
+        // Sinds v2: macro's (verdiepingen/ruimtes/ruimteblokken/toevoegingen) — bewust GLOBAAL
+        // (één record, key 'globaal'), niet per taxatie, zelfde als GM_setValue zonder rapportId()
+        // in taxatieweb-opname.user.js: Arno's eigen, over alle taxaties heen herbruikbare lijsten.
+        if (!db.objectStoreNames.contains('macros')) {
+          db.createObjectStore('macros', { keyPath: 'sleutel' });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -84,6 +90,21 @@ const VeldopnameDB = (() => {
       const s = await store('fotos', 'readonly');
       const index = s.index('rapport_id');
       return wrap(index.getAll(rapportId));
+    },
+    async verwijderFoto(id) {
+      const s = await store('fotos', 'readwrite');
+      return wrap(s.delete(id));
+    },
+
+    // --- macro's (globaal) ---
+    async haalMacros() {
+      const s = await store('macros', 'readonly');
+      const rec = await wrap(s.get('globaal'));
+      return rec ? rec.waarde : null;
+    },
+    async bewaarMacros(macros) {
+      const s = await store('macros', 'readwrite');
+      return wrap(s.put({ sleutel: 'globaal', waarde: macros }));
     },
 
     // --- sync-wachtrij ---

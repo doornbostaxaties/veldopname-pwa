@@ -1,6 +1,6 @@
 {
-  "name": "Veldopname — Doornbos & Hemmink Taxaties",
-  "short_name": "Veldopname",
+  "name": "Taxatieopname — Doornbos & Hemmink Taxaties",
+  "short_name": "Taxatieopname",
   "description": "Metingen, indeling, foto's en aantekeningen opnemen op locatie.",
   "start_url": "./index.html",
   "scope": "./",

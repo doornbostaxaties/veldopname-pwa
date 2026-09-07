@@ -28,7 +28,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; overflow: hidden; } /* alleen .inhoud scrolt — houdt de tabbalk echt vast onderin */
 body {
   margin: 0;
   background: var(--bg);
@@ -40,7 +40,7 @@ body {
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3, p { margin: 0; }
 
-#app { display: flex; flex-direction: column; height: 100dvh; }
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
 /* --- statusbalk (boven) --- */
 .statusbalk {
@@ -74,6 +74,7 @@ h1, h2, h3, p { margin: 0; }
 .tabbalk {
   display: flex; border-top: 1px solid var(--divider); background: var(--surface); flex-shrink: 0;
   padding-bottom: var(--safe-bottom);
+  position: sticky; bottom: 0; z-index: 20; /* reinforcement bovenop de flex-layout, tegen iOS-Safari-eigenaardigheden */
 }
 .tabbalk button {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -162,26 +163,71 @@ h1, h2, h3, p { margin: 0; }
 .checklist-item.klaar .vinkje { background: var(--ok); border-color: var(--ok); color: #fff; }
 .checklist-item.klaar span.naam { color: var(--text-dim); text-decoration: line-through; }
 
-.foto-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.foto-tegel { aspect-ratio: 1; border-radius: 12px; position: relative; overflow: hidden; background: var(--surface-3); }
+/* Sinds Arno's verzoek: kleinere tegels (meer overzicht per scherm), tik voor lightbox. */
+.foto-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.foto-tegel { aspect-ratio: 1; border-radius: 9px; position: relative; overflow: hidden; background: var(--surface-3); cursor: pointer; border: none; padding: 0; }
 .foto-tegel img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto-tegel .badge {
-  position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 600; padding: 2px 7px;
+  position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 600; padding: 1px 5px;
   border-radius: 999px;
 }
 .foto-tegel .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .foto-tegel .badge.wachtend { background: var(--pending-bg); color: var(--pending); }
+.foto-tegel .badge.archief { background: var(--navy-100); color: var(--navy); }
 .foto-tegel .label {
   position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(4,42,67,.85));
-  color: #fff; font-size: 10.5px; font-weight: 500; padding: 14px 8px 6px;
+  color: #fff; font-size: 8.5px; font-weight: 500; padding: 10px 5px 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .foto-add {
-  aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--divider); background: var(--surface);
-  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
-  color: var(--text-dim); font-size: 11px; font-weight: 600; cursor: pointer; position: relative;
+  aspect-ratio: 1; border-radius: 9px; border: 1.5px dashed var(--divider); background: var(--surface);
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 2px;
+  color: var(--text-dim); font-size: 9px; font-weight: 600; cursor: pointer; position: relative;
 }
-.foto-add .plus { font-size: 24px; line-height: 1; font-weight: 400; }
+.foto-add .plus { font-size: 20px; line-height: 1; font-weight: 400; }
 .foto-add input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* --- lightbox --- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100; background: rgba(4,10,16,.92);
+  display: flex; flex-direction: column;
+}
+.lightbox .lightbox-top {
+  display: flex; align-items: center; justify-content: space-between; padding: calc(10px + var(--safe-top)) 14px 10px;
+  color: #fff;
+}
+.lightbox .lightbox-top button { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+.lightbox .lightbox-titel { font-size: 13px; font-weight: 600; }
+.lightbox .lightbox-beeld { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 10px; min-height: 0; }
+.lightbox .lightbox-beeld img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.lightbox .lightbox-onder {
+  padding: 12px 14px calc(14px + var(--safe-bottom)); display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.archief-toggle { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 12.5px; }
+.archief-toggle input { width: 18px; height: 18px; }
+.lightbox .verwijder-foto-knop {
+  background: var(--danger-bg); color: var(--danger); border: none; border-radius: 9px;
+  padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+
+/* --- macro's --- */
+.macro-groep { background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+.macro-groep h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.macro-uitleg { font-size: 11.5px; color: var(--text-dim); margin-bottom: 16px; }
+
+/* --- plattegrondschetser --- */
+.weergave-wissel { display: flex; gap: 6px; margin-bottom: 10px; }
+.weergave-wissel button {
+  font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--divider); background: var(--surface); color: var(--text-dim); cursor: pointer;
+}
+.weergave-wissel button.actief { background: var(--navy); border-color: var(--navy); color: #fff; }
+.tekenkader { overflow: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); margin-bottom: 10px; max-height: 60vh; -webkit-overflow-scrolling: touch; }
+.tekenkader svg { display: block; touch-action: none; }
+.blok-rect { cursor: grab; touch-action: none; }
+.blok-label { font-size: 11px; font-weight: 700; fill: var(--navy); pointer-events: none; font-family: var(--font); }
+.blok-maat { font-size: 9.5px; fill: var(--text-dim); pointer-events: none; font-family: var(--font); }
+.blok-greep { fill: var(--navy); cursor: nwse-resize; touch-action: none; rx: 2; }
 
 /* --- Aantekeningen --- */
 .aantekeningen-veld {
