@@ -63,6 +63,11 @@ function leegTaxatie(rapportId) {
     rapport_id: rapportId,
     adres: '', postcode: '', plaats: '', afspraak_datumtijd: null,
     aantekeningen: '',
+    // voorlopig: true zodra deze taxatie ZELF in de PWA is aangemaakt (nog geen Taxatieweb-rapport
+    // bestaat) — zie nieuweTaxatieScherm(). kavelnummer/bouwplan alleen relevant bij nieuwbouw (nog
+    // geen BAG-adres). Zie project_taxatieweb_opname_bridge in memory voor de koppel-flow: het
+    // Taxatieweb-script herkent deze taxaties op adres en biedt een importknop.
+    voorlopig: false, kavelnummer: '', bouwplan: '',
     data: leegData(),
     lokaalGewijzigd: false,
   };
@@ -268,6 +273,39 @@ function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
   eigenSuggestiesLijst.style.display = 'block';
 }
 
+// Zelfde gedeelde dropdown als toonEigenSuggesties(), maar voor een kant-en-klare lijst met eigen
+// klik-callback i.p.v. een macroSleutel-lookup — gebruikt door de PDOK-adreszoeker in
+// renderNieuweTaxatieScherm(), zodat daar niet een tweede suggestie-element nodig is.
+function toonAdresSuggesties(input, items, onKies) {
+  actieveSuggestieInput = input;
+  eigenSuggestiesLijst.innerHTML = '';
+  items.forEach((item) => {
+    const el2 = el('div', { class: 'eigen-suggestie-item' }, item);
+    el2.addEventListener('click', () => {
+      onKies(item);
+      if (actieveSuggestieInput === input) verbergEigenSuggesties();
+    });
+    eigenSuggestiesLijst.appendChild(el2);
+  });
+  const rect = input.getBoundingClientRect();
+  const viewportHoogte = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const ruimteOnder = viewportHoogte - rect.bottom - 8;
+  const ruimteBoven = rect.top - 8;
+  const gewensteHoogte = 220;
+  eigenSuggestiesLijst.style.left = rect.left + 'px';
+  eigenSuggestiesLijst.style.width = rect.width + 'px';
+  if (ruimteOnder >= 120 || ruimteOnder >= ruimteBoven) {
+    eigenSuggestiesLijst.style.top = (rect.bottom + 2) + 'px';
+    eigenSuggestiesLijst.style.bottom = 'auto';
+    eigenSuggestiesLijst.style.maxHeight = Math.max(80, Math.min(gewensteHoogte, ruimteOnder)) + 'px';
+  } else {
+    eigenSuggestiesLijst.style.top = 'auto';
+    eigenSuggestiesLijst.style.bottom = (viewportHoogte - rect.top + 2) + 'px';
+    eigenSuggestiesLijst.style.maxHeight = Math.max(80, Math.min(gewensteHoogte, ruimteBoven)) + 'px';
+  }
+  eigenSuggestiesLijst.style.display = 'block';
+}
+
 // Koppelt een tekstveld aan een macro-lijst mét eigen, overal werkende dropdown — vervangt de eerdere
 // plain-<datalist>-aanpak (zie uitleg hierboven).
 function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
@@ -352,6 +390,9 @@ async function cloudOpslaan(taxatie) {
   if (taxatie.adres) { payload.adres = taxatie.adres; payload.straat = taxatie.adres; }
   if (taxatie.postcode) payload.postcode = taxatie.postcode;
   if (taxatie.plaats) payload.plaats = taxatie.plaats;
+  if (taxatie.voorlopig) payload.voorlopig = true;
+  if (taxatie.kavelnummer) payload.kavelnummer = taxatie.kavelnummer;
+  if (taxatie.bouwplan) payload.bouwplan = taxatie.bouwplan;
   const resp = await fetch(CLOUD_WEBHOOK, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
@@ -474,6 +515,7 @@ function render() {
   // Sluit een eventueel nog open suggestie-dropdown van vóór deze render (zie koppelDatalist).
   verbergEigenSuggesties();
   if (state.route.naam === 'lijst') { app.appendChild(renderLijstScherm()); return; }
+  if (state.route.naam === 'nieuw') { app.appendChild(renderNieuweTaxatieScherm()); return; }
   if (!state.taxatie) { app.appendChild(renderLaadscherm()); return; }
   app.appendChild(renderOpnameScherm());
 }
@@ -519,11 +561,12 @@ async function laadTaxatielijst() {
       adres: r.fields ? r.fields.adres : r.adres,
       plaats: r.fields ? r.fields.plaats : r.plaats,
       afspraak_datumtijd: r.fields ? r.fields.afspraak_datumtijd : r.afspraak_datumtijd,
+      voorlopig: !!(r.fields ? r.fields.voorlopig : r.voorlopig),
     })).filter(t => t.rapport_id);
   } catch (e) {
     // geen verbinding: laat zien wat we nog in IndexedDB hebben staan (lokaal geopende taxaties)
     const lokaal = await VeldopnameDB.alleTaxaties();
-    state.taxatielijst = lokaal.map(t => ({ rapport_id: t.rapport_id, adres: t.adres, plaats: t.plaats, afspraak_datumtijd: t.afspraak_datumtijd }));
+    state.taxatielijst = lokaal.map(t => ({ rapport_id: t.rapport_id, adres: t.adres, plaats: t.plaats, afspraak_datumtijd: t.afspraak_datumtijd, voorlopig: !!t.voorlopig }));
   } finally { taxatielijstOphalenBezig = false; }
   if (state.route.naam === 'lijst') render();
 }
@@ -572,8 +615,12 @@ function renderLijstScherm() {
     el('h1', {}, el('span', { class: 'letter' }, 'D&H'), ' Taxatieopname'),
     el('span', { class: 'sync-pil ' + syncPilTekst().klasse }, syncPilTekst().tekst),
   ));
-  const inhoud = el('div', { class: 'inhoud' }, el('div', { class: 'section-label' }, 'Taxaties'));
-  wrap.appendChild(inhoud);
+  const inhoud = el('div', { class: 'inhoud' });
+  inhoud.appendChild(el('button', {
+    class: 'knop', style: 'margin-bottom:14px;',
+    onclick: () => { navigeer({ naam: 'nieuw' }); },
+  }, '+ Nieuwe taxatie starten'));
+  inhoud.appendChild(el('div', { class: 'section-label' }, 'Taxaties'));
 
   if (state.taxatielijst.length === 0) {
     inhoud.appendChild(el('div', { class: 'lege-lijst' }, 'Nog geen taxaties gevonden. Trek naar beneden om te vernieuwen zodra er verbinding is.'));
@@ -583,12 +630,164 @@ function renderLijstScherm() {
         class: 'taxatie-kaart',
         onclick: () => { location.hash = '#/opname/' + encodeURIComponent(t.rapport_id) + '/meting'; },
       },
-        el('div', { class: 'adres' }, t.adres || '(adres onbekend)'),
+        el('div', { class: 'adres' },
+          t.adres || '(adres onbekend)',
+          t.voorlopig ? el('span', { class: 'badge-voorlopig' }, '⏳ Voorlopig') : null,
+        ),
         el('div', { class: 'plaats' }, t.plaats || ''),
         el('div', { class: 'meta' }, el('span', { class: 'afspraak' }, formatAfspraak(t.afspraak_datumtijd))),
       ));
     });
   }
+  wrap.appendChild(inhoud);
+  return wrap;
+}
+
+// ----------------------------------------------------------------------------------------------
+// SCHERM: Nieuwe taxatie starten — Arno's verzoek (10-09-2026): "zelf een opdracht kunnen aanmaken
+// in de PWA, adres invoeren op dezelfde manier als het opdrachtformulier (met BAG-gegevens of bij
+// nieuwbouw met specifieke velden)". Zelfde live-adreszoeker als opdrachtgegevens-formulier.html
+// (PDOK Locatieserver, gratis, geen sleutel), zelfde nieuwbouw-toggle (Kavelnummer/Bouwplan i.p.v.
+// een BAG-adres). De taxatie krijgt een ZELF gegenereerde rapport_id (geen Taxatieweb-rapport nodig
+// om te beginnen) en wordt gemarkeerd `voorlopig: true` — het Taxatieweb-script herkent 'm later op
+// adres en biedt daar een koppelknop, zie taxatieweb-opname.user.js.
+const PDOK_SUGGEST_URL = 'https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest';
+async function zoekAdresPDOK(zoekterm) {
+  const url = PDOK_SUGGEST_URL + '?q=' + encodeURIComponent(zoekterm) + '&fq=type:adres&rows=6';
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('PDOK-verzoek mislukt');
+  const json = await resp.json();
+  return (json.response && json.response.docs || []).map((d) => d.weergavenaam);
+}
+// "Voorstraat 1, 1234 AB Almelo" → { adres, postcode, plaats }.
+function ontleedPdokAdres(weergavenaam) {
+  const m = /^(.+?),\s*(\d{4}\s?[A-Z]{2})\s+(.+)$/.exec(weergavenaam || '');
+  if (!m) return { adres: weergavenaam || '', postcode: '', plaats: '' };
+  return { adres: m[1].trim(), postcode: m[2].trim(), plaats: m[3].trim() };
+}
+
+function renderNieuweTaxatieScherm() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { class: 'statusbalk' },
+    el('button', { class: 'terug', onclick: () => { navigeer({ naam: 'lijst' }); } }, '‹'),
+    el('h1', {}, 'Nieuwe taxatie'),
+  ));
+  const inhoud = el('div', { class: 'inhoud' });
+  wrap.appendChild(inhoud);
+
+  let isNieuwbouw = false;
+  let gekozenAdres = null; // { adres, postcode, plaats } zodra via PDOK gekozen of handmatig ingevuld
+  let handmatigModus = false;
+
+  inhoud.appendChild(el('div', { class: 'section-label' }, 'Betreft dit een nieuwbouwwoning?'));
+  const nbRij = el('div', { class: 'weergave-wissel' });
+  inhoud.appendChild(nbRij);
+
+  const adresSectie = el('div', {});
+  const nieuwbouwSectie = el('div', { style: 'display:none;' });
+  inhoud.appendChild(adresSectie);
+  inhoud.appendChild(nieuwbouwSectie);
+
+  // --- Adres-sectie (niet-nieuwbouw): live PDOK-zoeker + handmatige terugval — hergebruikt de
+  // gedeelde eigenSuggestiesLijst (zie koppelDatalist() hierboven) i.p.v. een eigen dropdown-element,
+  // anders zou elk bezoek aan dit scherm een nieuw, nooit-opgeruimd element aan <body> toevoegen.
+  const adresInput = el('input', { placeholder: 'Straat en huisnummer (bv. "Voorstraat 1")' });
+  const adresStatusEl = el('p', { class: 'macro-uitleg', style: 'margin:4px 0 0;' }, '');
+  let pdokTimer = null;
+  adresInput.addEventListener('input', () => {
+    gekozenAdres = null;
+    clearTimeout(pdokTimer);
+    const term = adresInput.value.trim();
+    if (term.length < 3) { verbergEigenSuggesties(); adresStatusEl.textContent = ''; return; }
+    adresStatusEl.textContent = 'zoeken…';
+    pdokTimer = setTimeout(async () => {
+      try {
+        const resultaten = await zoekAdresPDOK(term);
+        adresStatusEl.textContent = '';
+        if (resultaten.length === 0) { verbergEigenSuggesties(); return; }
+        toonAdresSuggesties(adresInput, resultaten, (naam) => {
+          adresInput.value = naam;
+          gekozenAdres = ontleedPdokAdres(naam);
+        });
+      } catch (e) { adresStatusEl.textContent = 'Adres opzoeken lukte niet — vul het handmatig in.'; }
+    }, 300);
+  });
+  adresInput.addEventListener('blur', () => setTimeout(() => {
+    if (actieveSuggestieInput === adresInput) verbergEigenSuggesties();
+  }, 150));
+  adresSectie.appendChild(el('div', { class: 'chip-toevoegen' }, adresInput));
+  adresSectie.appendChild(adresStatusEl);
+
+  const handmatigVeldenWrap = el('div', { style: 'display:none;margin-top:10px;' });
+  const straatVeld = el('input', { placeholder: 'Straat en huisnummer' });
+  const postcodeVeld = el('input', { placeholder: 'Postcode' });
+  const plaatsVeld = el('input', { placeholder: 'Plaats' });
+  [straatVeld, postcodeVeld, plaatsVeld].forEach((veld) => {
+    veld.style.marginBottom = '8px';
+    handmatigVeldenWrap.appendChild(veld);
+  });
+  adresSectie.appendChild(handmatigVeldenWrap);
+  const handmatigKnop = el('button', { class: 'knop spook klein', style: 'margin-top:8px;' }, 'Adres niet gevonden? Vul zelf in');
+  handmatigKnop.addEventListener('click', () => {
+    handmatigModus = !handmatigModus;
+    handmatigVeldenWrap.style.display = handmatigModus ? 'block' : 'none';
+    adresInput.parentElement.style.display = handmatigModus ? 'none' : 'flex';
+    adresStatusEl.style.display = handmatigModus ? 'none' : 'block';
+    handmatigKnop.textContent = handmatigModus ? '← Terug naar adres opzoeken' : 'Adres niet gevonden? Vul zelf in';
+  });
+  adresSectie.appendChild(handmatigKnop);
+
+  // --- Nieuwbouw-sectie: Kavelnummer/Bouwplan i.p.v. een (nog niet bestaand) BAG-adres ---
+  const kavelVeld = el('input', { placeholder: 'Kavelnummer' });
+  const bouwplanVeld = el('input', { placeholder: 'Bouwplan / projectnaam' });
+  const nbPlaatsVeld = el('input', { placeholder: 'Plaats' });
+  [kavelVeld, bouwplanVeld, nbPlaatsVeld].forEach((veld) => { veld.style.marginBottom = '8px'; nieuwbouwSectie.appendChild(veld); });
+
+  [['nee', 'Nee'], ['ja', 'Ja']].forEach(([val, label]) => {
+    const knop = el('button', { class: 'klein' + (val === 'nee' ? ' actief' : '') }, label);
+    knop.addEventListener('click', () => {
+      isNieuwbouw = val === 'ja';
+      nbRij.querySelectorAll('button').forEach((b) => b.classList.remove('actief'));
+      knop.classList.add('actief');
+      adresSectie.style.display = isNieuwbouw ? 'none' : 'block';
+      nieuwbouwSectie.style.display = isNieuwbouw ? 'block' : 'none';
+    });
+    nbRij.appendChild(knop);
+  });
+
+  const foutEl = el('p', { class: 'macro-uitleg', style: 'color:var(--danger);margin-top:10px;' }, '');
+  inhoud.appendChild(foutEl);
+
+  const startKnop = el('button', { class: 'knop', style: 'margin-top:14px;' }, 'Taxatie starten');
+  startKnop.addEventListener('click', async () => {
+    foutEl.textContent = '';
+    let adres = '', postcode = '', plaats = '', kavelnummer = '', bouwplan = '';
+    if (isNieuwbouw) {
+      kavelnummer = kavelVeld.value.trim();
+      bouwplan = bouwplanVeld.value.trim();
+      plaats = nbPlaatsVeld.value.trim();
+      if (!bouwplan && !kavelnummer) { foutEl.textContent = 'Vul kavelnummer en/of bouwplan in.'; return; }
+      adres = [bouwplan, kavelnummer].filter(Boolean).join(' — kavel ');
+    } else if (handmatigModus) {
+      adres = straatVeld.value.trim(); postcode = postcodeVeld.value.trim(); plaats = plaatsVeld.value.trim();
+      if (!adres) { foutEl.textContent = 'Vul een adres in.'; return; }
+    } else {
+      if (!gekozenAdres) { foutEl.textContent = 'Kies een adres uit de suggesties (of vul het handmatig in).'; return; }
+      ({ adres, postcode, plaats } = gekozenAdres);
+    }
+
+    startKnop.disabled = true;
+    startKnop.textContent = 'Aanmaken…';
+    const rapportId = crypto.randomUUID();
+    const taxatie = leegTaxatie(rapportId);
+    taxatie.adres = adres; taxatie.postcode = postcode; taxatie.plaats = plaats;
+    taxatie.voorlopig = true; taxatie.kavelnummer = kavelnummer; taxatie.bouwplan = bouwplan;
+    await VeldopnameDB.bewaarTaxatie(taxatie);
+    try { await cloudOpslaan(taxatie); } catch (e) { /* blijft lokaal staan, wachtrij pakt 'm later op via planOpslaan */ }
+    state.taxatielijst.push({ rapport_id: rapportId, adres, plaats, afspraak_datumtijd: null, voorlopig: true });
+    location.hash = '#/opname/' + encodeURIComponent(rapportId) + '/meting';
+  });
+  inhoud.appendChild(startKnop);
   return wrap;
 }
 
