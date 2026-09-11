@@ -16,6 +16,11 @@ const VOORONDERZOEK_WEBHOOK = 'https://hook.eu1.make.com/6z71b143w3nnerxjm7o5pqc
 // + een record in Airtable-tabel "Opname Foto's" (bestand als attachment via de tijdelijke
 // pre-authenticated downloadUrl uit de OneDrive-upload — geen permanente publieke deellink nodig).
 const FOTO_WEBHOOK = 'https://hook.eu1.make.com/w9oljmdhr4l9s7atf8kf38net3e7dhod'; // Veldopname PWA - Foto upload
+// Documenten die Arno vooraf in Taxatieweb (Q/R > Bijlagen) plaatst, doorgestuurd door
+// taxatieweb-opname.user.js naar Airtable-tabel "Bijlagen" — hier alleen UITLEZEN (de PWA upload
+// zelf niets naar deze tabel, dat gebeurt aan de Taxatieweb-kant). Zelfde "geef alles terug, filter
+// hier client-side op rapport_id"-patroon als LIJST_WEBHOOK.
+const BIJLAGEN_WEBHOOK = 'https://hook.eu1.make.com/190eh6nt7efgk9d20frzac88ql9m87nq'; // Veldopname PWA - Bijlagen ophalen
 
 // Zelfde 19 categorieën als QR_CATEGORIEEN in taxatieweb-opname.user.js (v0.54.0) — dezelfde lijst
 // als Taxatieweb's eigen Q/R-categorieselectie, plus "Anders" als vangnet.
@@ -206,6 +211,8 @@ const state = {
   taxatielijst: [], // cache voor het homescherm
   vooronderzoekLijst: null, // null = nog niet opgehaald; daarna array records uit Airtable-tabel "Vooronderzoek"
   vooronderzoekLaadFout: false,
+  bijlagenLijst: null, // null = nog niet opgehaald; daarna array records uit Airtable-tabel "Bijlagen"
+  bijlagenLaadFout: false,
   online: navigator.onLine,
   wachtrijAantal: 0,
   macros: standaardMacros(), // wordt bij init() overschreven met de bewaarde versie, indien aanwezig
@@ -638,6 +645,28 @@ function vindVooronderzoek(adres) {
   return state.vooronderzoekLijst.find(r => (r.fields.adres_volledig || '').trim().toLowerCase().startsWith(zoek)) || null;
 }
 
+// Bijlagen die Arno vooraf in Taxatieweb plaatst (Q/R > Bijlagen), doorgestuurd via
+// taxatieweb-opname.user.js naar Airtable-tabel "Bijlagen" — hier op dezelfde manier als
+// vooronderzoek eenmalig per sessie opgehaald en lokaal gefilterd (op taxatie_rapport_id, de
+// lookup die Airtable zelf al als tekst-array teruggeeft).
+async function laadBijlagenLijst() {
+  state.bijlagenLaadFout = false;
+  try {
+    const resp = await fetch(BIJLAGEN_WEBHOOK, { method: 'POST' });
+    if (!resp.ok) throw new Error('bijlagen ophalen mislukt');
+    const json = await resp.json();
+    state.bijlagenLijst = json.records || [];
+  } catch (e) {
+    state.bijlagenLijst = [];
+    state.bijlagenLaadFout = true;
+  }
+  if (state.route.naam === 'opname' && state.route.tab === 'onderzoek') render();
+}
+function vindBijlagen(rapportId) {
+  if (!rapportId || !state.bijlagenLijst) return [];
+  return state.bijlagenLijst.filter(r => (r.fields.taxatie_rapport_id || []).includes(rapportId));
+}
+
 function formatAfspraak(iso) {
   if (!iso) return 'Nog geen afspraak bekend';
   const d = new Date(iso);
@@ -834,9 +863,9 @@ function renderNieuweTaxatieScherm() {
 // SCHERM: Opname (Meting / Indeling / Foto's / Aantekeningen)
 // ----------------------------------------------------------------------------------------------
 const TABS = [
+  { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
-  { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
   { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
@@ -845,7 +874,7 @@ const TABS = [
 
 function renderOpnameScherm() {
   const t = state.taxatie;
-  const wrap = el('div', {});
+  const wrap = el('div', { class: 'opname-scherm' });
   wrap.appendChild(el('div', { class: 'statusbalk' },
     el('button', { class: 'terug', onclick: () => { location.hash = ''; } }, '‹'),
     el('h1', {}, t.adres || t.rapport_id),
@@ -1424,16 +1453,19 @@ function renderOnderzoekTab() {
   if (state.vooronderzoekLijst === null) {
     if (!vooronderzoekOphalenBezig) { vooronderzoekOphalenBezig = true; laadVooronderzoekLijst().then(() => { vooronderzoekOphalenBezig = false; }); }
     wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Laden…'));
+    wrap.appendChild(renderBijlagenSectie(t));
     return wrap;
   }
   if (state.vooronderzoekLaadFout) {
     wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Kon vooronderzoeksdata niet ophalen (geen verbinding?). Probeer het opnieuw met "Vernieuwen".'));
+    wrap.appendChild(renderBijlagenSectie(t));
     return wrap;
   }
 
   const record = vindVooronderzoek(t.adres);
   if (!record) {
     wrap.appendChild(el('p', { class: 'macro-uitleg' }, `Nog geen vooronderzoek gevonden voor "${t.adres || '(adres onbekend)'}". Nog niet compleet, of pas net gestart door de Research-agent? Probeer "Vernieuwen".`));
+    wrap.appendChild(renderBijlagenSectie(t));
     return wrap;
   }
   const f = record.fields;
@@ -1460,7 +1492,47 @@ function renderOnderzoekTab() {
     ));
   });
   wrap.appendChild(kaart);
+  wrap.appendChild(renderBijlagenSectie(t));
   return wrap;
+}
+
+// Sinds Arno's verzoek (11-09-2026): "een knop waarin je bijlagen en vooronderzoeksgegevens kan
+// raadplegen op locatie" — bewust in hetzelfde (nu vooraan staande) Onderzoek-tabblad, niet een
+// apart tabblad: allebei is informatie die je ALLEEN raadpleegt tijdens de opname, geen invoer.
+let bijlagenOphalenBezig = false;
+function renderBijlagenSectie(t) {
+  const kaart = el('div', { class: 'macro-groep' });
+  const kop = el('div', { class: 'onderzoek-koprij' },
+    el('h3', {}, '📎 Bijlagen'),
+    el('button', {
+      class: 'knop spook klein',
+      onclick: () => { if (!bijlagenOphalenBezig) { bijlagenOphalenBezig = true; laadBijlagenLijst().then(() => { bijlagenOphalenBezig = false; }); render(); } },
+    }, '⟳ Vernieuwen'),
+  );
+  kaart.appendChild(kop);
+
+  if (state.bijlagenLijst === null) {
+    if (!bijlagenOphalenBezig) { bijlagenOphalenBezig = true; laadBijlagenLijst().then(() => { bijlagenOphalenBezig = false; }); }
+    kaart.appendChild(el('p', { class: 'macro-uitleg' }, 'Laden…'));
+    return kaart;
+  }
+  if (state.bijlagenLaadFout) {
+    kaart.appendChild(el('p', { class: 'macro-uitleg' }, 'Kon bijlagen niet ophalen (geen verbinding?). Probeer het opnieuw met "Vernieuwen".'));
+    return kaart;
+  }
+  const bijlagen = vindBijlagen(t.rapport_id);
+  if (bijlagen.length === 0) {
+    kaart.appendChild(el('p', { class: 'macro-uitleg', style: 'margin-bottom:0;' }, 'Geen bijlagen doorgestuurd voor dit adres. Plaats ze vooraf in Taxatieweb (Q/R > Bijlagen) — Arno stuurt ze vandaar door met de "Bijlagen doorsturen"-knop.'));
+    return kaart;
+  }
+  bijlagen.forEach((record) => {
+    const bestand = (record.fields.bestand || [])[0];
+    if (!bestand) return;
+    kaart.appendChild(el('a', {
+      href: bestand.url, target: '_blank', rel: 'noopener', class: 'bijlage-rij',
+    }, el('span', { class: 'bijlage-icoon' }, '📄'), el('span', {}, record.fields.naam || bestand.filename || 'Bijlage')));
+  });
+  return kaart;
 }
 
 // --- Bewoning (L, Fase 1 van "volledige opname") ---

@@ -42,6 +42,16 @@ h1, h2, h3, p { margin: 0; }
 
 #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
+/* Sinds Arno's melding (11-09-2026): "knoppenbalk hangt soms halverwege" — echte oorzaak: dit
+   omhulsel had geen eigen display:flex, dus .inhoud's `flex:1` (hieronder) deed NIETS (flex-regels
+   werken alleen op directe kinderen van een flex-container) en kreeg gewoon zijn natuurlijke
+   inhoud-hoogte. Bij een langere tab (bv. veel woonlagen) werd .opname-scherm dan hoger dan het
+   scherm, en stak .tabbalk's position:sticky ergens halverwege — zonder scroll-begrenzing van
+   .inhoud had "sticky" simpelweg niets om aan vast te zitten. min-height:0 op zowel dit element als
+   .inhoud is nodig omdat flex-items anders NOOIT kleiner worden dan hun inhoud, wat overflow-y:auto
+   op .inhoud alsnog zou blokkeren (bekende flexbox-valkuil). */
+.opname-scherm { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
 /* --- statusbalk (boven) --- */
 .statusbalk {
   background: var(--navy);
@@ -67,7 +77,7 @@ h1, h2, h3, p { margin: 0; }
 .sync-pil.offline { background: rgba(226,104,95,.22); color: #ffb3ac; }
 
 /* --- content --- */
-.inhoud { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; padding-bottom: 24px; }
+.inhoud { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; padding-bottom: 24px; }
 .inhoud.geen-padding { padding: 0; }
 
 /* --- tabbalk (onder, in een opname) --- */
@@ -257,6 +267,14 @@ h1, h2, h3, p { margin: 0; }
 .blok-label { font-size: 11px; font-weight: 700; fill: var(--navy); pointer-events: none; font-family: var(--font); }
 .blok-maat { font-size: 9.5px; fill: var(--text-dim); pointer-events: none; font-family: var(--font); }
 .blok-greep { fill: var(--navy); cursor: nwse-resize; touch-action: none; rx: 2; }
+
+/* --- Bijlagen (Onderzoek-tab) --- */
+.bijlage-rij {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--divider);
+  color: var(--navy); text-decoration: none; font-size: 13.5px;
+}
+.bijlage-rij:last-child { border-bottom: none; }
+.bijlage-icoon { font-size: 16px; flex-shrink: 0; }
 
 /* --- Bewoning (L), Fase 1 van de "volledige opname" --- */
 .bewoning-vraag { margin-bottom: 12px; }
