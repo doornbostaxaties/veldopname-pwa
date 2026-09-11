@@ -79,6 +79,7 @@ function leegTaxatie(rapportId) {
     data: leegData(),
     bewoning: leegBewoning(),
     bouwkundig: leegBouwkundig(),
+    energetisch: leegEnergetisch(),
     lokaalGewijzigd: false,
   };
 }
@@ -366,6 +367,148 @@ const BOUWKUNDIG_SUBTABS = {
   ],
 };
 
+// Fase 3 "volledige opname" (12-09-2026): Energetische opnamestaat, 1-op-1 Taxatieweb's I.4 (live
+// nagekeken — LET OP: op een rapport met al ECHTE, ingevulde data, dus bewust alleen gelezen/
+// gescrold, nooit geklikt om een leeg bouwdeel te "testen" zoals bij J.4). Andere veldvorm dan
+// Bouwkundig (geen conditie/aandachtspunten): Isolatie/Installaties-velden hebben een "Gedeeltelijk"
+// Ja/Nee + "Installatiemoment" (Bouwjaar/Installatiejaar/Onbekend) + vrije Opmerkingen. Type 'dak'
+// heeft een EXTRA laag: "aanwezig" (het dak bestaat) staat los van "geïsoleerd" (Ja/Nee/nog niets
+// gekozen) — de rest (Gedeeltelijk/Installatiemoment/Opmerkingen) toont Taxatieweb alleen als
+// geïsoleerd op Ja staat. Type 'materiaalTijd' is het bekende materiaal-multiselect (+ "Overige" met
+// tekstveld, zelfde patroon als Bouwkundig) maar met Installatiemoment i.p.v. Bouwjaar/Eigendom.
+// Type 'simpel' = alleen aanwezig + Opmerkingen (geen Installatiemoment) — gebruikt voor de losse
+// items waarvan de Taxatieweb-velden niet live geverifieerd konden worden zonder een leeg bouwdeel
+// aan te klikken op dit ingevulde testrapport; als dat vermoeden niet klopt, breidt een latere
+// sessie dit bouwdeel uit zodra er een leeg rapport voorhanden is.
+const INSTALLATIEMOMENT_OPTIES = ['Bouwjaar', 'Installatiejaar', 'Onbekend'];
+const ENERGETISCH_ORIENTATIE_OPTIES = ['Noord', 'Noordwest', 'West', 'Zuidwest', 'Zuid', 'Zuidoost', 'Oost', 'Noordoost', 'Horizontaal'];
+const ENERGETISCH_EIGENDOM_OPTIES = ['Eigendom', 'Lease', 'Huur', 'Anders'];
+const ENERGETISCH_BRON_OPTIES = ['Visuele waarneming taxateur', 'Verkopende makelaar', 'Huurder/gebruiker', 'Eigenaar', 'Aankopende makelaar', 'Anderen'];
+const ENERGETISCH_BOUWTYPE_OPTIES = ['Houtbouw', 'Staalbouw', 'Metselwerk', 'Systeembouw', 'Overige bouwtype', 'Houtskeletbouw', 'Betonnen wanden en vloeren', 'Traditioneel gebouwd', 'Prefab bouw'];
+const GLAS_OPTIES = ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Overige'];
+const ENERGETISCH_SCHEMA = {
+  isolatie: {
+    gevel: [
+      { key: 'gevelisolatie', label: 'Gevelisolatie', type: 'isolatie' },
+      { key: 'gevelpanelen', label: 'Gevelpanelen', type: 'isolatie' },
+    ],
+    daken: [
+      { key: 'hellendDak', label: 'Hellend dak aanwezig', type: 'dak' },
+      { key: 'platDak', label: 'Plat dak aanwezig', type: 'dak' },
+    ],
+    vloer: [
+      { key: 'vloerisolatie1e', label: 'Vloerisolatie 1e woonlaag', type: 'isolatie' },
+      { key: 'vloerisolatie2e', label: 'Vloerisolatie 2e woonlaag', type: 'isolatie' },
+      { key: 'vloerisolatie3e', label: 'Vloerisolatie 3e woonlaag', type: 'isolatie' },
+      { key: 'vloerisolatieOverige', label: 'Vloerisolatie overige woonlagen', type: 'isolatie' },
+      { key: 'kruipruimteisolatie', label: 'Kruipruimteisolatie', type: 'isolatie' },
+    ],
+    ramen: [
+      { key: 'glas1e', label: 'Glas 1e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
+      { key: 'glas2e', label: 'Glas 2e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
+      { key: 'glas3e', label: 'Glas 3e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
+      { key: 'glasOverige', label: 'Glas overige woonlagen', type: 'materiaalTijd', opties: GLAS_OPTIES },
+    ],
+    overige: [
+      { key: 'leidingisolatie', label: 'Leidingisolatie', type: 'isolatie' },
+      { key: 'energiezuinigeKozijnen', label: 'Energiezuinige kozijnen, deuren en daarmee gelijk te stellen constructieonderdelen in combinatie met hoog rendement beglazing (tenminste HR++)', type: 'simpel' },
+    ],
+  },
+  installaties: {
+    verwarming: [
+      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaalTijd', opties: ['Airconditioning', 'Biomassaketel', 'Blokverwarming', 'Bodem/water warmtepomp', 'Centrale verwarming', 'Collectieve warmtepomp', 'CV-ketel', 'Elektrische verwarming', 'Gaskachels', 'HR combi ketel', 'Hybride warmtepomp', 'Infrarood', 'Lucht/lucht warmtepomp', 'Lucht/water warmtepomp', 'Micro WKK(HRe-ketel)', 'Moederhaard', 'Open haard/houtkachel', 'Pelletkachel', 'Stadsverwarming', 'Water/water warmtepomp(WKO)', 'Overige'] },
+      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'] },
+      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'] },
+    ],
+    warmWater: [
+      { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'] },
+      { key: 'doucheWtw', label: 'Douche-warmteterugwinningssysteem', type: 'simpel' },
+      { key: 'zonneboilerInstallatie', label: 'Zonneboiler', type: 'simpel' },
+    ],
+    ventilatieKoeling: [
+      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaalTijd', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'] },
+      { key: 'koeling', label: 'Koeling', type: 'materiaalTijd', opties: ['Airconditioning', 'Vloerverwarming', 'Radiatoren', 'Ventilatie', 'Overige'] },
+    ],
+  },
+  energieopwekking: [
+    { key: 'zonnepanelen', label: 'Zonnepanelen', type: 'zonnepanelen' },
+    { key: 'wind', label: 'Wind', type: 'simpel' },
+    { key: 'overigeEnergieopwekking', label: 'Overige energieopwekking', type: 'simpel' },
+  ],
+};
+const ENERGETISCH_SUBTABS = {
+  isolatie: [
+    { id: 'gevel', label: 'Gevel' }, { id: 'daken', label: 'Daken' }, { id: 'vloer', label: 'Vloer' },
+    { id: 'ramen', label: 'Ramen' }, { id: 'overige', label: 'Overige' },
+  ],
+  installaties: [
+    { id: 'verwarming', label: 'Verwarming' }, { id: 'warmWater', label: 'Warm water' },
+    { id: 'ventilatieKoeling', label: 'Ventilatie/Koeling' },
+  ],
+};
+const ENERGETISCH_HOOFDTABS = [
+  ['algemeen', 'Algemeen'], ['isolatie', 'Isolatie'], ['installaties', 'Installaties'], ['energieopwekking', 'Energieopwekking'],
+];
+
+function leegIsolatieVeld() { return { aanwezig: false, gedeeltelijk: null, installatiemoment: '', opmerkingen: '' }; }
+function leegDakVeld() { return { aanwezig: false, geisoleerd: null, gedeeltelijk: null, installatiemoment: '', opmerkingen: '' }; }
+function leegMateriaalTijdVeld() { return { aanwezig: false, materialen: [], overigeTekst: '', installatiemoment: '', opmerkingen: '' }; }
+function leegEnergetischSimpelVeld() { return { aanwezig: false, opmerkingen: '' }; }
+function leegZonnepanelenVeld() { return { aanwezig: false, metenType: '', aantal: '', orientatie: '', eigendom: '', installatiemoment: '', opmerkingen: '' }; }
+function maakLeegEnergetischVeld(def) {
+  if (def.type === 'isolatie') return leegIsolatieVeld();
+  if (def.type === 'dak') return leegDakVeld();
+  if (def.type === 'materiaalTijd') return leegMateriaalTijdVeld();
+  if (def.type === 'zonnepanelen') return leegZonnepanelenVeld();
+  return leegEnergetischSimpelVeld();
+}
+function maakEnergetischGroep(velden) {
+  const groep = {};
+  velden.forEach(d => { groep[d.key] = maakLeegEnergetischVeld(d); });
+  return groep;
+}
+function leegEnergetisch() {
+  return {
+    algemeen: { bron: [], bouwtype: [] },
+    isolatie: {
+      gevel: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.gevel),
+      daken: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.daken),
+      vloer: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.vloer),
+      ramen: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.ramen),
+      overige: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.overige),
+    },
+    installaties: {
+      verwarming: maakEnergetischGroep(ENERGETISCH_SCHEMA.installaties.verwarming),
+      warmWater: maakEnergetischGroep(ENERGETISCH_SCHEMA.installaties.warmWater),
+      ventilatieKoeling: maakEnergetischGroep(ENERGETISCH_SCHEMA.installaties.ventilatieKoeling),
+    },
+    energieopwekking: maakEnergetischGroep(ENERGETISCH_SCHEMA.energieopwekking),
+  };
+}
+// Zelfde migratie-patroon als metVolledigBouwkundig() — vult alleen ONTBREKENDE velden aan, past
+// nooit al ingevulde data met terugwerkende kracht aan.
+function metVolledigEnergetisch(e) {
+  const leeg = leegEnergetisch();
+  if (!e || typeof e !== 'object') return leeg;
+  if (!e.algemeen) e.algemeen = leeg.algemeen;
+  if (!Array.isArray(e.algemeen.bron)) e.algemeen.bron = [];
+  if (!Array.isArray(e.algemeen.bouwtype)) e.algemeen.bouwtype = [];
+  ['isolatie', 'installaties'].forEach(hoofd => {
+    if (!e[hoofd]) e[hoofd] = {};
+    Object.keys(ENERGETISCH_SCHEMA[hoofd]).forEach(sectie => {
+      if (!e[hoofd][sectie]) e[hoofd][sectie] = {};
+      ENERGETISCH_SCHEMA[hoofd][sectie].forEach(def => {
+        if (!e[hoofd][sectie][def.key]) e[hoofd][sectie][def.key] = leeg[hoofd][sectie][def.key];
+      });
+    });
+  });
+  if (!e.energieopwekking) e.energieopwekking = {};
+  ENERGETISCH_SCHEMA.energieopwekking.forEach(def => {
+    if (!e.energieopwekking[def.key]) e.energieopwekking[def.key] = leeg.energieopwekking[def.key];
+  });
+  return e;
+}
+
 function naarGetal(w) {
   const n = parseFloat(String(w || '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
@@ -477,6 +620,8 @@ const state = {
   bouwkundigHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties' | 'overigeBijzonderheden'
   bouwkundigSubtab: 'daken', // zie BOUWKUNDIG_SUBTABS[hoofdtab]
   instellingenMenuOpen: false,
+  energetischHoofdtab: 'algemeen', // 'algemeen' | 'isolatie' | 'installaties' | 'energieopwekking'
+  energetischSubtab: 'gevel', // zie ENERGETISCH_SUBTABS[hoofdtab]
 };
 
 async function laadMacros() {
@@ -681,6 +826,7 @@ async function cloudOpslaan(taxatie) {
     aantekeningen: taxatie.aantekeningen || '',
     bewoning_data: JSON.stringify(taxatie.bewoning || leegBewoning()),
     bouwkundig_data: JSON.stringify(taxatie.bouwkundig || leegBouwkundig()),
+    energetisch_data: JSON.stringify(taxatie.energetisch || leegEnergetisch()),
   };
   // adres/postcode/plaats alleen meesturen als we ze lokaal ECHT kennen — nooit een lege waarde
   // sturen die het bestaande veld in Airtable zou overschrijven. Zonder deze guard overschreef een
@@ -729,7 +875,12 @@ function pasAfgeleideRegelsToe() {
   if (['CV-ketel', 'HR combi ketel', 'Hybride warmtepomp'].some(x => materialenVerwarming.includes(x))) {
     warmwatertoestel.materialen = warmwatertoestel.materialen || [];
     if (!warmwatertoestel.materialen.includes('Geïntegreerd in cv')) warmwatertoestel.materialen.push('Geïntegreerd in cv');
-    if (verwarmingstoestel.details.bouwjaar) warmwatertoestel.details.bouwjaar = verwarmingstoestel.details.bouwjaar;
+  }
+  // Bouwjaar overnemen zodra "Geïntegreerd in cv" aan staat — ongeacht OF dat hierboven automatisch
+  // gebeurde of handmatig aangevinkt is (Arno's correctie 12-09-2026: de trigger is dit vinkje zelf,
+  // niet welk type verwarmingstoestel er staat).
+  if ((warmwatertoestel.materialen || []).includes('Geïntegreerd in cv') && verwarmingstoestel.details.bouwjaar) {
+    warmwatertoestel.details.bouwjaar = verwarmingstoestel.details.bouwjaar;
   }
 
   // Verwarmingstoestel heeft ook airco → Koeling-bouwdeel meteen meenemen.
@@ -815,6 +966,7 @@ async function laadOpname(rapportId, tab) {
   if (lokaal.bewoning.woningtype === undefined) lokaal.bewoning.woningtype = '';
   if (lokaal.bewoning.bouwjaar === undefined) lokaal.bewoning.bouwjaar = '';
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
+  lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -824,7 +976,7 @@ async function laadOpname(rapportId, tab) {
   // wachtrij staat, anders zouden we eigen niet-verzonden werk overschrijven.
   if (state.online && !lokaal.lokaalGewijzigd) {
     try {
-      const { data, bewoning_data, bouwkundig_data, aantekeningen } = await cloudOphalen(rapportId);
+      const { data, bewoning_data, bouwkundig_data, energetisch_data, aantekeningen } = await cloudOphalen(rapportId);
       // Let op: `data` (en sinds Fase 1/2 "volledige opname" ook bewoning_data/bouwkundig_data) komt
       // al als object terug (de Make-respons splitst 'm rechtstreeks in de JSON-body,
       // {"data":{{...}}} zonder quotes) — GEEN JSON.parse() erover heen, dat gaf hier "[object
@@ -838,6 +990,7 @@ async function laadOpname(rapportId, tab) {
         state.taxatie.bewoning = bewoning_data; gewijzigd = true;
       }
       if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
+      if (energetisch_data && typeof energetisch_data === 'object') { state.taxatie.energetisch = metVolledigEnergetisch(energetisch_data); gewijzigd = true; }
       // aantekeningen alleen overnemen als lokaal nog leeg is — anders zou een cloud-versie die (door
       // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
       if (aantekeningen && !state.taxatie.aantekeningen) { state.taxatie.aantekeningen = aantekeningen; gewijzigd = true; }
@@ -1204,6 +1357,7 @@ const TABS = [
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
+  { id: 'energetisch', icon: '♻️', label: 'Energetisch' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
@@ -1248,6 +1402,7 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'onderzoek') inhoud.appendChild(renderOnderzoekTab());
   else if (state.route.tab === 'objectkenmerken') inhoud.appendChild(renderObjectkenmerkenTab());
   else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
+  else if (state.route.tab === 'energetisch') inhoud.appendChild(renderEnergetischTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
@@ -2006,10 +2161,6 @@ function renderObjectkenmerkenTab() {
   groepA.appendChild(renderJaNeeVraag('Andere bronnen', t, 'gezochtAndereBronnen', 'gezochtAndereBronnenToelichting'));
   wrap.appendChild(groepA);
 
-  const groepB = el('div', { class: 'macro-groep' });
-  groepB.appendChild(renderJaNeeVraag('Ik heb de woning volledig kunnen inspecteren', t, 'volledigGeinspecteerd', null));
-  wrap.appendChild(groepB);
-
   const groepF = el('div', { class: 'macro-groep' });
   groepF.appendChild(el('h3', {}, 'F. Wat is de situatie van de woning?'));
   const select = el('select', {
@@ -2256,6 +2407,206 @@ function renderBouwkundigTab() {
   const defs = BOUWKUNDIG_SCHEMA[state.bouwkundigHoofdtab][state.bouwkundigSubtab];
   const lijst = el('div', { class: 'bouwdeel-lijst' });
   defs.forEach(def => lijst.appendChild(renderBouwdeelKaart(sectieObj, def)));
+  wrap.appendChild(lijst);
+  return wrap;
+}
+
+// --- Energetisch (Fase 2 "volledige opname", I.4 Energetische opnamestaat) ---
+// Generieke Ja/Nee-rij zonder toelichtingsveld (voor Gedeeltelijk/Geïsoleerd — dit zijn simpele
+// vlaggen, geen aandachtspunt-toelichting zoals bij Bouwkundig).
+function renderJaNeeToggle(labelText, huidigeWaarde, onChange) {
+  const wissel = el('div', { class: 'weergave-wissel' });
+  [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
+    wissel.appendChild(el('button', {
+      class: 'klein' + (huidigeWaarde === waarde ? ' actief' : ''),
+      onclick: () => { onChange(waarde); planOpslaan(); render(); },
+    }, tekst));
+  });
+  return el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'energetisch-veld-label' }, labelText), wissel);
+}
+function renderSelectVeld(labelText, waarde, opties, onChange) {
+  return el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, labelText),
+    el('select', {
+      class: 'energetisch-select',
+      onchange: (e) => { onChange(e.target.value); planOpslaan(); },
+    },
+      el('option', { value: '' }, 'Selecteer'),
+      ...opties.map(o => el('option', { value: o, selected: waarde === o ? 'selected' : null }, o))));
+}
+// Installatiemoment (Bouwjaar/Installatiejaar/Onbekend) + vrij opmerkingenveld — komt terug bij
+// vrijwel elk I.4-onderdeel in Taxatieweb.
+function renderInstallatiemomentEnOpmerkingen(veld) {
+  const wrap = el('div', {});
+  wrap.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
+  const opmerkingen = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
+    oninput: (e) => { veld.opmerkingen = e.target.value; planOpslaan(); },
+  });
+  opmerkingen.value = veld.opmerkingen || '';
+  wrap.appendChild(opmerkingen);
+  return wrap;
+}
+function renderEnergetischKop(veld, def) {
+  return el('div', {
+    class: 'bouwdeel-kop',
+    onclick: () => { veld.aanwezig = !veld.aanwezig; planOpslaan(); render(); },
+  },
+    el('input', { type: 'checkbox', checked: veld.aanwezig ? 'checked' : null }),
+    el('span', { class: 'bouwdeel-titel' }, def.label));
+}
+function renderIsolatieKaart(veld, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderEnergetischKop(veld, def));
+  if (!veld.aanwezig) return kaart;
+  kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  return kaart;
+}
+function renderDakKaart(veld, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderEnergetischKop(veld, def));
+  if (!veld.aanwezig) return kaart;
+  kaart.appendChild(renderJaNeeToggle('Geïsoleerd', veld.geisoleerd, (w) => { veld.geisoleerd = w; }));
+  kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  return kaart;
+}
+function renderMateriaalTijdKaart(veld, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderEnergetischKop(veld, def));
+  if (!veld.aanwezig) return kaart;
+  const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  def.opties.forEach(optie => {
+    const aan = (veld.materialen || []).includes(optie);
+    grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => {
+          veld.materialen = veld.materialen || [];
+          const i = veld.materialen.indexOf(optie);
+          if (i >= 0) veld.materialen.splice(i, 1); else veld.materialen.push(optie);
+          planOpslaan(); render();
+        },
+      }), optie));
+  });
+  kaart.appendChild(grid);
+  if ((veld.materialen || []).includes('Overige')) {
+    const overigeVeld = el('input', {
+      type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
+      oninput: (e) => { veld.overigeTekst = e.target.value; planOpslaan(); },
+    });
+    overigeVeld.value = veld.overigeTekst || '';
+    kaart.appendChild(overigeVeld);
+  }
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  return kaart;
+}
+function renderEnergetischSimpelKaart(veld, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderEnergetischKop(veld, def));
+  if (!veld.aanwezig) return kaart;
+  const opmerkingen = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
+    oninput: (e) => { veld.opmerkingen = e.target.value; planOpslaan(); },
+  });
+  opmerkingen.value = veld.opmerkingen || '';
+  kaart.appendChild(opmerkingen);
+  return kaart;
+}
+function renderZonnepanelenKaart(veld, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderEnergetischKop(veld, def));
+  if (!veld.aanwezig) return kaart;
+  const grid = el('div', { class: 'bouwdeel-details-grid' });
+  const aantalInput = el('input', {
+    type: 'number', placeholder: '0',
+    oninput: (e) => { veld.aantal = e.target.value; planOpslaan(); },
+  });
+  aantalInput.value = veld.aantal || '';
+  grid.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, 'Aantal', aantalInput));
+  grid.appendChild(renderSelectVeld('Oriëntatie', veld.orientatie, ENERGETISCH_ORIENTATIE_OPTIES, (w) => { veld.orientatie = w; }));
+  grid.appendChild(renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }));
+  kaart.appendChild(grid);
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  return kaart;
+}
+function renderEnergetischKaart(sectieObj, def) {
+  const veld = sectieObj[def.key];
+  if (def.type === 'isolatie') return renderIsolatieKaart(veld, def);
+  if (def.type === 'dak') return renderDakKaart(veld, def);
+  if (def.type === 'materiaalTijd') return renderMateriaalTijdKaart(veld, def);
+  if (def.type === 'zonnepanelen') return renderZonnepanelenKaart(veld, def);
+  return renderEnergetischSimpelKaart(veld, def);
+}
+function renderMultiselectGroep(titel, opties, geselecteerd, onToggle) {
+  const groep = el('div', { class: 'macro-groep' });
+  groep.appendChild(el('h3', {}, titel));
+  const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  opties.forEach(optie => {
+    const aan = geselecteerd.includes(optie);
+    grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => { onToggle(optie); planOpslaan(); render(); },
+      }), optie));
+  });
+  groep.appendChild(grid);
+  return groep;
+}
+function renderEnergetischAlgemeen() {
+  const t = state.taxatie;
+  const alg = t.energetisch.algemeen;
+  const wrap = el('div', {});
+  wrap.appendChild(renderMultiselectGroep('Bron van de informatie', ENERGETISCH_BRON_OPTIES, alg.bron, (optie) => {
+    const i = alg.bron.indexOf(optie);
+    if (i >= 0) alg.bron.splice(i, 1); else alg.bron.push(optie);
+  }));
+  wrap.appendChild(renderMultiselectGroep('Bouwtype', ENERGETISCH_BOUWTYPE_OPTIES, alg.bouwtype, (optie) => {
+    const i = alg.bouwtype.indexOf(optie);
+    if (i >= 0) alg.bouwtype.splice(i, 1); else alg.bouwtype.push(optie);
+  }));
+  return wrap;
+}
+function renderEnergetischTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+
+  const hoofdtabs = el('div', { class: 'weergave-wissel bouwkundig-hoofdtabs' });
+  ENERGETISCH_HOOFDTABS.forEach(([id, label]) => {
+    hoofdtabs.appendChild(el('button', {
+      class: 'klein' + (state.energetischHoofdtab === id ? ' actief' : ''),
+      onclick: () => { state.energetischHoofdtab = id; render(); },
+    }, label));
+  });
+  wrap.appendChild(hoofdtabs);
+
+  if (state.energetischHoofdtab === 'algemeen') {
+    wrap.appendChild(renderEnergetischAlgemeen());
+    return wrap;
+  }
+  if (state.energetischHoofdtab === 'energieopwekking') {
+    const lijst = el('div', { class: 'bouwdeel-lijst' });
+    ENERGETISCH_SCHEMA.energieopwekking.forEach(def => lijst.appendChild(renderEnergetischKaart(t.energetisch.energieopwekking, def)));
+    wrap.appendChild(lijst);
+    return wrap;
+  }
+
+  const subtabsSchema = ENERGETISCH_SUBTABS[state.energetischHoofdtab];
+  if (!subtabsSchema.some(s => s.id === state.energetischSubtab)) state.energetischSubtab = subtabsSchema[0].id;
+
+  const subtabs = el('div', { class: 'weergave-wissel bouwkundig-subtabs' });
+  subtabsSchema.forEach(sub => {
+    subtabs.appendChild(el('button', {
+      class: 'klein' + (state.energetischSubtab === sub.id ? ' actief' : ''),
+      onclick: () => { state.energetischSubtab = sub.id; render(); },
+    }, sub.label));
+  });
+  wrap.appendChild(subtabs);
+
+  const sectieObj = t.energetisch[state.energetischHoofdtab][state.energetischSubtab];
+  const defs = ENERGETISCH_SCHEMA[state.energetischHoofdtab][state.energetischSubtab];
+  const lijst = el('div', { class: 'bouwdeel-lijst' });
+  defs.forEach(def => lijst.appendChild(renderEnergetischKaart(sectieObj, def)));
   wrap.appendChild(lijst);
   return wrap;
 }
