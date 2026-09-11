@@ -290,6 +290,36 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 10px; background: var(--surface); font: inherit; font-size: 13.5px; color: var(--text);
 }
 
+/* --- Bouwkundig (Fase 2 "volledige opname") --- */
+.bouwkundig-hoofdtabs { flex-wrap: wrap; }
+.bouwkundig-subtabs { flex-wrap: wrap; }
+.bouwkundig-nog-niet { font-size: 13px; color: var(--text-dim); padding: 20px 4px; }
+.bouwdeel-lijst { display: flex; flex-direction: column; gap: 10px; }
+.bouwdeel-kaart { background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; }
+.bouwdeel-kop { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.bouwdeel-kop input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
+.bouwdeel-titel { font-size: 14px; font-weight: 700; color: var(--navy); }
+.bouwdeel-veld-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim); margin: 12px 0 6px; }
+.conditie-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.conditie-chips button {
+  font: inherit; font-size: 11.5px; font-weight: 600; padding: 6px 10px; border-radius: 999px;
+  border: 1px solid var(--divider); background: var(--bg); color: var(--text-dim); cursor: pointer;
+}
+.conditie-chips button.actief { background: var(--navy); border-color: var(--navy); color: #fff; }
+.bouwdeel-kosten-rij { display: flex; gap: 12px; margin: 10px 0; }
+.bouwdeel-kosten-rij label { flex: 1; font-size: 11.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+.bouwdeel-kosten-rij input {
+  font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--divider);
+  border-radius: 8px; background: var(--bg); color: var(--text); box-sizing: border-box;
+}
+.bouwdeel-materiaal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.bouwdeel-omschrijving {
+  width: 100%; min-height: 60px; border: 1px solid var(--divider); border-radius: 10px;
+  background: var(--bg); padding: 10px; font: inherit; font-size: 13.5px; color: var(--text);
+  resize: vertical; box-sizing: border-box; margin-bottom: 4px;
+}
+
 /* --- Aantekeningen --- */
 .aantekeningen-veld {
   width: 100%; min-height: 60vh; border: 1px solid var(--divider); border-radius: 14px; background: var(--surface);

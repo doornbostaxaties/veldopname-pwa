@@ -75,6 +75,7 @@ function leegTaxatie(rapportId) {
     voorlopig: false, kavelnummer: '', bouwplan: '',
     data: leegData(),
     bewoning: leegBewoning(),
+    bouwkundig: leegBouwkundig(),
     lokaalGewijzigd: false,
   };
 }
@@ -107,6 +108,104 @@ const BEWONING_SITUATIE_OPTIES = [
   'de eigenaar in een deel van de woning woont, eventueel samen met zijn gezin. Een ander deel van de woning staat leeg.',
   'de woning gedeeltelijk is verhuurd. Een ander deel van de woning staat leeg.',
   'Anders, namelijk:',
+];
+
+// Fase 2 "volledige opname" (11-09-2026): Bouwkundige staat per ruimte/bouwdeel, 1-op-1 dezelfde
+// bouwdelen/velden als Taxatieweb's J.4 Bouwkundige opnamestaat (live nagekeken op een testrapport).
+// Bewust ALLEEN Buitenzijde uitgewerkt in deze fase (Arno's akkoord: "eerst Buitenzijde, dan
+// Binnenzijde, dan Installaties") — Binnenzijde/Installaties/Overige bijzonderheden/Specifieke
+// aandachtspunten volgen later, zelfde patroon.
+//
+// Elk "gewoon" bouwdeel (type 'tekst'/'materiaal') heeft: aanwezig (checkbox — Taxatieweb toont de
+// rest van de velden alleen als dit aan staat), conditie (0-5, zelfde labels als Taxatieweb: 0=niet
+// waarneembaar, 1=nader onderzoek nodig, 2=slecht, 3=matig, 4=redelijk, 5=goed — live afgelezen via
+// de slider se aria-valuetext), kostenDirect/kosten5jaar (indicatieve herstelkosten), omschrijving
+// (vrije tekst) OF materialen (checkbox-multiselect, bij bouwdelen waar Taxatieweb zelf ook geen
+// vrije tekst maar een vaste materiaallijst toont), aandachtspuntenAanwezig + -Toelichting (Ja/Nee,
+// toelichting verplicht bij Ja — zelfde Ja/Nee-patroon als renderJaNeeVraag).
+// Type 'simpel' (Overige waarnemingen) heeft GEEN conditie en GEEN aandachtspunten — Taxatieweb
+// toont daar alleen kosten + omschrijving + foto.
+function leegBouwdeel() {
+  return {
+    aanwezig: false, conditie: 5, kostenDirect: '', kosten5jaar: '',
+    omschrijving: '', materialen: [],
+    aandachtspuntenAanwezig: null, aandachtspuntenToelichting: '',
+  };
+}
+function leegBouwkundig() {
+  const maakGroep = (bouwdelen) => {
+    const groep = {};
+    bouwdelen.forEach(b => { groep[b.key] = leegBouwdeel(); });
+    return groep;
+  };
+  return {
+    buitenzijde: {
+      daken: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.daken),
+      gevel: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.gevel),
+      bijgebouwen: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.bijgebouwen),
+      perceel: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.perceel),
+      overigeWaarnemingen: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.overigeWaarnemingen),
+    },
+  };
+}
+// Vult ontbrekende groepen/bouwdelen aan bij bestaande data (nieuwe bouwdelen later toegevoegd, of
+// data van vóór Fase 2) — zelfde migratie-patroon als metExterneBergruimte()/metNieuweMacroCategorieen().
+function metVolledigBouwkundig(bk) {
+  const leeg = leegBouwkundig();
+  if (!bk || typeof bk !== 'object') return leeg;
+  if (!bk.buitenzijde) bk.buitenzijde = {};
+  Object.keys(leeg.buitenzijde).forEach(sectie => {
+    if (!bk.buitenzijde[sectie]) bk.buitenzijde[sectie] = {};
+    Object.keys(leeg.buitenzijde[sectie]).forEach(key => {
+      if (!bk.buitenzijde[sectie][key]) bk.buitenzijde[sectie][key] = leegBouwdeel();
+    });
+  });
+  return bk;
+}
+const CONDITIE_LABELS = ['niet waarneembaar', 'nader onderzoek nodig', 'slecht', 'matig', 'redelijk', 'goed'];
+const BOUWKUNDIG_SCHEMA = {
+  buitenzijde: {
+    daken: [
+      { key: 'dakconstructie', label: 'Dakconstructie', type: 'tekst' },
+      { key: 'materiaalDak', label: 'Materiaal dak', type: 'materiaal', opties: ['Pannen', 'Leien', 'Riet', 'Bitumineus', 'EPDM', 'Sedum', 'Overige'] },
+      { key: 'dakkapellen', label: 'Dakkapel(len)', type: 'tekst' },
+      { key: 'schoorstenen', label: 'Schoorste(e)n(en)', type: 'tekst' },
+      { key: 'goten', label: 'Goten (incl. hemelwaterafvoeren)', type: 'tekst' },
+      { key: 'loodwerk', label: 'Loodwerk', type: 'tekst' },
+    ],
+    gevel: [
+      { key: 'gevelwerk', label: 'Gevelwerk', type: 'materiaal', opties: ['Metselwerk', 'Gevelbetimmering', 'Gevelcement', 'Stucwerk', 'Composiet', 'Overige'] },
+      { key: 'balkon', label: 'Balkon', type: 'tekst' },
+      { key: 'kozijnen', label: 'Kozijnen', type: 'tekst' },
+      { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst' },
+      { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst' },
+      { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst' },
+      { key: 'glas1eWoonlaag', label: 'Glas 1e woonlaag', type: 'tekst' },
+      { key: 'glas2eWoonlaag', label: 'Glas 2e woonlaag', type: 'tekst' },
+      { key: 'glas3eWoonlaag', label: 'Glas 3e woonlaag', type: 'tekst' },
+      { key: 'glasOverigeWoonlagen', label: 'Glas overige woonlagen', type: 'tekst' },
+    ],
+    bijgebouwen: [
+      { key: 'schuurBerging', label: 'Schuur / berging', type: 'tekst' },
+      { key: 'garage', label: 'Garage', type: 'tekst' },
+      { key: 'overigeBijgebouwen', label: 'Overige bijgebouwen', type: 'tekst' },
+    ],
+    perceel: [
+      { key: 'tuinaanleg', label: 'Tuinaanleg', type: 'tekst' },
+      { key: 'nietStandaardBuitenVoorzieningen', label: 'Niet standaard buiten voorzieningen', type: 'tekst' },
+    ],
+    overigeWaarnemingen: [
+      { key: 'overigeWaarnemingenBuitenzijde', label: 'Overige waarnemingen buitenzijde', type: 'simpel' },
+      { key: 'overigeWaarnemingenBijgebouwenEnPerceel', label: 'Overige waarnemingen bijgebouwen en perceel', type: 'simpel' },
+    ],
+  },
+};
+const BUITENZIJDE_SUBTABS = [
+  { id: 'daken', label: 'Daken' },
+  { id: 'gevel', label: 'Gevel' },
+  { id: 'bijgebouwen', label: 'Bijgebouwen' },
+  { id: 'perceel', label: 'Perceel/tuin' },
+  { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
 ];
 
 function naarGetal(w) {
@@ -217,6 +316,9 @@ const state = {
   wachtrijAantal: 0,
   macros: standaardMacros(), // wordt bij init() overschreven met de bewaarde versie, indien aanwezig
   afmetingenWeergave: 'tekening', // 'tekening' | 'lijst' — zelfde standaard als Taxatieweb sinds v0.17.0
+  bouwkundigHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties' — nu alleen buitenzijde uitgewerkt
+  bouwkundigSubtab: 'daken', // zie BUITENZIJDE_SUBTABS
+  ingeklaptBouwdelen: new Set(), // sleutel 'sectie.key' — welke bouwdeel-kaarten ingeklapt zijn
 };
 
 async function laadMacros() {
@@ -420,6 +522,7 @@ async function cloudOpslaan(taxatie) {
     vergelijker_data: '{}',
     aantekeningen: taxatie.aantekeningen || '',
     bewoning_data: JSON.stringify(taxatie.bewoning || leegBewoning()),
+    bouwkundig_data: JSON.stringify(taxatie.bouwkundig || leegBouwkundig()),
   };
   // adres/postcode/plaats alleen meesturen als we ze lokaal ECHT kennen — nooit een lege waarde
   // sturen die het bestaande veld in Airtable zou overschrijven. Zonder deze guard overschreef een
@@ -509,6 +612,7 @@ async function laadOpname(rapportId, tab) {
     }
   }
   if (!lokaal.bewoning) lokaal.bewoning = leegBewoning(); // taxaties van vóór Fase 1 "volledige opname"
+  lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -518,14 +622,16 @@ async function laadOpname(rapportId, tab) {
   // wachtrij staat, anders zouden we eigen niet-verzonden werk overschrijven.
   if (state.online && !lokaal.lokaalGewijzigd) {
     try {
-      const { data, bewoning_data, aantekeningen } = await cloudOphalen(rapportId);
-      // Let op: `data` (en sinds Fase 1 "volledige opname" ook bewoning_data) komt al als object
-      // terug (de Make-respons splitst 'm rechtstreeks in de JSON-body, {"data":{{...}}} zonder
-      // quotes) — GEEN JSON.parse() erover heen, dat gaf hier "[object Object] is not valid JSON".
-      // Vergelijk taxatieweb-opname.user.js, waar cloudData ook rechtstreeks als object gebruikt wordt.
+      const { data, bewoning_data, bouwkundig_data, aantekeningen } = await cloudOphalen(rapportId);
+      // Let op: `data` (en sinds Fase 1/2 "volledige opname" ook bewoning_data/bouwkundig_data) komt
+      // al als object terug (de Make-respons splitst 'm rechtstreeks in de JSON-body,
+      // {"data":{{...}}} zonder quotes) — GEEN JSON.parse() erover heen, dat gaf hier "[object
+      // Object] is not valid JSON". Vergelijk taxatieweb-opname.user.js, waar cloudData ook
+      // rechtstreeks als object gebruikt wordt.
       let gewijzigd = false;
       if (data && typeof data === 'object') { state.taxatie.data = data; gewijzigd = true; }
       if (bewoning_data && typeof bewoning_data === 'object') { state.taxatie.bewoning = bewoning_data; gewijzigd = true; }
+      if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
       // aantekeningen alleen overnemen als lokaal nog leeg is — anders zou een cloud-versie die (door
       // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
       if (aantekeningen && !state.taxatie.aantekeningen) { state.taxatie.aantekeningen = aantekeningen; gewijzigd = true; }
@@ -867,6 +973,7 @@ const TABS = [
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
+  { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'macros', icon: '⚙️', label: "Macro's" },
@@ -886,6 +993,7 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'indeling') inhoud.appendChild(renderIndelingTab());
   else if (state.route.tab === 'onderzoek') inhoud.appendChild(renderOnderzoekTab());
   else if (state.route.tab === 'bewoning') inhoud.appendChild(renderBewoningTab());
+  else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
@@ -1603,6 +1711,129 @@ function renderBewoningTab() {
   groepJ.appendChild(renderJaNeeVraag('J. Heb ik andere informatie ontdekt dan de informatie die hierboven staat?', t, 'andereInfoOntdekt', 'andereInfoOntdektToelichting'));
   wrap.appendChild(groepJ);
 
+  return wrap;
+}
+
+// --- Bouwkundig (Fase 2 "volledige opname", J.4 Bouwkundige opnamestaat) ---
+function conditieChips(bouwdeel) {
+  const wrap = el('div', { class: 'conditie-chips' });
+  CONDITIE_LABELS.forEach((label, waarde) => {
+    wrap.appendChild(el('button', {
+      class: 'klein' + (bouwdeel.conditie === waarde ? ' actief' : ''),
+      onclick: () => { bouwdeel.conditie = waarde; planOpslaan(); render(); },
+    }, label));
+  });
+  return wrap;
+}
+function renderBouwdeelKaart(sectieObj, def) {
+  const bouwdeel = sectieObj[def.key];
+  const sleutel = def.key;
+  const ingeklapt = !bouwdeel.aanwezig; // niet-aanwezige bouwdelen tonen alleen de kop, zelfde als Taxatieweb
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  const kop = el('div', {
+    class: 'bouwdeel-kop',
+    onclick: () => { bouwdeel.aanwezig = !bouwdeel.aanwezig; planOpslaan(); render(); },
+  },
+    el('input', { type: 'checkbox', checked: bouwdeel.aanwezig ? 'checked' : null }),
+    el('span', { class: 'bouwdeel-titel' }, def.label));
+  kaart.appendChild(kop);
+  if (ingeklapt) return kaart;
+
+  if (def.type !== 'simpel') {
+    kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Conditie: ' + CONDITIE_LABELS[bouwdeel.conditie]));
+    kaart.appendChild(conditieChips(bouwdeel));
+  }
+
+  const kostenRij = el('div', { class: 'bouwdeel-kosten-rij' },
+    el('label', {}, 'Direct (€)', el('input', {
+      type: 'number', value: bouwdeel.kostenDirect,
+      oninput: (e) => { bouwdeel.kostenDirect = e.target.value; planOpslaan(); },
+    })),
+    el('label', {}, '1-5 jaar (€)', el('input', {
+      type: 'number', value: bouwdeel.kosten5jaar,
+      oninput: (e) => { bouwdeel.kosten5jaar = e.target.value; planOpslaan(); },
+    })));
+  kaart.appendChild(kostenRij);
+
+  if (def.type === 'materiaal') {
+    const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+    def.opties.forEach(optie => {
+      const aan = (bouwdeel.materialen || []).includes(optie);
+      grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+        el('input', {
+          type: 'checkbox', checked: aan ? 'checked' : null,
+          onchange: () => {
+            bouwdeel.materialen = bouwdeel.materialen || [];
+            const i = bouwdeel.materialen.indexOf(optie);
+            if (i >= 0) bouwdeel.materialen.splice(i, 1); else bouwdeel.materialen.push(optie);
+            planOpslaan(); render();
+          },
+        }), optie));
+    });
+    kaart.appendChild(grid);
+  } else {
+    const omschrijvingVeld = el('textarea', {
+      class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
+      oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
+    });
+    omschrijvingVeld.value = bouwdeel.omschrijving || '';
+    kaart.appendChild(omschrijvingVeld);
+  }
+
+  if (def.type !== 'simpel') {
+    kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Aandachtspunten ' + def.label.toLowerCase() + '?'));
+    const wissel = el('div', { class: 'weergave-wissel' });
+    [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
+      wissel.appendChild(el('button', {
+        class: 'klein' + (bouwdeel.aandachtspuntenAanwezig === waarde ? ' actief' : ''),
+        onclick: () => { bouwdeel.aandachtspuntenAanwezig = waarde; planOpslaan(); render(); },
+      }, tekst));
+    });
+    kaart.appendChild(wissel);
+    if (bouwdeel.aandachtspuntenAanwezig === true) {
+      const toelichting = el('textarea', {
+        class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aandachtspunt…',
+        oninput: (e) => { bouwdeel.aandachtspuntenToelichting = e.target.value; planOpslaan(); },
+      });
+      toelichting.value = bouwdeel.aandachtspuntenToelichting || '';
+      kaart.appendChild(toelichting);
+    }
+  }
+  return kaart;
+}
+function renderBouwkundigTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+
+  const hoofdtabs = el('div', { class: 'weergave-wissel bouwkundig-hoofdtabs' });
+  [['buitenzijde', 'Buitenzijde'], ['binnenzijde', 'Binnenzijde (binnenkort)'], ['installaties', 'Installaties (binnenkort)']].forEach(([id, label]) => {
+    hoofdtabs.appendChild(el('button', {
+      class: 'klein' + (state.bouwkundigHoofdtab === id ? ' actief' : ''),
+      disabled: id === 'buitenzijde' ? null : 'disabled',
+      onclick: () => { state.bouwkundigHoofdtab = id; render(); },
+    }, label));
+  });
+  wrap.appendChild(hoofdtabs);
+
+  if (state.bouwkundigHoofdtab !== 'buitenzijde') {
+    wrap.appendChild(el('p', { class: 'bouwkundig-nog-niet' }, 'Deze sectie is nog niet uitgewerkt in de Veldopname-app — komt in een volgende fase.'));
+    return wrap;
+  }
+
+  const subtabs = el('div', { class: 'weergave-wissel bouwkundig-subtabs' });
+  BUITENZIJDE_SUBTABS.forEach(sub => {
+    subtabs.appendChild(el('button', {
+      class: 'klein' + (state.bouwkundigSubtab === sub.id ? ' actief' : ''),
+      onclick: () => { state.bouwkundigSubtab = sub.id; render(); },
+    }, sub.label));
+  });
+  wrap.appendChild(subtabs);
+
+  const sectieObj = t.bouwkundig.buitenzijde[state.bouwkundigSubtab];
+  const defs = BOUWKUNDIG_SCHEMA.buitenzijde[state.bouwkundigSubtab];
+  const lijst = el('div', { class: 'bouwdeel-lijst' });
+  defs.forEach(def => lijst.appendChild(renderBouwdeelKaart(sectieObj, def)));
+  wrap.appendChild(lijst);
   return wrap;
 }
 
