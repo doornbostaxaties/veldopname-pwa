@@ -119,15 +119,17 @@ const BEWONING_SITUATIE_OPTIES = [
 // Elk "gewoon" bouwdeel (type 'tekst'/'materiaal') heeft: aanwezig (checkbox — Taxatieweb toont de
 // rest van de velden alleen als dit aan staat), conditie (0-5, zelfde labels als Taxatieweb: 0=niet
 // waarneembaar, 1=nader onderzoek nodig, 2=slecht, 3=matig, 4=redelijk, 5=goed — live afgelezen via
-// de slider se aria-valuetext), kostenDirect/kosten5jaar (indicatieve herstelkosten), omschrijving
-// (vrije tekst) OF materialen (checkbox-multiselect, bij bouwdelen waar Taxatieweb zelf ook geen
-// vrije tekst maar een vaste materiaallijst toont), aandachtspuntenAanwezig + -Toelichting (Ja/Nee,
-// toelichting verplicht bij Ja — zelfde Ja/Nee-patroon als renderJaNeeVraag).
+// de slider se aria-valuetext), omschrijving (vrije tekst) OF materialen (checkbox-multiselect, bij
+// bouwdelen waar Taxatieweb zelf ook geen vrije tekst maar een vaste materiaallijst toont),
+// aandachtspuntenAanwezig + -Toelichting (Ja/Nee, toelichting verplicht bij Ja — zelfde Ja/Nee-
+// patroon als renderJaNeeVraag). Bewust GEEN indicatieve-herstelkosten-velden (Direct/1-5 jaar) — op
+// Arno's verzoek (11-09-2026): "hoeft niet in de opname app te staan, is voor uitwerking in
+// Taxatieweb" — die vult hij later zelf rechtstreeks in Taxatieweb in.
 // Type 'simpel' (Overige waarnemingen) heeft GEEN conditie en GEEN aandachtspunten — Taxatieweb
-// toont daar alleen kosten + omschrijving + foto.
+// toont daar alleen kosten (niet hier) + omschrijving + foto.
 function leegBouwdeel() {
   return {
-    aanwezig: false, conditie: 5, kostenDirect: '', kosten5jaar: '',
+    aanwezig: false, conditie: 5,
     omschrijving: '', materialen: [],
     aandachtspuntenAanwezig: null, aandachtspuntenToelichting: '',
   };
@@ -542,6 +544,13 @@ async function cloudOpslaan(taxatie) {
   if (!resp.ok) throw new Error('Opslaan mislukt (' + resp.status + ')');
 }
 
+// Debounce bewust omhoog van 1200ms naar 15s (11-09-2026, Arno's vraag "kost dit niet veel Make-
+// credits?") — elke cloudOpslaan() kost 4-6 Make-operaties (Airtable search+create/update), en bij
+// snel doorklikken door bv. de Bouwkundig-tab (tientallen checkboxes/chips) gaf de oude 1200ms-timer
+// tijdens het testen tientallen losse aanroepen in een paar minuten. Data gaat nooit verloren door
+// deze verruiming: elke wijziging wordt AL synchroon lokaal bewaard (VeldopnameDB, regel hierboven),
+// de cloud-sync is puur voor delen tussen apparaten en mag best 15s achterlopen tijdens actief typen.
+const OPSLAAN_DEBOUNCE_MS = 15000;
 function planOpslaan() {
   if (!state.taxatie) return;
   state.taxatie.lokaalGewijzigd = true;
@@ -558,7 +567,7 @@ function planOpslaan() {
     } catch (e) {
       // lokaal-eerst: mislukte sync is geen probleem, blijft "lokaalGewijzigd" en probeert later opnieuw
     }
-  }, 1200);
+  }, OPSLAAN_DEBOUNCE_MS);
 }
 
 async function verwerkWachtrij() {
@@ -662,14 +671,28 @@ function el(tag, attrs, ...kinderen) {
   return node;
 }
 
+// Onthoudt op welke tab de vorige render stond, zodat render() de scrollpositie van .inhoud kan
+// herstellen bij een re-render van DEZELFDE tab (bv. een checkbox aanklikken) — zonder dit sprong de
+// pagina bij elke wijziging terug naar boven, omdat render() steeds app.innerHTML = '' doet en dus
+// een compleet NIEUW .inhoud-element maakt (scrollTop altijd 0). Bij een echte tab-wissel (of andere
+// route) is terug-naar-boven wél gewenst — dat gebeurt hier vanzelf, want dan wordt niets herstel.
+let laatsteRenderTab = null;
 function render() {
+  const vorigeInhoud = app.querySelector('.inhoud');
+  const scrollBehouden = (vorigeInhoud && state.route.naam === 'opname' && state.route.tab === laatsteRenderTab)
+    ? vorigeInhoud.scrollTop : null;
   app.innerHTML = '';
   // Sluit een eventueel nog open suggestie-dropdown van vóór deze render (zie koppelDatalist).
   verbergEigenSuggesties();
+  laatsteRenderTab = state.route.naam === 'opname' ? state.route.tab : null;
   if (state.route.naam === 'lijst') { app.appendChild(renderLijstScherm()); return; }
   if (state.route.naam === 'nieuw') { app.appendChild(renderNieuweTaxatieScherm()); return; }
   if (!state.taxatie) { app.appendChild(renderLaadscherm()); return; }
   app.appendChild(renderOpnameScherm());
+  if (scrollBehouden !== null) {
+    const nieuweInhoud = app.querySelector('.inhoud');
+    if (nieuweInhoud) nieuweInhoud.scrollTop = scrollBehouden;
+  }
 }
 
 function renderLaadscherm() {
@@ -970,9 +993,9 @@ function renderNieuweTaxatieScherm() {
 // ----------------------------------------------------------------------------------------------
 const TABS = [
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
+  { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
-  { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
@@ -1743,17 +1766,6 @@ function renderBouwdeelKaart(sectieObj, def) {
     kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Conditie: ' + CONDITIE_LABELS[bouwdeel.conditie]));
     kaart.appendChild(conditieChips(bouwdeel));
   }
-
-  const kostenRij = el('div', { class: 'bouwdeel-kosten-rij' },
-    el('label', {}, 'Direct (€)', el('input', {
-      type: 'number', value: bouwdeel.kostenDirect,
-      oninput: (e) => { bouwdeel.kostenDirect = e.target.value; planOpslaan(); },
-    })),
-    el('label', {}, '1-5 jaar (€)', el('input', {
-      type: 'number', value: bouwdeel.kosten5jaar,
-      oninput: (e) => { bouwdeel.kosten5jaar = e.target.value; planOpslaan(); },
-    })));
-  kaart.appendChild(kostenRij);
 
   if (def.type === 'materiaal') {
     const grid = el('div', { class: 'bouwdeel-materiaal-grid' });

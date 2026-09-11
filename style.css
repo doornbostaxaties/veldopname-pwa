@@ -182,16 +182,24 @@ h1, h2, h3, p { margin: 0; }
 }
 
 /* --- Foto's --- */
+/* Sinds Arno's verzoek (11-09-2026): meer kolommen zodat de checklist niet één lange smalle lijst
+   is — 4 op tablet/desktop (default), 2 op telefoon (zie media-query onderaan dit bestand). De
+   sectie-titel (.section-label) is ook een direct kind van .checklist-kaart, dus die krijgt een
+   eigen regel (grid-column: 1 / -1) i.p.v. als grid-item mee te doen. */
 .checklist-kaart {
   background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 12px;
 }
-.checklist-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; }
+.checklist-kaart > .section-label { grid-column: 1 / -1; }
+.checklist-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; min-width: 0; }
+.checklist-item .naam { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .checklist-item .vinkje { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--divider); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
 .checklist-item.klaar .vinkje { background: var(--ok); border-color: var(--ok); color: #fff; }
 .checklist-item.klaar span.naam { color: var(--text-dim); text-decoration: line-through; }
 
-/* Sinds Arno's verzoek: kleinere tegels (meer overzicht per scherm), tik voor lightbox. */
-.foto-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+/* Sinds Arno's verzoek: kleinere tegels (meer overzicht per scherm), tik voor lightbox. Sinds
+   11-09-2026: 6 kolommen op tablet/desktop (default), 3 op telefoon (media-query onderaan). */
+.foto-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .foto-tegel { aspect-ratio: 1; border-radius: 9px; position: relative; overflow: hidden; background: var(--surface-3); cursor: pointer; border: none; padding: 0; }
 .foto-tegel img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto-tegel .badge {
@@ -306,12 +314,6 @@ h1, h2, h3, p { margin: 0; }
   border: 1px solid var(--divider); background: var(--bg); color: var(--text-dim); cursor: pointer;
 }
 .conditie-chips button.actief { background: var(--navy); border-color: var(--navy); color: #fff; }
-.bouwdeel-kosten-rij { display: flex; gap: 12px; margin: 10px 0; }
-.bouwdeel-kosten-rij label { flex: 1; font-size: 11.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
-.bouwdeel-kosten-rij input {
-  width: 100%; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--divider);
-  border-radius: 8px; background: var(--bg); color: var(--text); box-sizing: border-box;
-}
 .bouwdeel-materiaal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .bouwdeel-omschrijving {
@@ -340,4 +342,12 @@ h1, h2, h3, p { margin: 0; }
     --ok: #3fbc7c; --ok-bg: #103324; --pending: #e0a04a; --pending-bg: #3a2a10;
     --danger: #e2685f; --danger-bg: #3a1512;
   }
+}
+
+/* Telefoon (smal scherm) — minder kolommen dan het tablet/desktop-default hierboven, op Arno's
+   verzoek (11-09-2026): "telefoon 2 en iPad 3 of 4" voor de verplichte-foto's-checklist, "alle
+   foto's ... 3 op de telefoon". 600px is een gangbare telefoon/tablet-grens. */
+@media (max-width: 600px) {
+  .checklist-kaart { grid-template-columns: repeat(2, 1fr); }
+  .foto-grid { grid-template-columns: repeat(3, 1fr); }
 }
