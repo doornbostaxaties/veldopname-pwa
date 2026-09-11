@@ -309,7 +309,7 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-kosten-rij { display: flex; gap: 12px; margin: 10px 0; }
 .bouwdeel-kosten-rij label { flex: 1; font-size: 11.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
 .bouwdeel-kosten-rij input {
-  font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--divider);
+  width: 100%; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--divider);
   border-radius: 8px; background: var(--bg); color: var(--text); box-sizing: border-box;
 }
 .bouwdeel-materiaal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
