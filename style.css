@@ -75,6 +75,22 @@ h1, h2, h3, p { margin: 0; }
 .sync-pil.ok { background: rgba(63,188,124,.22); color: #baf3d3; }
 .sync-pil.wachtend { background: rgba(236,176,6,.22); color: var(--goud); }
 .sync-pil.offline { background: rgba(226,104,95,.22); color: #ffb3ac; }
+/* Instellingen-menu rechtsboven (12-09-2026) — Macro's verhuisd hierheen, zie renderInstellingenMenu(). */
+.instellingen-wrap { position: relative; flex-shrink: 0; }
+.instellingen-knop {
+  background: rgba(255,255,255,.12); border: none; color: #fff; font-size: 16px; line-height: 1;
+  width: 32px; height: 32px; border-radius: 999px; cursor: pointer;
+}
+.instellingen-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; min-width: 160px;
+  background: var(--surface); border: 1px solid var(--divider); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25); overflow: hidden;
+}
+.instellingen-menu button {
+  display: block; width: 100%; text-align: left; padding: 12px 14px; font: inherit; font-size: 13.5px;
+  font-weight: 600; color: var(--text); background: none; border: none; cursor: pointer;
+}
+.instellingen-menu button:active { background: var(--bg); }
 
 /* --- content --- */
 .inhoud { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; padding-bottom: 24px; }
@@ -156,6 +172,19 @@ h1, h2, h3, p { margin: 0; }
 .onderzoek-rij:last-child { border-bottom: none; }
 .onderzoek-label { color: var(--text-dim); }
 .onderzoek-waarde { font-weight: 600; text-align: right; }
+/* Ruwe tekst uit _Makelaarsinformatie.txt — alleen raadplegen, dus gewoon monospace/pre-wrap. */
+.makelaarsinformatie-tekst {
+  font: inherit; font-family: inherit; font-size: 12.5px; white-space: pre-wrap; word-break: break-word;
+  color: var(--text); max-height: 40vh; overflow-y: auto; margin: 0;
+}
+
+/* --- Objectkenmerken (was Bewoning) --- */
+.objectkenmerken-rij { display: flex; gap: 10px; flex-wrap: wrap; }
+.objectkenmerken-veld { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.objectkenmerken-veld input {
+  font: inherit; font-size: 13.5px; font-weight: 400; color: var(--text); padding: 9px 10px;
+  border: 1px solid var(--divider); border-radius: 8px; background: var(--bg); box-sizing: border-box;
+}
 
 /* --- Indeling --- */
 .ruimte-kaart {
@@ -319,7 +348,9 @@ h1, h2, h3, p { margin: 0; }
 /* auto-fill i.p.v. een vast aantal kolommen: op een brede telefoon/tablet passen er vanzelf meer
    dan 2 smalle keuzes naast elkaar (Arno: "kolommen met keuzes smaller"), op een smal scherm valt
    het netjes terug naar 1-2 kolommen — geen apart mobiel-breakpoint nodig. */
-.bouwdeel-materiaal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 10px; margin: 10px 0; }
+/* Max. 4 kolommen (Arno: "wordt wat onoverzichtelijk" met auto-fill op een brede iPad) — vast
+   aantal i.p.v. auto-fill, met dezelfde telefoon-terugval als de andere grids hieronder. */
+.bouwdeel-materiaal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin: 10px 0; }
 .bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .bouwdeel-omschrijving {
   width: 100%; min-height: 60px; border: 1px solid var(--divider); border-radius: 10px;
@@ -333,7 +364,7 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-omschrijving-naast { flex: 1; min-height: 44px; margin-bottom: 0; }
 /* Details (Bouwjaar/Eigendom bij Verwarmings-/Warmwatertoestel, Aantal groepen e.d. bij Meterkast)
    — zelfde auto-fill-aanpak als de materiaal-grid. */
-.bouwdeel-details-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; margin: 10px 0; }
+.bouwdeel-details-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; margin: 10px 0; }
 .bouwdeel-detail-veld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .bouwdeel-detail-veld input, .bouwdeel-detail-select {
   font: inherit; font-size: 13px; font-weight: 400; color: var(--text); padding: 7px 9px;
@@ -385,4 +416,5 @@ h1, h2, h3, p { margin: 0; }
 @media (max-width: 600px) {
   .checklist-kaart { grid-template-columns: repeat(2, 1fr); }
   .foto-grid { grid-template-columns: repeat(3, 1fr); }
+  .bouwdeel-materiaal-grid, .bouwdeel-details-grid { grid-template-columns: repeat(2, 1fr); }
 }

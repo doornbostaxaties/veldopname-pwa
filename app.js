@@ -87,8 +87,14 @@ function leegTaxatie(rapportId) {
 // Fase 1 = Bewoning, 1-op-1 dezelfde velden/volgorde als Taxatieweb's L. Bewoning (live nagekeken op
 // een testrapport), zodat een latere "Vul in bij Taxatieweb"-knop (taxatieweb-opname.user.js) deze
 // waarden zonder vertaalslag kan overnemen. ja_nee-velden: null (nog niet ingevuld) | true | false.
+// Sinds Arno's verzoek (12-09-2026): Bewoning-tabblad hernoemd naar "Objectkenmerken" mét twee
+// nieuwe velden vooraan (Woningtype uit Taxatieweb's C. Object, Bouwjaar uit H. Object/Omgeving) —
+// de rest van dit object (gezochtEigenaarBewoner e.o.) is de bestaande L. Bewoning-data, bewust
+// ongewijzigd (zelfde Airtable-veld bewoning_data, geen migratie nodig). woningtype/bouwjaar worden
+// automatisch voorgevuld uit het vooronderzoek zodra ze nog leeg zijn, zie renderObjectkenmerkenTab().
 function leegBewoning() {
   return {
+    woningtype: '', bouwjaar: '',
     gezochtEigenaarBewoner: null, gezochtEigenaarBewonerToelichting: '',
     gezochtMakelaar: null, gezochtMakelaarToelichting: '',
     gezochtAndereBronnen: null, gezochtAndereBronnenToelichting: '',
@@ -470,6 +476,7 @@ const state = {
   afmetingenWeergave: 'tekening', // 'tekening' | 'lijst' — zelfde standaard als Taxatieweb sinds v0.17.0
   bouwkundigHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties' | 'overigeBijzonderheden'
   bouwkundigSubtab: 'daken', // zie BOUWKUNDIG_SUBTABS[hoofdtab]
+  instellingenMenuOpen: false,
 };
 
 async function laadMacros() {
@@ -700,8 +707,42 @@ async function cloudOpslaan(taxatie) {
 // deze verruiming: elke wijziging wordt AL synchroon lokaal bewaard (VeldopnameDB, regel hierboven),
 // de cloud-sync is puur voor delen tussen apparaten en mag best 15s achterlopen tijdens actief typen.
 const OPSLAAN_DEBOUNCE_MS = 15000;
+// Eerste "afgeleide regels"-logica (Arno's verzoek 12-09-2026: "kunnen we nog wat met logica doen
+// welke velden wanneer aan en uit staan onder bepaalde voorwaarden") — draait bij ELKE wijziging
+// (via planOpslaan hieronder), niet alleen bij de velden die de regel triggeren: goedkoop genoeg om
+// gewoon altijd te checken, en dat maakt het vanzelf ook correct als bv. eerst Warmwatertoestel en
+// dan pas Verwarmingstoestel wordt ingevuld. Bewust een simpele, uitbreidbare lijst (geen generiek
+// "regels-systeem") — Arno wil hier later meer keuzelijstjes/regels aan toevoegen.
+function pasAfgeleideRegelsToe() {
+  const t = state.taxatie;
+  if (!t || !t.bouwkundig) return;
+  const installaties = t.bouwkundig.installaties;
+
+  // Bouwjaar > 2021 → geen gasaansluiting meer verplicht/aannemelijk, Gas standaard uitzetten.
+  const bouwjaar = parseInt(t.bewoning && t.bewoning.bouwjaar, 10);
+  if (!isNaN(bouwjaar) && bouwjaar > 2021) installaties.leidingen.gas.aanwezig = false;
+
+  // Verwarmingstoestel is een (combi-)ketel of hybride warmtepomp → warmwater komt daar ook uit.
+  const verwarmingstoestel = installaties.verwarming.verwarmingstoestel;
+  const warmwatertoestel = installaties.warmwater.warmwatertoestel;
+  const materialenVerwarming = verwarmingstoestel.materialen || [];
+  if (['CV-ketel', 'HR combi ketel', 'Hybride warmtepomp'].some(x => materialenVerwarming.includes(x))) {
+    warmwatertoestel.materialen = warmwatertoestel.materialen || [];
+    if (!warmwatertoestel.materialen.includes('Geïntegreerd in cv')) warmwatertoestel.materialen.push('Geïntegreerd in cv');
+    if (verwarmingstoestel.details.bouwjaar) warmwatertoestel.details.bouwjaar = verwarmingstoestel.details.bouwjaar;
+  }
+
+  // Verwarmingstoestel heeft ook airco → Koeling-bouwdeel meteen meenemen.
+  if (materialenVerwarming.includes('Airconditioning')) {
+    const koeling = installaties.ventilatieKoeling.koeling;
+    koeling.aanwezig = true;
+    koeling.materialen = koeling.materialen || [];
+    if (!koeling.materialen.includes('Airconditioning')) koeling.materialen.push('Airconditioning');
+  }
+}
 function planOpslaan() {
   if (!state.taxatie) return;
+  pasAfgeleideRegelsToe();
   state.taxatie.lokaalGewijzigd = true;
   VeldopnameDB.bewaarTaxatie(state.taxatie);
   werkStatusbalkBij();
@@ -770,6 +811,9 @@ async function laadOpname(rapportId, tab) {
     }
   }
   if (!lokaal.bewoning) lokaal.bewoning = leegBewoning(); // taxaties van vóór Fase 1 "volledige opname"
+  // taxaties van vóór de Objectkenmerken-velden (12-09-2026):
+  if (lokaal.bewoning.woningtype === undefined) lokaal.bewoning.woningtype = '';
+  if (lokaal.bewoning.bouwjaar === undefined) lokaal.bewoning.bouwjaar = '';
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
@@ -788,7 +832,11 @@ async function laadOpname(rapportId, tab) {
       // rechtstreeks als object gebruikt wordt.
       let gewijzigd = false;
       if (data && typeof data === 'object') { state.taxatie.data = data; gewijzigd = true; }
-      if (bewoning_data && typeof bewoning_data === 'object') { state.taxatie.bewoning = bewoning_data; gewijzigd = true; }
+      if (bewoning_data && typeof bewoning_data === 'object') {
+        if (bewoning_data.woningtype === undefined) bewoning_data.woningtype = '';
+        if (bewoning_data.bouwjaar === undefined) bewoning_data.bouwjaar = '';
+        state.taxatie.bewoning = bewoning_data; gewijzigd = true;
+      }
       if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
       // aantekeningen alleen overnemen als lokaal nog leeg is — anders zou een cloud-versie die (door
       // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
@@ -921,6 +969,14 @@ function vindVooronderzoek(adres) {
   if (!adres || !state.vooronderzoekLijst) return null;
   const zoek = adres.trim().toLowerCase();
   return state.vooronderzoekLijst.find(r => (r.fields.adres_volledig || '').trim().toLowerCase().startsWith(zoek)) || null;
+}
+// Start het ophalen van de vooronderzoekslijst als dat nog niet gebeurd/aan de gang is — gebruikt
+// door zowel de Onderzoek-tab als Objectkenmerken (voor de auto-invul van woningtype/bouwjaar),
+// zodat het niet uitmaakt in welke volgorde Arno de tabbladen bezoekt.
+function zorgVoorVooronderzoek() {
+  if (state.vooronderzoekLijst !== null || vooronderzoekOphalenBezig) return;
+  vooronderzoekOphalenBezig = true;
+  laadVooronderzoekLijst().then(() => { vooronderzoekOphalenBezig = false; });
 }
 
 // Bijlagen die Arno vooraf in Taxatieweb plaatst (Q/R > Bijlagen), doorgestuurd via
@@ -1140,16 +1196,41 @@ function renderNieuweTaxatieScherm() {
 // ----------------------------------------------------------------------------------------------
 // SCHERM: Opname (Meting / Indeling / Foto's / Aantekeningen)
 // ----------------------------------------------------------------------------------------------
+// Volgorde op Arno's verzoek (12-09-2026): Onderzoek helemaal rechts (was vooraan — dat blijkt in de
+// praktijk niet de tab waarmee de opname begint); Macro's is GEEN eigen tabblad meer, verhuisd naar
+// het Instellingen-menu rechtsboven (zie renderOpnameScherm/renderInstellingenMenu).
 const TABS = [
-  { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
-  { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
+  { id: 'objectkenmerken', icon: '🔑', label: 'Objectkenmerken' },
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
-  { id: 'macros', icon: '⚙️', label: "Macro's" },
+  { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
 ];
+
+// Instellingen-menu rechtsboven (12-09-2026): Macro's is geen eigen tabblad meer (Arno: "mag naar
+// een submenuknop in nieuwe knop Instellingen"). Eén gedeelde open/dicht-status; een document-brede
+// klik-listener (hieronder, module-scope — zelfde reden als de bestaande hashchange-listener: één
+// keer registreren, niet per render) sluit het menu bij een klik erbuiten.
+function renderInstellingenMenu(rapportId) {
+  const knop = el('button', {
+    class: 'instellingen-knop', title: 'Instellingen',
+    onclick: (e) => { e.stopPropagation(); state.instellingenMenuOpen = !state.instellingenMenuOpen; render(); },
+  }, '⚙️');
+  if (!state.instellingenMenuOpen) return el('div', { class: 'instellingen-wrap' }, knop);
+  const menu = el('div', { class: 'instellingen-menu' },
+    el('button', {
+      onclick: () => { state.instellingenMenuOpen = false; location.hash = '#/opname/' + encodeURIComponent(rapportId) + '/macros'; },
+    }, "⚙️ Macro's"),
+  );
+  return el('div', { class: 'instellingen-wrap' }, knop, menu);
+}
+window.addEventListener('click', (e) => {
+  if (!state.instellingenMenuOpen) return;
+  const binnen = e.composedPath().some(el => el.classList && el.classList.contains('instellingen-wrap'));
+  if (!binnen) { state.instellingenMenuOpen = false; render(); }
+});
 
 function renderOpnameScherm() {
   const t = state.taxatie;
@@ -1158,13 +1239,14 @@ function renderOpnameScherm() {
     el('button', { class: 'terug', onclick: () => { location.hash = ''; } }, '‹'),
     el('h1', {}, t.adres || t.rapport_id),
     el('span', { class: 'sync-pil ' + syncPilTekst().klasse }, syncPilTekst().tekst),
+    renderInstellingenMenu(t.rapport_id),
   ));
 
   const inhoud = el('div', { class: 'inhoud' });
   if (state.route.tab === 'meting') inhoud.appendChild(renderMetingTab());
   else if (state.route.tab === 'indeling') inhoud.appendChild(renderIndelingTab());
   else if (state.route.tab === 'onderzoek') inhoud.appendChild(renderOnderzoekTab());
-  else if (state.route.tab === 'bewoning') inhoud.appendChild(renderBewoningTab());
+  else if (state.route.tab === 'objectkenmerken') inhoud.appendChild(renderObjectkenmerkenTab());
   else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
@@ -1737,6 +1819,7 @@ async function verstuurFotoWachtrij() {
 let vooronderzoekOphalenBezig = false;
 const ONDERZOEK_VELDEN = [
   { veld: 'bestemming', label: 'Bestemming' },
+  { veld: 'woningtype_funda', label: 'Woningtype' },
   { veld: 'bouwjaar', label: 'Bouwjaar' },
   { veld: 'gebruiksoppervlakte_m2', label: 'Gebruiksoppervlakte', suffix: ' m²' },
   { veld: 'perceeloppervlakte_m2', label: 'Perceeloppervlakte', suffix: ' m²' },
@@ -1804,6 +1887,18 @@ function renderOnderzoekTab() {
     ));
   });
   wrap.appendChild(kaart);
+
+  // Sinds Arno's verzoek (12-09-2026): _Makelaarsinformatie.txt (documenten van de makelaar/
+  // notaris/VvE, samengevat door de scheduled task makelaarsinformatie-verwerken) gesynchroniseerd
+  // naar hetzelfde Vooronderzoek-record door een aparte scheduled task
+  // (makelaarsinformatie-naar-airtable) — hier alleen RAADPLEGEN, ruwe tekst, geen parsing/invoer.
+  if (f.makelaarsinformatie_tekst) {
+    const makelaarsKaart = el('div', { class: 'macro-groep' });
+    makelaarsKaart.appendChild(el('h3', {}, '📋 Makelaarsinformatie'));
+    makelaarsKaart.appendChild(el('pre', { class: 'makelaarsinformatie-tekst' }, f.makelaarsinformatie_tekst));
+    wrap.appendChild(makelaarsKaart);
+  }
+
   wrap.appendChild(renderBijlagenSectie(t));
   return wrap;
 }
@@ -1872,9 +1967,37 @@ function renderJaNeeVraag(label, taxatie, veld, toelichtingVeld, { toelichtBij =
   return wrap;
 }
 
-function renderBewoningTab() {
+// "Bewoning" hernoemd naar "Objectkenmerken" (Arno's verzoek 12-09-2026) met twee nieuwe velden
+// vooraan: Woningtype (Taxatieweb's C. Object) en Bouwjaar (H. Object/Omgeving). Worden automatisch
+// voorgevuld vanuit het vooronderzoek zodra ze nog leeg zijn — nooit een handmatige invoer
+// overschrijven. De rest van de tab (A/B/F/G/H/J) is de bestaande L. Bewoning-data, ongewijzigd.
+function renderObjectkenmerkenTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
+  zorgVoorVooronderzoek();
+  const vo = vindVooronderzoek(t.adres);
+  if (vo) {
+    if (!t.bewoning.woningtype && vo.fields.woningtype_funda) { t.bewoning.woningtype = vo.fields.woningtype_funda; planOpslaan(); }
+    if (!t.bewoning.bouwjaar && vo.fields.bouwjaar) { t.bewoning.bouwjaar = String(vo.fields.bouwjaar); planOpslaan(); }
+  }
+
+  const groepKenmerken = el('div', { class: 'macro-groep' });
+  groepKenmerken.appendChild(el('h3', {}, 'Objectkenmerken'));
+  const kenmerkenRij = el('div', { class: 'objectkenmerken-rij' });
+  const woningtypeVeld = el('input', {
+    type: 'text', placeholder: 'Woningtype (bv. tussenwoning)',
+    oninput: (e) => { t.bewoning.woningtype = e.target.value; planOpslaan(); },
+  });
+  woningtypeVeld.value = t.bewoning.woningtype || '';
+  const bouwjaarVeld = el('input', {
+    type: 'number', placeholder: 'Bouwjaar',
+    oninput: (e) => { t.bewoning.bouwjaar = e.target.value; planOpslaan(); },
+  });
+  bouwjaarVeld.value = t.bewoning.bouwjaar || '';
+  kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Woningtype', woningtypeVeld));
+  kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
+  groepKenmerken.appendChild(kenmerkenRij);
+  wrap.appendChild(groepKenmerken);
 
   const groepA = el('div', { class: 'macro-groep' });
   groepA.appendChild(el('h3', {}, 'A. Waar heb ik gezocht naar informatie?'));
