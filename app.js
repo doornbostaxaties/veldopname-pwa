@@ -127,10 +127,14 @@ const BEWONING_SITUATIE_OPTIES = [
 // Taxatieweb" — die vult hij later zelf rechtstreeks in Taxatieweb in.
 // Type 'simpel' (Overige waarnemingen) heeft GEEN conditie en GEEN aandachtspunten — Taxatieweb
 // toont daar alleen kosten (niet hier) + omschrijving + foto.
+// `details`: een paar bouwdelen (Verwarmings-/Warmwatertoestel, Meterkast) hebben in Taxatieweb nog
+// een eigen "Details"-blokje met extra velden (Bouwjaar/Eigendom, Aantal groepen e.d.) — zie
+// `def.details` in BOUWKUNDIG_SCHEMA. Waarden staan los in `details` (per bouwdeel-key), zodat een
+// bouwdeel zonder eigen details gewoon een leeg object heeft.
 function leegBouwdeel() {
   return {
     aanwezig: false, conditie: 5,
-    omschrijving: '', materialen: [],
+    omschrijving: '', materialen: [], details: {},
     aandachtspuntenAanwezig: null, aandachtspuntenToelichting: '',
   };
 }
@@ -140,9 +144,24 @@ function leegBouwdeel() {
 function leegRisicoBouwdeel() {
   return { aanwezig: false, risico: null, omschrijving: '' };
 }
+function standaardDetailWaarde(type) {
+  return type === 'ja_nee' ? null : '';
+}
+// Vult ontbrekende details-velden aan op een bestaand bouwdeel-object — gebruikt bij het aanmaken
+// van een leeg bouwdeel EN bij het migreren van bestaande data (metVolledigBouwkundig) wanneer een
+// bouwdeel al bestond vóórdat een `details`-veld aan het schema werd toegevoegd.
+function vulOntbrekendeDetails(bouwdeel, def) {
+  if (!def.details) return;
+  if (!bouwdeel.details) bouwdeel.details = {};
+  def.details.forEach(d => { if (!(d.key in bouwdeel.details)) bouwdeel.details[d.key] = standaardDetailWaarde(d.type); });
+}
 function maakGroep(bouwdelen) {
   const groep = {};
-  bouwdelen.forEach(b => { groep[b.key] = b.type === 'risico' ? leegRisicoBouwdeel() : leegBouwdeel(); });
+  bouwdelen.forEach(b => {
+    const bouwdeel = b.type === 'risico' ? leegRisicoBouwdeel() : leegBouwdeel();
+    vulOntbrekendeDetails(bouwdeel, b);
+    groep[b.key] = bouwdeel;
+  });
   return groep;
 }
 function leegBouwkundig() {
@@ -181,16 +200,17 @@ function metVolledigBouwkundig(bk) {
   if (!bk || typeof bk !== 'object') return leeg;
   ['buitenzijde', 'binnenzijde', 'installaties'].forEach(hoofd => {
     if (!bk[hoofd]) bk[hoofd] = {};
-    Object.keys(leeg[hoofd]).forEach(sectie => {
+    Object.keys(BOUWKUNDIG_SCHEMA[hoofd]).forEach(sectie => {
       if (!bk[hoofd][sectie]) bk[hoofd][sectie] = {};
-      Object.keys(leeg[hoofd][sectie]).forEach(key => {
-        if (!bk[hoofd][sectie][key]) bk[hoofd][sectie][key] = leeg[hoofd][sectie][key];
+      BOUWKUNDIG_SCHEMA[hoofd][sectie].forEach(def => {
+        if (!bk[hoofd][sectie][def.key]) bk[hoofd][sectie][def.key] = leeg[hoofd][sectie][def.key];
+        else vulOntbrekendeDetails(bk[hoofd][sectie][def.key], def);
       });
     });
   });
   if (!bk.overigeBijzonderheden) bk.overigeBijzonderheden = {};
-  Object.keys(leeg.overigeBijzonderheden).forEach(key => {
-    if (!bk.overigeBijzonderheden[key]) bk.overigeBijzonderheden[key] = leeg.overigeBijzonderheden[key];
+  BOUWKUNDIG_SCHEMA.overigeBijzonderheden.forEach(def => {
+    if (!bk.overigeBijzonderheden[def.key]) bk.overigeBijzonderheden[def.key] = leeg.overigeBijzonderheden[def.key];
   });
   return bk;
 }
@@ -271,19 +291,19 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'riolering', label: 'Riolering', type: 'tekst' },
     ],
     verwarming: [
-      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'] },
+      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }] },
       { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
       { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
     ],
     warmwater: [
-      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'] },
+      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }] },
     ],
     ventilatieKoeling: [
       { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'] },
       { key: 'koeling', label: 'Koeling', type: 'materiaal', opties: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'] },
     ],
     elektrotechnisch: [
-      { key: 'meterkast', label: 'Meterkast', type: 'tekst' },
+      { key: 'meterkast', label: 'Meterkast', type: 'tekst', details: [{ key: 'aantalGroepen', label: 'Aantal groepen', type: 'getal' }, { key: 'aantalAardlekschakelaars', label: 'Aantal aardlekschakelaars', type: 'getal' }, { key: 'krachtstroomAanwezig', label: 'Krachtstroom aanwezig', type: 'ja_nee' }, { key: 'oplaadpuntAanwezig', label: 'Oplaadpunt aanwezig', type: 'ja_nee' }] },
       { key: 'ictDomotica', label: 'ICT / Domotica', type: 'tekst' },
       { key: 'brandveiligheid', label: 'Brandveiligheid', type: 'tekst' },
       { key: 'brandmeldinstallatie', label: 'Brandmeldinstallatie', type: 'tekst' },
@@ -1852,18 +1872,43 @@ function renderBewoningTab() {
 }
 
 // --- Bouwkundig (Fase 2 "volledige opname", J.4 Bouwkundige opnamestaat) ---
-function conditieChips(bouwdeel) {
-  const wrap = el('div', { class: 'conditie-chips' });
+// Compact: label + chips op ÉÉN regel (i.p.v. label erboven, chips op een eigen regel eronder) —
+// Arno: "conditie keuzes bijvoorbeeld naast veld conditie (scheelt een regel)".
+function conditieRij(bouwdeel) {
+  const chips = el('div', { class: 'conditie-chips' });
   CONDITIE_LABELS.forEach((label, waarde) => {
-    wrap.appendChild(el('button', {
+    chips.appendChild(el('button', {
       class: 'klein' + (bouwdeel.conditie === waarde ? ' actief' : ''),
       onclick: () => { bouwdeel.conditie = waarde; planOpslaan(); render(); },
     }, label));
   });
-  return wrap;
+  return el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'bouwdeel-veld-label' }, 'Conditie'), chips);
+}
+// Compact: label+Ja/Nee-knoppen in een smalle linker kolom, toelichtingsveld ernaast i.p.v.
+// eronder — Arno: "Aandachtspunten ja/nee met opmerkingenveld ernaast" (scheelt hoogte).
+function jaNeeMetToelichtingRij(waardeLabel, huidigeWaarde, onWaarde, huidigeToelichting, onToelichting, placeholder) {
+  const wissel = el('div', { class: 'weergave-wissel' });
+  [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
+    wissel.appendChild(el('button', {
+      class: 'klein' + (huidigeWaarde === waarde ? ' actief' : ''),
+      onclick: () => { onWaarde(waarde); render(); },
+    }, tekst));
+  });
+  const links = el('div', { class: 'bouwdeel-aandacht-links' }, el('span', { class: 'bouwdeel-veld-label' }, waardeLabel), wissel);
+  const rij = el('div', { class: 'bouwdeel-aandacht-rij' }, links);
+  if (huidigeWaarde === true) {
+    const toelichting = el('textarea', {
+      class: 'bouwdeel-omschrijving bouwdeel-omschrijving-naast', placeholder,
+      oninput: (e) => onToelichting(e.target.value),
+    });
+    toelichting.value = huidigeToelichting || '';
+    rij.appendChild(toelichting);
+  }
+  return rij;
 }
 // Type 'risico': geen conditie/materiaal/aandachtspunten — alleen "Risico: Ja/Nee" + vrije
 // omschrijving, exact zoals Taxatieweb's eigen Overige bijzonderheden-velden (Houtaantasters e.d.).
+// Zelfde compacte Ja/Nee-naast-tekstveld-opzet als de gewone aandachtspunten-rij.
 function renderRisicoBouwdeelKaart(bouwdeel, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   const kop = el('div', {
@@ -1875,22 +1920,53 @@ function renderRisicoBouwdeelKaart(bouwdeel, def) {
   kaart.appendChild(kop);
   if (!bouwdeel.aanwezig) return kaart;
 
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Risico'));
-  const wissel = el('div', { class: 'weergave-wissel' });
-  [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
-    wissel.appendChild(el('button', {
-      class: 'klein' + (bouwdeel.risico === waarde ? ' actief' : ''),
-      onclick: () => { bouwdeel.risico = waarde; planOpslaan(); render(); },
-    }, tekst));
-  });
-  kaart.appendChild(wissel);
-  const omschrijvingVeld = el('textarea', {
-    class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
-    oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
-  });
-  omschrijvingVeld.value = bouwdeel.omschrijving || '';
-  kaart.appendChild(omschrijvingVeld);
+  kaart.appendChild(jaNeeMetToelichtingRij(
+    'Risico', bouwdeel.risico, (w) => { bouwdeel.risico = w; planOpslaan(); },
+    bouwdeel.omschrijving, (v) => { bouwdeel.omschrijving = v; planOpslaan(); },
+    'Omschrijving ' + def.label.toLowerCase() + '…',
+  ));
+  // Bij Risico "Nee" toont Taxatieweb de omschrijving nog steeds (het is geen aandachtspunt-detail
+  // maar de hoofdomschrijving van dit bouwdeel) — dus hier altijd tonen, niet alleen bij Ja.
+  if (bouwdeel.risico !== true) {
+    const omschrijvingVeld = el('textarea', {
+      class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
+      oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
+    });
+    omschrijvingVeld.value = bouwdeel.omschrijving || '';
+    kaart.appendChild(omschrijvingVeld);
+  }
   return kaart;
+}
+// Renderfunctie per detail-veldtype (Bouwjaar/Eigendom bij Verwarmings-/Warmwatertoestel, Aantal
+// groepen/aardlekschakelaars/Krachtstroom/Oplaadpunt bij Meterkast — live nagekeken in Taxatieweb).
+function renderDetailVeld(bouwdeel, d) {
+  const waarde = bouwdeel.details[d.key];
+  if (d.type === 'select') {
+    return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
+      el('select', {
+        class: 'bouwdeel-detail-select',
+        onchange: (e) => { bouwdeel.details[d.key] = e.target.value; planOpslaan(); },
+      },
+        el('option', { value: '' }, 'Selecteer'),
+        ...d.opties.map(o => el('option', { value: o, selected: waarde === o ? 'selected' : null }, o))));
+  }
+  if (d.type === 'ja_nee') {
+    const wissel = el('div', { class: 'weergave-wissel' });
+    [[false, 'Nee'], [true, 'Ja']].forEach(([w, tekst]) => {
+      wissel.appendChild(el('button', {
+        class: 'klein' + (waarde === w ? ' actief' : ''),
+        onclick: () => { bouwdeel.details[d.key] = w; planOpslaan(); render(); },
+      }, tekst));
+    });
+    return el('div', { class: 'bouwdeel-detail-veld' }, el('span', {}, d.label), wissel);
+  }
+  // 'jaar' of 'getal'
+  const input = el('input', {
+    type: 'number', placeholder: d.type === 'jaar' ? 'bv. 2015' : '0',
+    oninput: (e) => { bouwdeel.details[d.key] = e.target.value; planOpslaan(); },
+  });
+  input.value = waarde || '';
+  return el('label', { class: 'bouwdeel-detail-veld' }, d.label, input);
 }
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
@@ -1906,10 +1982,7 @@ function renderBouwdeelKaart(sectieObj, def) {
   kaart.appendChild(kop);
   if (ingeklapt) return kaart;
 
-  if (def.type !== 'simpel') {
-    kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Conditie: ' + CONDITIE_LABELS[bouwdeel.conditie]));
-    kaart.appendChild(conditieChips(bouwdeel));
-  }
+  if (def.type !== 'simpel') kaart.appendChild(conditieRij(bouwdeel));
 
   if (def.type === 'materiaal') {
     const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
@@ -1936,24 +2009,18 @@ function renderBouwdeelKaart(sectieObj, def) {
     kaart.appendChild(omschrijvingVeld);
   }
 
+  if (def.details) {
+    const grid = el('div', { class: 'bouwdeel-details-grid' });
+    def.details.forEach(d => grid.appendChild(renderDetailVeld(bouwdeel, d)));
+    kaart.appendChild(grid);
+  }
+
   if (def.type !== 'simpel') {
-    kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Aandachtspunten ' + def.label.toLowerCase() + '?'));
-    const wissel = el('div', { class: 'weergave-wissel' });
-    [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
-      wissel.appendChild(el('button', {
-        class: 'klein' + (bouwdeel.aandachtspuntenAanwezig === waarde ? ' actief' : ''),
-        onclick: () => { bouwdeel.aandachtspuntenAanwezig = waarde; planOpslaan(); render(); },
-      }, tekst));
-    });
-    kaart.appendChild(wissel);
-    if (bouwdeel.aandachtspuntenAanwezig === true) {
-      const toelichting = el('textarea', {
-        class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aandachtspunt…',
-        oninput: (e) => { bouwdeel.aandachtspuntenToelichting = e.target.value; planOpslaan(); },
-      });
-      toelichting.value = bouwdeel.aandachtspuntenToelichting || '';
-      kaart.appendChild(toelichting);
-    }
+    kaart.appendChild(jaNeeMetToelichtingRij(
+      'Aandachtspunten', bouwdeel.aandachtspuntenAanwezig, (w) => { bouwdeel.aandachtspuntenAanwezig = w; planOpslaan(); },
+      bouwdeel.aandachtspuntenToelichting, (v) => { bouwdeel.aandachtspuntenToelichting = v; planOpslaan(); },
+      'Toelichting aandachtspunt…',
+    ));
   }
   return kaart;
 }

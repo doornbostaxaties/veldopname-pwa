@@ -306,19 +306,38 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-kop { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .bouwdeel-kop input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
 .bouwdeel-titel { font-size: 14px; font-weight: 700; color: var(--navy); }
-.bouwdeel-veld-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim); margin: 12px 0 6px; }
+.bouwdeel-veld-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
+/* Conditie: label + chips op één regel (i.p.v. label erboven, chips op een eigen regel) — scheelt
+   een regel per bouwdeel, Arno's expliciete verzoek (11-09-2026). */
+.bouwdeel-conditie-rij { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
 .conditie-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .conditie-chips button {
   font: inherit; font-size: 11.5px; font-weight: 600; padding: 6px 10px; border-radius: 999px;
   border: 1px solid var(--divider); background: var(--bg); color: var(--text-dim); cursor: pointer;
 }
 .conditie-chips button.actief { background: var(--navy); border-color: var(--navy); color: #fff; }
-.bouwdeel-materiaal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+/* auto-fill i.p.v. een vast aantal kolommen: op een brede telefoon/tablet passen er vanzelf meer
+   dan 2 smalle keuzes naast elkaar (Arno: "kolommen met keuzes smaller"), op een smal scherm valt
+   het netjes terug naar 1-2 kolommen — geen apart mobiel-breakpoint nodig. */
+.bouwdeel-materiaal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 10px; margin: 10px 0; }
+.bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .bouwdeel-omschrijving {
   width: 100%; min-height: 60px; border: 1px solid var(--divider); border-radius: 10px;
   background: var(--bg); padding: 10px; font: inherit; font-size: 13.5px; color: var(--text);
   resize: vertical; box-sizing: border-box; margin-bottom: 4px;
+}
+/* Aandachtspunten (en Risico): label+Ja/Nee in een smalle linker kolom, toelichting ernaast i.p.v.
+   eronder — Arno: "Aandachtspunten ja/nee met opmerkingenveld ernaast" (scheelt hoogte per kaart). */
+.bouwdeel-aandacht-rij { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
+.bouwdeel-aandacht-links { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.bouwdeel-omschrijving-naast { flex: 1; min-height: 44px; margin-bottom: 0; }
+/* Details (Bouwjaar/Eigendom bij Verwarmings-/Warmwatertoestel, Aantal groepen e.d. bij Meterkast)
+   — zelfde auto-fill-aanpak als de materiaal-grid. */
+.bouwdeel-details-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; margin: 10px 0; }
+.bouwdeel-detail-veld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.bouwdeel-detail-veld input, .bouwdeel-detail-select {
+  font: inherit; font-size: 13px; font-weight: 400; color: var(--text); padding: 7px 9px;
+  border: 1px solid var(--divider); border-radius: 8px; background: var(--bg); box-sizing: border-box;
 }
 
 /* --- Aantekeningen --- */
