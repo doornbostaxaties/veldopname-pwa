@@ -69,9 +69,40 @@ function leegTaxatie(rapportId) {
     // Taxatieweb-script herkent deze taxaties op adres en biedt een importknop.
     voorlopig: false, kavelnummer: '', bouwplan: '',
     data: leegData(),
+    bewoning: leegBewoning(),
     lokaalGewijzigd: false,
   };
 }
+
+// Sinds Arno's verzoek (11-09-2026): "de app afbouwen voor een volledige opname zoals Provadie" —
+// Fase 1 = Bewoning, 1-op-1 dezelfde velden/volgorde als Taxatieweb's L. Bewoning (live nagekeken op
+// een testrapport), zodat een latere "Vul in bij Taxatieweb"-knop (taxatieweb-opname.user.js) deze
+// waarden zonder vertaalslag kan overnemen. ja_nee-velden: null (nog niet ingevuld) | true | false.
+function leegBewoning() {
+  return {
+    gezochtEigenaarBewoner: null, gezochtEigenaarBewonerToelichting: '',
+    gezochtMakelaar: null, gezochtMakelaarToelichting: '',
+    gezochtAndereBronnen: null, gezochtAndereBronnenToelichting: '',
+    volledigGeinspecteerd: null,
+    situatie: '', situatieAnders: '',
+    aanvragerWoontAl: null, aanvragerWoontAlToelichting: '',
+    aanvragerBlijftWonen: null, aanvragerBlijftWonenToelichting: '',
+    andereInfoOntdekt: null, andereInfoOntdektToelichting: '',
+  };
+}
+// Exacte tekst van Taxatieweb's eigen keuzelijst (F. Wat is de situatie van de woning?) — bewust
+// woordelijk overgenomen, niet herschreven, zodat de importknop straks op exacte tekst kan matchen.
+const BEWONING_SITUATIE_OPTIES = [
+  'de woning leegstaat.',
+  'alleen de eigenaar in de woning woont, eventueel samen met zijn gezin.',
+  'de eigenaar in een deel van de woning woont, eventueel samen met zijn gezin. In een ander deel van de woning wonen anderen.',
+  'de woning als geheel is verhuurd.',
+  'de woning per kamer is verhuurd.',
+  'de woning geheel is bewoond door anderen.',
+  'de eigenaar in een deel van de woning woont, eventueel samen met zijn gezin. Een ander deel van de woning staat leeg.',
+  'de woning gedeeltelijk is verhuurd. Een ander deel van de woning staat leeg.',
+  'Anders, namelijk:',
+];
 
 function naarGetal(w) {
   const n = parseFloat(String(w || '').replace(',', '.'));
@@ -380,6 +411,8 @@ async function cloudOpslaan(taxatie) {
     indeling_tekst: componeerIndelingTekst(taxatie.data.indeling),
     data: JSON.stringify(taxatie.data),
     vergelijker_data: '{}',
+    aantekeningen: taxatie.aantekeningen || '',
+    bewoning_data: JSON.stringify(taxatie.bewoning || leegBewoning()),
   };
   // adres/postcode/plaats alleen meesturen als we ze lokaal ECHT kennen — nooit een lege waarde
   // sturen die het bestaande veld in Airtable zou overschrijven. Zonder deze guard overschreef een
@@ -468,6 +501,7 @@ async function laadOpname(rapportId, tab) {
       lokaal.afspraak_datumtijd = uitLijst.afspraak_datumtijd || null;
     }
   }
+  if (!lokaal.bewoning) lokaal.bewoning = leegBewoning(); // taxaties van vóór Fase 1 "volledige opname"
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -477,13 +511,18 @@ async function laadOpname(rapportId, tab) {
   // wachtrij staat, anders zouden we eigen niet-verzonden werk overschrijven.
   if (state.online && !lokaal.lokaalGewijzigd) {
     try {
-      const { data } = await cloudOphalen(rapportId);
-      // Let op: `data` komt al als object terug (de Make-respons splitst 'm rechtstreeks in de
-      // JSON-body, {"data":{{...}}} zonder quotes) — GEEN JSON.parse() erover heen, dat gaf
-      // hier "[object Object] is not valid JSON". Vergelijk taxatieweb-opname.user.js, waar
-      // cloudData ook rechtstreeks als object gebruikt wordt.
-      if (data && typeof data === 'object') {
-        state.taxatie.data = data;
+      const { data, bewoning_data, aantekeningen } = await cloudOphalen(rapportId);
+      // Let op: `data` (en sinds Fase 1 "volledige opname" ook bewoning_data) komt al als object
+      // terug (de Make-respons splitst 'm rechtstreeks in de JSON-body, {"data":{{...}}} zonder
+      // quotes) — GEEN JSON.parse() erover heen, dat gaf hier "[object Object] is not valid JSON".
+      // Vergelijk taxatieweb-opname.user.js, waar cloudData ook rechtstreeks als object gebruikt wordt.
+      let gewijzigd = false;
+      if (data && typeof data === 'object') { state.taxatie.data = data; gewijzigd = true; }
+      if (bewoning_data && typeof bewoning_data === 'object') { state.taxatie.bewoning = bewoning_data; gewijzigd = true; }
+      // aantekeningen alleen overnemen als lokaal nog leeg is — anders zou een cloud-versie die (door
+      // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
+      if (aantekeningen && !state.taxatie.aantekeningen) { state.taxatie.aantekeningen = aantekeningen; gewijzigd = true; }
+      if (gewijzigd) {
         await VeldopnameDB.bewaarTaxatie(state.taxatie);
         if (state.route.naam === 'opname' && state.route.rapportId === rapportId) render();
       }
@@ -798,6 +837,7 @@ const TABS = [
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
+  { id: 'bewoning', icon: '🔑', label: 'Bewoning' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'macros', icon: '⚙️', label: "Macro's" },
@@ -816,6 +856,7 @@ function renderOpnameScherm() {
   if (state.route.tab === 'meting') inhoud.appendChild(renderMetingTab());
   else if (state.route.tab === 'indeling') inhoud.appendChild(renderIndelingTab());
   else if (state.route.tab === 'onderzoek') inhoud.appendChild(renderOnderzoekTab());
+  else if (state.route.tab === 'bewoning') inhoud.appendChild(renderBewoningTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
@@ -1419,6 +1460,77 @@ function renderOnderzoekTab() {
     ));
   });
   wrap.appendChild(kaart);
+  return wrap;
+}
+
+// --- Bewoning (L, Fase 1 van "volledige opname") ---
+// Herbruikbaar bouwsteentje: een Ja/Nee-vraag, met een toelichting-tekstveld dat verschijnt zodra
+// "Ja, toelichten" gekozen is — exact het patroon dat Taxatieweb's L. Bewoning zelf overal gebruikt.
+function renderJaNeeVraag(label, taxatie, veld, toelichtingVeld, { toelichtBij = true } = {}) {
+  const wrap = el('div', { class: 'bewoning-vraag' });
+  wrap.appendChild(el('div', { class: 'bewoning-label' }, label));
+  const wissel = el('div', { class: 'weergave-wissel' });
+  [[false, toelichtBij === false ? 'Nee, toelichten' : 'Nee'], [true, toelichtBij === true ? 'Ja, toelichten' : 'Ja']].forEach(([waarde, tekst]) => {
+    wissel.appendChild(el('button', {
+      class: 'klein' + (taxatie.bewoning[veld] === waarde ? ' actief' : ''),
+      onclick: () => { taxatie.bewoning[veld] = waarde; planOpslaan(); render(); },
+    }, tekst));
+  });
+  wrap.appendChild(wissel);
+  if (taxatie.bewoning[veld] === toelichtBij && toelichtingVeld) {
+    const veldEl = el('textarea', {
+      class: 'bewoning-toelichting', placeholder: 'Toelichting…',
+      oninput: (e) => { taxatie.bewoning[toelichtingVeld] = e.target.value; planOpslaan(); },
+    });
+    veldEl.value = taxatie.bewoning[toelichtingVeld] || '';
+    wrap.appendChild(veldEl);
+  }
+  return wrap;
+}
+
+function renderBewoningTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+
+  const groepA = el('div', { class: 'macro-groep' });
+  groepA.appendChild(el('h3', {}, 'A. Waar heb ik gezocht naar informatie?'));
+  groepA.appendChild(renderJaNeeVraag('Bij de eigenaar of de bewoner', t, 'gezochtEigenaarBewoner', 'gezochtEigenaarBewonerToelichting'));
+  groepA.appendChild(renderJaNeeVraag('Bij de verkopende makelaar', t, 'gezochtMakelaar', 'gezochtMakelaarToelichting'));
+  groepA.appendChild(renderJaNeeVraag('Andere bronnen', t, 'gezochtAndereBronnen', 'gezochtAndereBronnenToelichting'));
+  wrap.appendChild(groepA);
+
+  const groepB = el('div', { class: 'macro-groep' });
+  groepB.appendChild(renderJaNeeVraag('Ik heb de woning volledig kunnen inspecteren', t, 'volledigGeinspecteerd', null));
+  wrap.appendChild(groepB);
+
+  const groepF = el('div', { class: 'macro-groep' });
+  groepF.appendChild(el('h3', {}, 'F. Wat is de situatie van de woning?'));
+  const select = el('select', {
+    class: 'bewoning-select',
+    onchange: (e) => { t.bewoning.situatie = e.target.value; planOpslaan(); render(); },
+  }, el('option', { value: '' }, 'Selecteer'),
+    ...BEWONING_SITUATIE_OPTIES.map(optie => el('option', { value: optie, selected: t.bewoning.situatie === optie ? 'selected' : null }, optie)));
+  groepF.appendChild(select);
+  if (t.bewoning.situatie === 'Anders, namelijk:') {
+    const anders = el('textarea', {
+      class: 'bewoning-toelichting', placeholder: 'Namelijk…',
+      oninput: (e) => { t.bewoning.situatieAnders = e.target.value; planOpslaan(); },
+    });
+    anders.value = t.bewoning.situatieAnders || '';
+    groepF.appendChild(anders);
+  }
+  wrap.appendChild(groepF);
+
+  const groepGH = el('div', { class: 'macro-groep' });
+  groepGH.appendChild(renderJaNeeVraag('G. Woont de aanvrager van de lening al in de woning?', t, 'aanvragerWoontAl', 'aanvragerWoontAlToelichting', { toelichtBij: false }));
+  groepGH.appendChild(el('div', { style: 'height:10px' }));
+  groepGH.appendChild(renderJaNeeVraag('H. Gaat of blijft de aanvrager van de lening zelf in de woning wonen?', t, 'aanvragerBlijftWonen', 'aanvragerBlijftWonenToelichting', { toelichtBij: false }));
+  wrap.appendChild(groepGH);
+
+  const groepJ = el('div', { class: 'macro-groep' });
+  groepJ.appendChild(renderJaNeeVraag('J. Heb ik andere informatie ontdekt dan de informatie die hierboven staat?', t, 'andereInfoOntdekt', 'andereInfoOntdektToelichting'));
+  wrap.appendChild(groepJ);
+
   return wrap;
 }
 

@@ -258,6 +258,20 @@ h1, h2, h3, p { margin: 0; }
 .blok-maat { font-size: 9.5px; fill: var(--text-dim); pointer-events: none; font-family: var(--font); }
 .blok-greep { fill: var(--navy); cursor: nwse-resize; touch-action: none; rx: 2; }
 
+/* --- Bewoning (L), Fase 1 van de "volledige opname" --- */
+.bewoning-vraag { margin-bottom: 12px; }
+.bewoning-vraag:last-child { margin-bottom: 0; }
+.bewoning-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.bewoning-toelichting {
+  width: 100%; min-height: 60px; border: 1px solid var(--divider); border-radius: 10px;
+  background: var(--surface); padding: 10px; font: inherit; font-size: 13.5px; color: var(--text);
+  resize: vertical; box-sizing: border-box; margin-top: 6px;
+}
+.bewoning-select {
+  width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--divider);
+  border-radius: 10px; background: var(--surface); font: inherit; font-size: 13.5px; color: var(--text);
+}
+
 /* --- Aantekeningen --- */
 .aantekeningen-veld {
   width: 100%; min-height: 60vh; border: 1px solid var(--divider); border-radius: 14px; background: var(--surface);
