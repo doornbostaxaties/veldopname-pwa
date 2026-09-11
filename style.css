@@ -301,7 +301,6 @@ h1, h2, h3, p { margin: 0; }
 /* --- Bouwkundig (Fase 2 "volledige opname") --- */
 .bouwkundig-hoofdtabs { flex-wrap: wrap; }
 .bouwkundig-subtabs { flex-wrap: wrap; }
-.bouwkundig-nog-niet { font-size: 13px; color: var(--text-dim); padding: 20px 4px; }
 .bouwdeel-lijst { display: flex; flex-direction: column; gap: 10px; }
 .bouwdeel-kaart { background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; }
 .bouwdeel-kop { display: flex; align-items: center; gap: 10px; cursor: pointer; }

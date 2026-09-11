@@ -134,12 +134,18 @@ function leegBouwdeel() {
     aandachtspuntenAanwezig: null, aandachtspuntenToelichting: '',
   };
 }
+// Type 'risico' (Overige bijzonderheden: Houtaantasters/Vochtproblemen/Niet eerder genoemd) heeft
+// een ANDER schema dan de rest — geen conditie/kosten, in plaats daarvan een simpele "Risico:
+// Ja/Nee" (live nagekeken: Taxatieweb noemt dit veld daar zelf ook letterlijk "Risico").
+function leegRisicoBouwdeel() {
+  return { aanwezig: false, risico: null, omschrijving: '' };
+}
+function maakGroep(bouwdelen) {
+  const groep = {};
+  bouwdelen.forEach(b => { groep[b.key] = b.type === 'risico' ? leegRisicoBouwdeel() : leegBouwdeel(); });
+  return groep;
+}
 function leegBouwkundig() {
-  const maakGroep = (bouwdelen) => {
-    const groep = {};
-    bouwdelen.forEach(b => { groep[b.key] = leegBouwdeel(); });
-    return groep;
-  };
   return {
     buitenzijde: {
       daken: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.daken),
@@ -148,19 +154,43 @@ function leegBouwkundig() {
       perceel: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.perceel),
       overigeWaarnemingen: maakGroep(BOUWKUNDIG_SCHEMA.buitenzijde.overigeWaarnemingen),
     },
+    binnenzijde: {
+      funderingen: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.funderingen),
+      vloeren: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.vloeren),
+      wanden: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.wanden),
+      plafonds: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.plafonds),
+      inrichting: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.inrichting),
+      overigeWaarnemingen: maakGroep(BOUWKUNDIG_SCHEMA.binnenzijde.overigeWaarnemingen),
+    },
+    installaties: {
+      leidingen: maakGroep(BOUWKUNDIG_SCHEMA.installaties.leidingen),
+      verwarming: maakGroep(BOUWKUNDIG_SCHEMA.installaties.verwarming),
+      warmwater: maakGroep(BOUWKUNDIG_SCHEMA.installaties.warmwater),
+      ventilatieKoeling: maakGroep(BOUWKUNDIG_SCHEMA.installaties.ventilatieKoeling),
+      elektrotechnisch: maakGroep(BOUWKUNDIG_SCHEMA.installaties.elektrotechnisch),
+      overigeWaarnemingen: maakGroep(BOUWKUNDIG_SCHEMA.installaties.overigeWaarnemingen),
+    },
+    overigeBijzonderheden: maakGroep(BOUWKUNDIG_SCHEMA.overigeBijzonderheden),
   };
 }
-// Vult ontbrekende groepen/bouwdelen aan bij bestaande data (nieuwe bouwdelen later toegevoegd, of
-// data van vóór Fase 2) — zelfde migratie-patroon als metExterneBergruimte()/metNieuweMacroCategorieen().
+// Vult ontbrekende hoofdstukken/groepen/bouwdelen aan bij bestaande data (nieuwe bouwdelen later
+// toegevoegd, of data van vóór deze fase) — zelfde migratie-patroon als
+// metExterneBergruimte()/metNieuweMacroCategorieen().
 function metVolledigBouwkundig(bk) {
   const leeg = leegBouwkundig();
   if (!bk || typeof bk !== 'object') return leeg;
-  if (!bk.buitenzijde) bk.buitenzijde = {};
-  Object.keys(leeg.buitenzijde).forEach(sectie => {
-    if (!bk.buitenzijde[sectie]) bk.buitenzijde[sectie] = {};
-    Object.keys(leeg.buitenzijde[sectie]).forEach(key => {
-      if (!bk.buitenzijde[sectie][key]) bk.buitenzijde[sectie][key] = leegBouwdeel();
+  ['buitenzijde', 'binnenzijde', 'installaties'].forEach(hoofd => {
+    if (!bk[hoofd]) bk[hoofd] = {};
+    Object.keys(leeg[hoofd]).forEach(sectie => {
+      if (!bk[hoofd][sectie]) bk[hoofd][sectie] = {};
+      Object.keys(leeg[hoofd][sectie]).forEach(key => {
+        if (!bk[hoofd][sectie][key]) bk[hoofd][sectie][key] = leeg[hoofd][sectie][key];
+      });
     });
+  });
+  if (!bk.overigeBijzonderheden) bk.overigeBijzonderheden = {};
+  Object.keys(leeg.overigeBijzonderheden).forEach(key => {
+    if (!bk.overigeBijzonderheden[key]) bk.overigeBijzonderheden[key] = leeg.overigeBijzonderheden[key];
   });
   return bk;
 }
@@ -201,14 +231,99 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'overigeWaarnemingenBijgebouwenEnPerceel', label: 'Overige waarnemingen bijgebouwen en perceel', type: 'simpel' },
     ],
   },
+  binnenzijde: {
+    funderingen: [
+      { key: 'fundering', label: 'Fundering', type: 'materiaal', opties: ['Fundering op staal', 'Fundering op houten palen', 'Fundering op vloerplaat', 'Strokenfundering', 'Fundering op betonnen palen', 'Overige'] },
+      { key: 'kelder', label: 'Kelder', type: 'tekst' },
+      { key: 'kruipruimte', label: 'Kruipruimte', type: 'tekst' },
+    ],
+    vloeren: [
+      { key: 'woonlaag1', label: 'Woonlaag 1', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
+      { key: 'woonlaag2', label: 'Woonlaag 2', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
+      { key: 'woonlaag3', label: 'Woonlaag 3', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
+      { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
+    ],
+    wanden: [
+      { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst' },
+    ],
+    plafonds: [
+      { key: 'plafonds', label: 'Plafonds', type: 'tekst' },
+    ],
+    inrichting: [
+      { key: 'trappen', label: 'Trappen', type: 'tekst' },
+      { key: 'binnenschilderwerk', label: 'Binnenschilderwerk', type: 'tekst' },
+      { key: 'keuken', label: "Keuken (+eventuele inbouwapparatuur)", type: 'materiaal', opties: ['Magnetron', 'Combi-Magnetron', 'Oven', 'Stoomoven', 'Afzuigkap', 'Koelkast', 'Vriezer', '4-pits gasstel', '5-pits gasstel', 'Electrische kookplaat', 'Keramische kookplaat', 'Inductie kookplaat', 'Combi-kookplaat', 'Kokendwaterkraan', 'Koffiezetapparaat', 'Close-in boiler', 'Vaatwasser', 'Overige'] },
+      { key: 'badkamer1', label: 'Badkamer 1', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
+      { key: 'badkamer2', label: 'Badkamer 2', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
+      { key: 'badkamer3', label: 'Badkamer 3', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
+      { key: 'toilet1', label: 'Toilet 1', type: 'tekst' },
+      { key: 'toilet2', label: 'Toilet 2', type: 'tekst' },
+      { key: 'toilet3', label: 'Toilet 3', type: 'tekst' },
+    ],
+    overigeWaarnemingen: [
+      { key: 'overigeWaarnemingenBinnenzijde', label: 'Overige waarnemingen binnenzijde', type: 'simpel' },
+    ],
+  },
+  installaties: {
+    leidingen: [
+      { key: 'gas', label: 'Gas', type: 'tekst' },
+      { key: 'water', label: 'Water', type: 'tekst' },
+      { key: 'riolering', label: 'Riolering', type: 'tekst' },
+    ],
+    verwarming: [
+      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'] },
+      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
+      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
+    ],
+    warmwater: [
+      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'] },
+    ],
+    ventilatieKoeling: [
+      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'] },
+      { key: 'koeling', label: 'Koeling', type: 'materiaal', opties: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'] },
+    ],
+    elektrotechnisch: [
+      { key: 'meterkast', label: 'Meterkast', type: 'tekst' },
+      { key: 'ictDomotica', label: 'ICT / Domotica', type: 'tekst' },
+      { key: 'brandveiligheid', label: 'Brandveiligheid', type: 'tekst' },
+      { key: 'brandmeldinstallatie', label: 'Brandmeldinstallatie', type: 'tekst' },
+    ],
+    overigeWaarnemingen: [
+      { key: 'overigeWaarnemingenInstallaties', label: 'Overige waarnemingen installaties', type: 'simpel' },
+    ],
+  },
+  // Geen sub-tabbladen (Taxatieweb toont deze drie los onder één hoofdstuk).
+  overigeBijzonderheden: [
+    { key: 'houtaantasters', label: 'Houtaantasters (zwam / schimmel / overige)', type: 'risico' },
+    { key: 'vochtproblemen', label: 'Vochtproblemen (lekkage, condensatie)', type: 'risico' },
+    { key: 'nietEerderGenoemd', label: 'Niet eerder genoemde bijzonderheden', type: 'risico' },
+  ],
 };
-const BUITENZIJDE_SUBTABS = [
-  { id: 'daken', label: 'Daken' },
-  { id: 'gevel', label: 'Gevel' },
-  { id: 'bijgebouwen', label: 'Bijgebouwen' },
-  { id: 'perceel', label: 'Perceel/tuin' },
-  { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
-];
+const BOUWKUNDIG_SUBTABS = {
+  buitenzijde: [
+    { id: 'daken', label: 'Daken' },
+    { id: 'gevel', label: 'Gevel' },
+    { id: 'bijgebouwen', label: 'Bijgebouwen' },
+    { id: 'perceel', label: 'Perceel/tuin' },
+    { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
+  ],
+  binnenzijde: [
+    { id: 'funderingen', label: 'Funderingen' },
+    { id: 'vloeren', label: 'Vloeren' },
+    { id: 'wanden', label: 'Wanden' },
+    { id: 'plafonds', label: 'Plafonds' },
+    { id: 'inrichting', label: 'Inrichting' },
+    { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
+  ],
+  installaties: [
+    { id: 'leidingen', label: 'Leidingen' },
+    { id: 'verwarming', label: 'Verwarming' },
+    { id: 'warmwater', label: 'Warmwater' },
+    { id: 'ventilatieKoeling', label: 'Ventilatie/Koeling' },
+    { id: 'elektrotechnisch', label: 'Electrotechnisch' },
+    { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
+  ],
+};
 
 function naarGetal(w) {
   const n = parseFloat(String(w || '').replace(',', '.'));
@@ -318,9 +433,8 @@ const state = {
   wachtrijAantal: 0,
   macros: standaardMacros(), // wordt bij init() overschreven met de bewaarde versie, indien aanwezig
   afmetingenWeergave: 'tekening', // 'tekening' | 'lijst' — zelfde standaard als Taxatieweb sinds v0.17.0
-  bouwkundigHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties' — nu alleen buitenzijde uitgewerkt
-  bouwkundigSubtab: 'daken', // zie BUITENZIJDE_SUBTABS
-  ingeklaptBouwdelen: new Set(), // sleutel 'sectie.key' — welke bouwdeel-kaarten ingeklapt zijn
+  bouwkundigHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties' | 'overigeBijzonderheden'
+  bouwkundigSubtab: 'daken', // zie BOUWKUNDIG_SUBTABS[hoofdtab]
 };
 
 async function laadMacros() {
@@ -1748,9 +1862,39 @@ function conditieChips(bouwdeel) {
   });
   return wrap;
 }
+// Type 'risico': geen conditie/materiaal/aandachtspunten — alleen "Risico: Ja/Nee" + vrije
+// omschrijving, exact zoals Taxatieweb's eigen Overige bijzonderheden-velden (Houtaantasters e.d.).
+function renderRisicoBouwdeelKaart(bouwdeel, def) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  const kop = el('div', {
+    class: 'bouwdeel-kop',
+    onclick: () => { bouwdeel.aanwezig = !bouwdeel.aanwezig; planOpslaan(); render(); },
+  },
+    el('input', { type: 'checkbox', checked: bouwdeel.aanwezig ? 'checked' : null }),
+    el('span', { class: 'bouwdeel-titel' }, def.label));
+  kaart.appendChild(kop);
+  if (!bouwdeel.aanwezig) return kaart;
+
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Risico'));
+  const wissel = el('div', { class: 'weergave-wissel' });
+  [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
+    wissel.appendChild(el('button', {
+      class: 'klein' + (bouwdeel.risico === waarde ? ' actief' : ''),
+      onclick: () => { bouwdeel.risico = waarde; planOpslaan(); render(); },
+    }, tekst));
+  });
+  kaart.appendChild(wissel);
+  const omschrijvingVeld = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
+    oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
+  });
+  omschrijvingVeld.value = bouwdeel.omschrijving || '';
+  kaart.appendChild(omschrijvingVeld);
+  return kaart;
+}
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
-  const sleutel = def.key;
+  if (def.type === 'risico') return renderRisicoBouwdeelKaart(bouwdeel, def);
   const ingeklapt = !bouwdeel.aanwezig; // niet-aanwezige bouwdelen tonen alleen de kop, zelfde als Taxatieweb
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   const kop = el('div', {
@@ -1813,27 +1957,38 @@ function renderBouwdeelKaart(sectieObj, def) {
   }
   return kaart;
 }
+const BOUWKUNDIG_HOOFDTABS = [
+  ['buitenzijde', 'Buitenzijde'], ['binnenzijde', 'Binnenzijde'], ['installaties', 'Installaties'],
+  ['overigeBijzonderheden', 'Overige bijzonderheden'],
+];
 function renderBouwkundigTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
 
   const hoofdtabs = el('div', { class: 'weergave-wissel bouwkundig-hoofdtabs' });
-  [['buitenzijde', 'Buitenzijde'], ['binnenzijde', 'Binnenzijde (binnenkort)'], ['installaties', 'Installaties (binnenkort)']].forEach(([id, label]) => {
+  BOUWKUNDIG_HOOFDTABS.forEach(([id, label]) => {
     hoofdtabs.appendChild(el('button', {
       class: 'klein' + (state.bouwkundigHoofdtab === id ? ' actief' : ''),
-      disabled: id === 'buitenzijde' ? null : 'disabled',
       onclick: () => { state.bouwkundigHoofdtab = id; render(); },
     }, label));
   });
   wrap.appendChild(hoofdtabs);
 
-  if (state.bouwkundigHoofdtab !== 'buitenzijde') {
-    wrap.appendChild(el('p', { class: 'bouwkundig-nog-niet' }, 'Deze sectie is nog niet uitgewerkt in de Veldopname-app — komt in een volgende fase.'));
+  // Overige bijzonderheden heeft geen sub-tabbladen in Taxatieweb — direct de (risico-)bouwdelen.
+  if (state.bouwkundigHoofdtab === 'overigeBijzonderheden') {
+    const lijst = el('div', { class: 'bouwdeel-lijst' });
+    BOUWKUNDIG_SCHEMA.overigeBijzonderheden.forEach(def => lijst.appendChild(renderBouwdeelKaart(t.bouwkundig.overigeBijzonderheden, def)));
+    wrap.appendChild(lijst);
     return wrap;
   }
 
+  const subtabsSchema = BOUWKUNDIG_SUBTABS[state.bouwkundigHoofdtab];
+  // Bij het wisselen van hoofdtab kan de vorige subtab hier niet bestaan (bv. 'daken' bestaat niet
+  // onder Installaties) — val dan terug op de eerste subtab van de nieuwe hoofdtab.
+  if (!subtabsSchema.some(s => s.id === state.bouwkundigSubtab)) state.bouwkundigSubtab = subtabsSchema[0].id;
+
   const subtabs = el('div', { class: 'weergave-wissel bouwkundig-subtabs' });
-  BUITENZIJDE_SUBTABS.forEach(sub => {
+  subtabsSchema.forEach(sub => {
     subtabs.appendChild(el('button', {
       class: 'klein' + (state.bouwkundigSubtab === sub.id ? ' actief' : ''),
       onclick: () => { state.bouwkundigSubtab = sub.id; render(); },
@@ -1841,8 +1996,8 @@ function renderBouwkundigTab() {
   });
   wrap.appendChild(subtabs);
 
-  const sectieObj = t.bouwkundig.buitenzijde[state.bouwkundigSubtab];
-  const defs = BOUWKUNDIG_SCHEMA.buitenzijde[state.bouwkundigSubtab];
+  const sectieObj = t.bouwkundig[state.bouwkundigHoofdtab][state.bouwkundigSubtab];
+  const defs = BOUWKUNDIG_SCHEMA[state.bouwkundigHoofdtab][state.bouwkundigSubtab];
   const lijst = el('div', { class: 'bouwdeel-lijst' });
   defs.forEach(def => lijst.appendChild(renderBouwdeelKaart(sectieObj, def)));
   wrap.appendChild(lijst);
