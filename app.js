@@ -386,6 +386,32 @@ const ENERGETISCH_EIGENDOM_OPTIES = ['Eigendom', 'Lease', 'Huur', 'Anders'];
 const ENERGETISCH_BRON_OPTIES = ['Visuele waarneming taxateur', 'Verkopende makelaar', 'Huurder/gebruiker', 'Eigenaar', 'Aankopende makelaar', 'Anderen'];
 const ENERGETISCH_BOUWTYPE_OPTIES = ['Houtbouw', 'Staalbouw', 'Metselwerk', 'Systeembouw', 'Overige bouwtype', 'Houtskeletbouw', 'Betonnen wanden en vloeren', 'Traditioneel gebouwd', 'Prefab bouw'];
 const GLAS_OPTIES = ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Overige'];
+const ENERGETISCH_METEN_TYPE_OPTIES = ['Aantal Wattpiek', 'Aantal panelen'];
+// Live geverifieerd bij Taxatieweb's eigen C. Object → Woningtype (13-09-2026).
+const WONINGTYPE_OPTIES = [
+  '2-onder-1-kapwoning', 'Benedenwoning', 'Bovenwoning', 'Corridorflat', 'Eindwoning', 'Galerijflat',
+  'Geschakelde 2-onder-1-kapwoning', 'Geschakelde woning', 'Half vrijstaande woning', 'Hoekwoning',
+  'Ligplaats', 'Maisonnette', 'Portiekflat', 'Portiekwoning', 'Tussenwoning', 'Vrijstaande woning',
+  'Waterwoning', 'Woon-/winkelpand', 'Woonboot', 'Woonwagen/stacaravan',
+  'Woonwagenstandplaats/Stacaravanstandplaats',
+];
+// Keuzelijst bouwjaren, aflopend vanaf het huidige jaar (Arno's verzoek 13-09-2026: "keuzelijst met
+// bouwjaren teruglopend vanaf het huidige bouwjaar" i.p.v. een vrij getalveld) — 1850 als praktische
+// ondergrens, ruim voor vrijwel elke Nederlandse woning.
+const JAREN_OPTIES = (() => {
+  const huidig = new Date().getFullYear();
+  const lijst = [];
+  for (let j = huidig; j >= 1850; j--) lijst.push(String(j));
+  return lijst;
+})();
+function renderJaarSelect(waarde, onChange, klasse) {
+  return el('select', {
+    class: klasse || 'energetisch-select',
+    onchange: (e) => { onChange(e.target.value); },
+  },
+    el('option', { value: '' }, 'Selecteer'),
+    ...JAREN_OPTIES.map(j => el('option', { value: j, selected: String(waarde) === j ? 'selected' : null }, j)));
+}
 const ENERGETISCH_SCHEMA = {
   isolatie: {
     gevel: [
@@ -450,11 +476,13 @@ const ENERGETISCH_HOOFDTABS = [
   ['algemeen', 'Algemeen'], ['isolatie', 'Isolatie'], ['installaties', 'Installaties'], ['energieopwekking', 'Energieopwekking'],
 ];
 
-function leegIsolatieVeld() { return { aanwezig: false, gedeeltelijk: null, installatiemoment: '', opmerkingen: '' }; }
-function leegDakVeld() { return { aanwezig: false, geisoleerd: null, gedeeltelijk: null, installatiemoment: '', opmerkingen: '' }; }
-function leegMateriaalTijdVeld() { return { aanwezig: false, materialen: [], overigeTekst: '', installatiemoment: '', opmerkingen: '' }; }
+function leegIsolatieVeld() { return { aanwezig: false, gedeeltelijk: null, installatiemoment: '', jaar: '', opmerkingen: '' }; }
+function leegDakVeld() { return { aanwezig: false, geisoleerd: null, gedeeltelijk: null, installatiemoment: '', jaar: '', opmerkingen: '' }; }
+function leegMateriaalTijdVeld() { return { aanwezig: false, materialen: [], overigeTekst: '', installatiemoment: '', jaar: '', opmerkingen: '' }; }
 function leegEnergetischSimpelVeld() { return { aanwezig: false, opmerkingen: '' }; }
-function leegZonnepanelenVeld() { return { aanwezig: false, metenType: '', aantal: '', orientatie: '', eigendom: '', installatiemoment: '', opmerkingen: '' }; }
+// orientaties is een lijst (Taxatieweb toont dit als checkbox-multiselect, geen keuzelijst — live
+// geverifieerd 13-09-2026: een dak/installatie kan op meerdere windrichtingen tegelijk liggen).
+function leegZonnepanelenVeld() { return { aanwezig: false, metenType: '', aantal: '', orientaties: [], eigendom: '', installatiemoment: '', jaar: '', opmerkingen: '' }; }
 function maakLeegEnergetischVeld(def) {
   if (def.type === 'isolatie') return leegIsolatieVeld();
   if (def.type === 'dak') return leegDakVeld();
@@ -2139,16 +2167,16 @@ function renderObjectkenmerkenTab() {
   const groepKenmerken = el('div', { class: 'macro-groep' });
   groepKenmerken.appendChild(el('h3', {}, 'Objectkenmerken'));
   const kenmerkenRij = el('div', { class: 'objectkenmerken-rij' });
-  const woningtypeVeld = el('input', {
-    type: 'text', placeholder: 'Woningtype (bv. tussenwoning)',
-    oninput: (e) => { t.bewoning.woningtype = e.target.value; planOpslaan(); },
-  });
-  woningtypeVeld.value = t.bewoning.woningtype || '';
-  const bouwjaarVeld = el('input', {
-    type: 'number', placeholder: 'Bouwjaar',
-    oninput: (e) => { t.bewoning.bouwjaar = e.target.value; planOpslaan(); },
-  });
-  bouwjaarVeld.value = t.bewoning.bouwjaar || '';
+  // Beide velden zijn keuzelijsten i.p.v. vrije tekst/getal sinds 13-09-2026 (Arno: "Woningtype lijst
+  // overnemen" + "Bouwjaar met keuzelijst"), exact de opties van Taxatieweb's C. Object/eigen
+  // bouwjaar-aanpak — een auto-ingevulde waarde die niet exact matcht (bv. rechtstreeks uit Funda)
+  // toont dan gewoon "Selecteer", de taxateur kiest zelf de juiste.
+  const woningtypeVeld = el('select', {
+    onchange: (e) => { t.bewoning.woningtype = e.target.value; planOpslaan(); },
+  },
+    el('option', { value: '' }, 'Selecteer'),
+    ...WONINGTYPE_OPTIES.map(o => el('option', { value: o, selected: t.bewoning.woningtype === o ? 'selected' : null }, o)));
+  const bouwjaarVeld = renderJaarSelect(t.bewoning.bouwjaar, (w) => { t.bewoning.bouwjaar = w; planOpslaan(); });
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Woningtype', woningtypeVeld));
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
   groepKenmerken.appendChild(kenmerkenRij);
@@ -2281,9 +2309,13 @@ function renderDetailVeld(bouwdeel, d) {
     });
     return el('div', { class: 'bouwdeel-detail-veld' }, el('span', {}, d.label), wissel);
   }
-  // 'jaar' of 'getal'
+  if (d.type === 'jaar') {
+    return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
+      renderJaarSelect(waarde, (w) => { bouwdeel.details[d.key] = w; planOpslaan(); }, 'bouwdeel-detail-select'));
+  }
+  // 'getal'
   const input = el('input', {
-    type: 'number', placeholder: d.type === 'jaar' ? 'bv. 2015' : '0',
+    type: 'number', placeholder: '0',
     oninput: (e) => { bouwdeel.details[d.key] = e.target.value; planOpslaan(); },
   });
   input.value = waarde || '';
@@ -2428,7 +2460,7 @@ function renderSelectVeld(labelText, waarde, opties, onChange) {
   return el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, labelText),
     el('select', {
       class: 'energetisch-select',
-      onchange: (e) => { onChange(e.target.value); planOpslaan(); },
+      onchange: (e) => { onChange(e.target.value); planOpslaan(); render(); },
     },
       el('option', { value: '' }, 'Selecteer'),
       ...opties.map(o => el('option', { value: o, selected: waarde === o ? 'selected' : null }, o))));
@@ -2437,7 +2469,16 @@ function renderSelectVeld(labelText, waarde, opties, onChange) {
 // vrijwel elk I.4-onderdeel in Taxatieweb.
 function renderInstallatiemomentEnOpmerkingen(veld) {
   const wrap = el('div', {});
-  wrap.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
+  const rij = el('div', { class: 'bouwdeel-details-grid' });
+  rij.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
+  // Bouwjaar-veld naast Installatiemoment, alleen zichtbaar bij Bouwjaar/Installatiejaar (Arno's
+  // verzoek 13-09-2026: "past er prima naast").
+  if (veld.installatiemoment === 'Bouwjaar' || veld.installatiemoment === 'Installatiejaar') {
+    rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
+      el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
+      renderJaarSelect(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
+  }
+  wrap.appendChild(rij);
   const opmerkingen = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
     oninput: (e) => { veld.opmerkingen = e.target.value; planOpslaan(); },
@@ -2517,16 +2558,34 @@ function renderZonnepanelenKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderEnergetischKop(veld, def));
   if (!veld.aanwezig) return kaart;
-  const grid = el('div', { class: 'bouwdeel-details-grid' });
+  // "Omschrijving zonnepanelen": Taxatieweb laat je kiezen of je Wattpiek of aantal panelen invult
+  // (Arno's verzoek 13-09-2026), i.p.v. altijd een kaal getalveld "Aantal".
+  kaart.appendChild(renderSelectVeld('Omschrijving zonnepanelen', veld.metenType, ENERGETISCH_METEN_TYPE_OPTIES, (w) => { veld.metenType = w; }));
   const aantalInput = el('input', {
     type: 'number', placeholder: '0',
     oninput: (e) => { veld.aantal = e.target.value; planOpslaan(); },
   });
   aantalInput.value = veld.aantal || '';
-  grid.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, 'Aantal', aantalInput));
-  grid.appendChild(renderSelectVeld('Oriëntatie', veld.orientatie, ENERGETISCH_ORIENTATIE_OPTIES, (w) => { veld.orientatie = w; }));
-  grid.appendChild(renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }));
-  kaart.appendChild(grid);
+  kaart.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, veld.metenType || 'Aantal Wattpiek of aantal panelen', aantalInput));
+  // Oriëntatie is in Taxatieweb een checkbox-multiselect (meerdere windrichtingen tegelijk mogelijk),
+  // geen keuzelijst — zelfde grid-patroon als een materiaal-multiselect.
+  const orientatieGrid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  ENERGETISCH_ORIENTATIE_OPTIES.forEach(optie => {
+    const aan = (veld.orientaties || []).includes(optie);
+    orientatieGrid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => {
+          veld.orientaties = veld.orientaties || [];
+          const i = veld.orientaties.indexOf(optie);
+          if (i >= 0) veld.orientaties.splice(i, 1); else veld.orientaties.push(optie);
+          planOpslaan(); render();
+        },
+      }), optie));
+  });
+  kaart.appendChild(el('span', { class: 'energetisch-veld-label' }, 'Oriëntatie'));
+  kaart.appendChild(orientatieGrid);
+  kaart.appendChild(renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }));
   kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
   return kaart;
 }
