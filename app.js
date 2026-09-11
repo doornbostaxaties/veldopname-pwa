@@ -30,9 +30,12 @@ const QR_CATEGORIEEN = [
   'Dakterras', 'Verbouwing', 'Achterstallig onderhoud',
 ];
 // Verplichte vaste foto's (uit Q/R's eigen instructietekst) — altijd op de checklist, ongeacht Indeling.
+// 'C.V.-ketel' toegevoegd op Arno's verzoek (12-09-2026): Verwarmingstoestel is net als Meterkast
+// een verplichte foto — de bouwkundig-tab-fotoknop bij dat bouwdeel gebruikt dezelfde categorienaam,
+// zodat die éne foto ook meteen deze checklist-regel afvinkt (zie ook FOTO_CATEGORIE_PER_BOUWDEEL).
 const VASTE_VERPLICHTE_FOTOS = [
   'Vooraanzicht', 'Straatbeeld', 'Achtergevel', 'Tuin', 'Badkamer', 'Keuken', 'Woonkamer',
-  'Toilet', 'Meterkast',
+  'Toilet', 'Meterkast', 'C.V.-ketel',
 ];
 
 // ----------------------------------------------------------------------------------------------
@@ -131,11 +134,20 @@ const BEWONING_SITUATIE_OPTIES = [
 // een eigen "Details"-blokje met extra velden (Bouwjaar/Eigendom, Aantal groepen e.d.) — zie
 // `def.details` in BOUWKUNDIG_SCHEMA. Waarden staan los in `details` (per bouwdeel-key), zodat een
 // bouwdeel zonder eigen details gewoon een leeg object heeft.
-function leegBouwdeel() {
+// `overigeTekst`: bij type 'materiaal', zodra "Overige" is aangevinkt toont Taxatieweb daar zelf ook
+// een vrij tekstveld (Arno's verzoek 12-09-2026) — los bewaard, niet in `materialen` zelf.
+// `def` (optioneel): een NIEUW bouwdeel start met `aanwezig`/`conditie` op def.standaardAan/
+// def.standaardConditie als die in het schema staan (Arno: bepaalde bouwdelen staan bij Taxatieweb
+// standaard al aan, Riolering staat standaard op "niet waarneembaar") — bestaande, al opgeslagen
+// bouwdelen worden hier NOOIT met terugwerkende kracht aangepast (alleen leegBouwkundig()/maakGroep()
+// voor een gloednieuwe taxatie roept dit met een `def` aan).
+function leegBouwdeel(def) {
   return {
-    aanwezig: false, conditie: 5,
-    omschrijving: '', materialen: [], details: {},
-    aandachtspuntenAanwezig: null, aandachtspuntenToelichting: '',
+    aanwezig: !!(def && def.standaardAan), conditie: def && def.standaardConditie !== undefined ? def.standaardConditie : 5,
+    omschrijving: '', materialen: [], overigeTekst: '', details: {},
+    // Alle aandachtspunten staan standaard op Nee (Arno's verzoek 12-09-2026) — was eerst `null`
+    // (nog niets gekozen), maar Taxatieweb zelf toont hier ook altijd al "Nee" als startwaarde.
+    aandachtspuntenAanwezig: false, aandachtspuntenToelichting: '',
   };
 }
 // Type 'risico' (Overige bijzonderheden: Houtaantasters/Vochtproblemen/Niet eerder genoemd) heeft
@@ -158,7 +170,7 @@ function vulOntbrekendeDetails(bouwdeel, def) {
 function maakGroep(bouwdelen) {
   const groep = {};
   bouwdelen.forEach(b => {
-    const bouwdeel = b.type === 'risico' ? leegRisicoBouwdeel() : leegBouwdeel();
+    const bouwdeel = b.type === 'risico' ? leegRisicoBouwdeel() : leegBouwdeel(b);
     vulOntbrekendeDetails(bouwdeel, b);
     groep[b.key] = bouwdeel;
   });
@@ -204,7 +216,10 @@ function metVolledigBouwkundig(bk) {
       if (!bk[hoofd][sectie]) bk[hoofd][sectie] = {};
       BOUWKUNDIG_SCHEMA[hoofd][sectie].forEach(def => {
         if (!bk[hoofd][sectie][def.key]) bk[hoofd][sectie][def.key] = leeg[hoofd][sectie][def.key];
-        else vulOntbrekendeDetails(bk[hoofd][sectie][def.key], def);
+        else {
+          vulOntbrekendeDetails(bk[hoofd][sectie][def.key], def);
+          if (bk[hoofd][sectie][def.key].overigeTekst === undefined) bk[hoofd][sectie][def.key].overigeTekst = '';
+        }
       });
     });
   });
@@ -218,21 +233,21 @@ const CONDITIE_LABELS = ['niet waarneembaar', 'nader onderzoek nodig', 'slecht',
 const BOUWKUNDIG_SCHEMA = {
   buitenzijde: {
     daken: [
-      { key: 'dakconstructie', label: 'Dakconstructie', type: 'tekst' },
-      { key: 'materiaalDak', label: 'Materiaal dak', type: 'materiaal', opties: ['Pannen', 'Leien', 'Riet', 'Bitumineus', 'EPDM', 'Sedum', 'Overige'] },
+      { key: 'dakconstructie', label: 'Dakconstructie', type: 'tekst', standaardAan: true },
+      { key: 'materiaalDak', label: 'Materiaal dak', type: 'materiaal', opties: ['Pannen', 'Leien', 'Riet', 'Bitumineus', 'EPDM', 'Sedum', 'Overige'], standaardAan: true },
       { key: 'dakkapellen', label: 'Dakkapel(len)', type: 'tekst' },
       { key: 'schoorstenen', label: 'Schoorste(e)n(en)', type: 'tekst' },
       { key: 'goten', label: 'Goten (incl. hemelwaterafvoeren)', type: 'tekst' },
       { key: 'loodwerk', label: 'Loodwerk', type: 'tekst' },
     ],
     gevel: [
-      { key: 'gevelwerk', label: 'Gevelwerk', type: 'materiaal', opties: ['Metselwerk', 'Gevelbetimmering', 'Gevelcement', 'Stucwerk', 'Composiet', 'Overige'] },
+      { key: 'gevelwerk', label: 'Gevelwerk', type: 'materiaal', opties: ['Metselwerk', 'Gevelbetimmering', 'Gevelcement', 'Stucwerk', 'Composiet', 'Overige'], standaardAan: true },
       { key: 'balkon', label: 'Balkon', type: 'tekst' },
-      { key: 'kozijnen', label: 'Kozijnen', type: 'tekst' },
-      { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst' },
-      { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst' },
-      { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst' },
-      { key: 'glas1eWoonlaag', label: 'Glas 1e woonlaag', type: 'tekst' },
+      { key: 'kozijnen', label: 'Kozijnen', type: 'tekst', standaardAan: true },
+      { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst', standaardAan: true },
+      { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst', standaardAan: true },
+      { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst', standaardAan: true },
+      { key: 'glas1eWoonlaag', label: 'Glas 1e woonlaag', type: 'tekst', standaardAan: true },
       { key: 'glas2eWoonlaag', label: 'Glas 2e woonlaag', type: 'tekst' },
       { key: 'glas3eWoonlaag', label: 'Glas 3e woonlaag', type: 'tekst' },
       { key: 'glasOverigeWoonlagen', label: 'Glas overige woonlagen', type: 'tekst' },
@@ -264,19 +279,19 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
     ],
     wanden: [
-      { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst' },
+      { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst', standaardAan: true },
     ],
     plafonds: [
-      { key: 'plafonds', label: 'Plafonds', type: 'tekst' },
+      { key: 'plafonds', label: 'Plafonds', type: 'tekst', standaardAan: true },
     ],
     inrichting: [
       { key: 'trappen', label: 'Trappen', type: 'tekst' },
-      { key: 'binnenschilderwerk', label: 'Binnenschilderwerk', type: 'tekst' },
-      { key: 'keuken', label: "Keuken (+eventuele inbouwapparatuur)", type: 'materiaal', opties: ['Magnetron', 'Combi-Magnetron', 'Oven', 'Stoomoven', 'Afzuigkap', 'Koelkast', 'Vriezer', '4-pits gasstel', '5-pits gasstel', 'Electrische kookplaat', 'Keramische kookplaat', 'Inductie kookplaat', 'Combi-kookplaat', 'Kokendwaterkraan', 'Koffiezetapparaat', 'Close-in boiler', 'Vaatwasser', 'Overige'] },
-      { key: 'badkamer1', label: 'Badkamer 1', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
+      { key: 'binnenschilderwerk', label: 'Binnenschilderwerk', type: 'tekst', standaardAan: true },
+      { key: 'keuken', label: "Keuken (+eventuele inbouwapparatuur)", type: 'materiaal', opties: ['Magnetron', 'Combi-Magnetron', 'Oven', 'Stoomoven', 'Afzuigkap', 'Koelkast', 'Vriezer', '4-pits gasstel', '5-pits gasstel', 'Electrische kookplaat', 'Keramische kookplaat', 'Inductie kookplaat', 'Combi-kookplaat', 'Kokendwaterkraan', 'Koffiezetapparaat', 'Close-in boiler', 'Vaatwasser', 'Overige'], standaardAan: true },
+      { key: 'badkamer1', label: 'Badkamer 1', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'], standaardAan: true },
       { key: 'badkamer2', label: 'Badkamer 2', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
       { key: 'badkamer3', label: 'Badkamer 3', type: 'materiaal', opties: ['Ligbad', 'Jacuzzi whirlpool', 'Douchehoek', 'Douchecabine', 'Inloopdouche', 'Stoomdouche', 'Wastafel', 'Dubbele wastafel', 'Wastafel in meubel', 'Toilet', 'Bidet', 'Overige'] },
-      { key: 'toilet1', label: 'Toilet 1', type: 'tekst' },
+      { key: 'toilet1', label: 'Toilet 1', type: 'tekst', standaardAan: true },
       { key: 'toilet2', label: 'Toilet 2', type: 'tekst' },
       { key: 'toilet3', label: 'Toilet 3', type: 'tekst' },
     ],
@@ -286,24 +301,24 @@ const BOUWKUNDIG_SCHEMA = {
   },
   installaties: {
     leidingen: [
-      { key: 'gas', label: 'Gas', type: 'tekst' },
-      { key: 'water', label: 'Water', type: 'tekst' },
-      { key: 'riolering', label: 'Riolering', type: 'tekst' },
+      { key: 'gas', label: 'Gas', type: 'tekst', standaardAan: true },
+      { key: 'water', label: 'Water', type: 'tekst', standaardAan: true },
+      { key: 'riolering', label: 'Riolering', type: 'tekst', standaardAan: true, standaardConditie: 0 },
     ],
     verwarming: [
-      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }] },
+      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
       { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
       { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
     ],
     warmwater: [
-      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }] },
+      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
     ],
     ventilatieKoeling: [
-      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'] },
+      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'], standaardAan: true },
       { key: 'koeling', label: 'Koeling', type: 'materiaal', opties: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'] },
     ],
     elektrotechnisch: [
-      { key: 'meterkast', label: 'Meterkast', type: 'tekst', details: [{ key: 'aantalGroepen', label: 'Aantal groepen', type: 'getal' }, { key: 'aantalAardlekschakelaars', label: 'Aantal aardlekschakelaars', type: 'getal' }, { key: 'krachtstroomAanwezig', label: 'Krachtstroom aanwezig', type: 'ja_nee' }, { key: 'oplaadpuntAanwezig', label: 'Oplaadpunt aanwezig', type: 'ja_nee' }] },
+      { key: 'meterkast', label: 'Meterkast', type: 'tekst', details: [{ key: 'aantalGroepen', label: 'Aantal groepen', type: 'getal' }, { key: 'aantalAardlekschakelaars', label: 'Aantal aardlekschakelaars', type: 'getal' }, { key: 'krachtstroomAanwezig', label: 'Krachtstroom aanwezig', type: 'ja_nee' }, { key: 'oplaadpuntAanwezig', label: 'Oplaadpunt aanwezig', type: 'ja_nee' }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'Meterkast' },
       { key: 'ictDomotica', label: 'ICT / Domotica', type: 'tekst' },
       { key: 'brandveiligheid', label: 'Brandveiligheid', type: 'tekst' },
       { key: 'brandmeldinstallatie', label: 'Brandmeldinstallatie', type: 'tekst' },
@@ -1616,13 +1631,15 @@ async function verkleinFoto(file, maxAfmeting = 1600, kwaliteit = 0.82) {
   } catch (e) { return file; }
 }
 
-async function verwerkGekozenFoto(file, ruimteNaam) {
-  if (!file) return;
-  const categorie = ruimteNaam ? (bepaalQRCategorieVoorRuimte(ruimteNaam) || 'Anders') : 'Anders';
+// Gedeelde opslagroutine achter verwerkGekozenFoto() (Foto's-tab/Indeling) EN de bouwkundig-
+// fotoknoppen (verplichte foto's bij Meterkast/Verwarmingstoestel, "Aandachtspunt <bouwdeel>" bij
+// een slechte/matige conditie) — zelfde foto-object-vorm, alleen het label/categorie verschilt.
+async function slaFotoOp(file, ruimteLabel, categorie) {
+  if (!file) return null;
   const foto = {
     rapport_id: state.taxatie.rapport_id,
     blob: await verkleinFoto(file),
-    ruimte_label: ruimteNaam || null,
+    ruimte_label: ruimteLabel || null,
     categorie,
     gemaaktOp: new Date().toISOString(),
     status: 'lokaal',
@@ -1632,8 +1649,38 @@ async function verwerkGekozenFoto(file, ruimteNaam) {
   foto.id = id;
   state.fotos.push(foto);
   await VeldopnameDB.voegWachtrijItemToe({ type: 'foto', fotoId: id });
-  if (state.route.tab === 'fotos') render();
   verstuurFotoWachtrij();
+  return foto;
+}
+async function verwerkGekozenFoto(file, ruimteNaam) {
+  if (!file) return;
+  const categorie = ruimteNaam ? (bepaalQRCategorieVoorRuimte(ruimteNaam) || 'Anders') : 'Anders';
+  await slaFotoOp(file, ruimteNaam, categorie);
+  if (state.route.tab === 'fotos') render();
+}
+// Foto('s) voor een bouwkundig-fotoknop, bv. alle niet-gearchiveerde foto's met ruimte_label
+// "Meterkast" of "Aandachtspunt Dakconstructie".
+function fotosVoorLabel(label) {
+  return state.fotos.filter(f => f.ruimte_label === label && !f.archief);
+}
+// Compacte fotoknop + eventuele al-gemaakte-foto-miniaturen, voor gebruik ín een bouwdeel-kaart.
+// `verplicht` bepaalt alleen het label/uiterlijk van de knop zolang er nog geen foto is — de foto
+// zelf is altijd optioneel om te VERWIJDEREN (via de bestaande lightbox), nooit hard afgedwongen.
+function renderFotoKnopRij(label, categorie, verplicht) {
+  const fotos = fotosVoorLabel(label);
+  const rij = el('div', { class: 'bouwdeel-foto-rij' });
+  fotos.forEach(f => {
+    rij.appendChild(el('button', {
+      type: 'button', class: 'bouwdeel-foto-mini', onclick: () => openLightbox(f),
+    }, el('img', { src: URL.createObjectURL(f.blob) })));
+  });
+  rij.appendChild(el('label', { class: 'bouwdeel-foto-knop' + (fotos.length ? '' : verplicht ? ' verplicht' : '') },
+    fotos.length ? '📷 Nog een foto' : (verplicht ? '📷 Foto verplicht' : '📷 Foto toevoegen'),
+    el('input', {
+      type: 'file', accept: 'image/*', capture: 'environment',
+      onchange: async (e) => { await slaFotoOp(e.target.files[0], label, categorie); render(); },
+    })));
+  return rij;
 }
 
 // Blob → kale base64 (zonder de "data:image/jpeg;base64," voorloop) voor de JSON-webhook-body.
@@ -2000,6 +2047,15 @@ function renderBouwdeelKaart(sectieObj, def) {
         }), optie));
     });
     kaart.appendChild(grid);
+    // "Overige" toont net als in Taxatieweb een vrij tekstveld ernaast (Arno's verzoek 12-09-2026).
+    if ((bouwdeel.materialen || []).includes('Overige')) {
+      const overigeVeld = el('input', {
+        type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
+        oninput: (e) => { bouwdeel.overigeTekst = e.target.value; planOpslaan(); },
+      });
+      overigeVeld.value = bouwdeel.overigeTekst || '';
+      kaart.appendChild(overigeVeld);
+    }
   } else {
     const omschrijvingVeld = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
@@ -2013,6 +2069,16 @@ function renderBouwdeelKaart(sectieObj, def) {
     const grid = el('div', { class: 'bouwdeel-details-grid' });
     def.details.forEach(d => grid.appendChild(renderDetailVeld(bouwdeel, d)));
     kaart.appendChild(grid);
+  }
+
+  // Meterkast/Verwarmingstoestel zijn altijd een verplichte foto (Arno's verzoek 12-09-2026,
+  // zelfde categorienaam als de bestaande Foto's-tab-checklist, zie VASTE_VERPLICHTE_FOTOS). Bij
+  // een slechte of matige conditie is DAARNAAST altijd een foto verplicht, apart bewaard onder
+  // "Aandachtspunt <bouwdeel>" — ook als dit bouwdeel zelf al een verplichte foto heeft.
+  if (def.verplichteFoto) kaart.appendChild(renderFotoKnopRij(def.label, def.fotoCategorie, true));
+  const slechteConditie = bouwdeel.conditie === 2 || bouwdeel.conditie === 3; // slecht/matig
+  if (def.type !== 'simpel' && slechteConditie) {
+    kaart.appendChild(renderFotoKnopRij('Aandachtspunt ' + def.label, 'Aandachtspunt ' + def.label, true));
   }
 
   if (def.type !== 'simpel') {
