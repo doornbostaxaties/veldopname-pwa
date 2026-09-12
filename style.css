@@ -225,6 +225,16 @@ h1, h2, h3, p { margin: 0; }
 .checklist-item .vinkje { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--divider); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
 .checklist-item.klaar .vinkje { background: var(--ok); border-color: var(--ok); color: #fff; }
 .checklist-item.klaar span.naam { color: var(--text-dim); text-decoration: line-through; }
+/* Controle-tab: checklist-items zijn hier klikbare <button>'s (spring naar het bijbehorende tabblad)
+   i.p.v. platte <div>'s — reset de button-standaardstijl, en geef een niet-afgevinkt item een
+   duidelijke "let op"-kleur i.p.v. de neutrale lege rand. */
+.checklist-item-knop { width: 100%; background: none; border: none; font: inherit; text-align: left; cursor: pointer; }
+.checklist-item-knop:not(.klaar) .vinkje { background: var(--pending-bg); border-color: var(--pending); color: var(--pending); }
+.controle-samenvatting {
+  font-size: 13.5px; font-weight: 600; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
+  background: var(--pending-bg); color: var(--pending);
+}
+.controle-samenvatting.klaar { background: var(--ok-bg); color: var(--ok); }
 
 /* Sinds Arno's verzoek: kleinere tegels (meer overzicht per scherm), tik voor lightbox. Sinds
    11-09-2026: 6 kolommen op tablet/desktop (default), 3 op telefoon (media-query onderaan). */

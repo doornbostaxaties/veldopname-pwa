@@ -1490,6 +1490,7 @@ const TABS = [
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
+  { id: 'controle', icon: '✅', label: 'Controle' },
 ];
 
 // Instellingen-menu rechtsboven (12-09-2026): Macro's is geen eigen tabblad meer (Arno: "mag naar
@@ -1536,12 +1537,14 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
+  else if (state.route.tab === 'controle') inhoud.appendChild(renderControleTab());
   wrap.appendChild(inhoud);
 
   const tabbalk = el('div', { class: 'tabbalk' });
   TABS.forEach(tab => {
     const actief = state.route.tab === tab.id;
-    const verplichtNogNietKlaar = tab.id === 'fotos' && bepaalVerplichteFotos().some(v => !v.klaar);
+    const verplichtNogNietKlaar = (tab.id === 'fotos' && bepaalVerplichteFotos().some(v => !v.klaar))
+      || (tab.id === 'controle' && berekenControleResultaten().some(g => g.items.some(i => !i.ok)));
     tabbalk.appendChild(el('button', {
       class: (actief ? 'actief ' : '') + (verplichtNogNietKlaar ? 'badge-stip' : ''),
       onclick: () => { location.hash = '#/opname/' + encodeURIComponent(t.rapport_id) + '/' + tab.id; },
@@ -1843,9 +1846,14 @@ function renderRuimteKaart(ruimte, verwijder) {
   koppelDatalist(ruimteNaamInput, 'ruimtes');
   kaart.appendChild(el('div', { class: 'ruimte-rij-boven' },
     ruimteNaamInput,
-    el('button', { class: 'camera-knop', title: 'Foto maken bij deze ruimte', onclick: () => openCameraVoorRuimte(ruimte, kaart) }, '📷'),
     el('button', { class: 'verwijder', onclick: verwijder }, '✕'),
   ));
+  // Arno (13-09-2026): "Graag in de app de foto waar ie gemaakt is gelijk als miniatuur daar
+  // weergeven. En optie voor nog een foto toevoegen." — zelfde bouwsteen als bij Bouwkundig/
+  // Energetisch (renderFotoKnopRij): toont meteen miniaturen van al gemaakte foto's bij DEZE ruimte
+  // plus een knop om er nog een te maken/toevoegen. Vervangt het oude losse camera-icoontje, dat geen
+  // enkele terugkoppeling gaf of er al een foto stond.
+  kaart.appendChild(renderFotoKnopRij(ruimte.naam, bepaalQRCategorieVoorRuimte(ruimte.naam) || 'Anders', false));
   const chipRij = el('div', { class: 'chip-rij' });
   (ruimte.toevoegingen || []).forEach((tekst, i) => {
     chipRij.appendChild(el('span', { class: 'chip' }, tekst,
@@ -1887,17 +1895,7 @@ function renderRuimteKaart(ruimte, verwijder) {
     invoerWrap.appendChild(maakToevoegVeld('toevoegingen', 'Toevoeging (bv. "meterkast")'));
   }
   kaart.appendChild(el('div', { class: 'chip-toevoegen' }, invoerWrap));
-
-  // verborgen input voor de camera-per-ruimte-koppeling (zie openCameraVoorRuimte)
-  const cameraInput = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none;' });
-  cameraInput.addEventListener('change', () => { verwerkGekozenFoto(cameraInput.files[0], ruimte.naam); });
-  kaart.appendChild(cameraInput);
-  kaart._cameraInput = cameraInput;
   return kaart;
-}
-
-function openCameraVoorRuimte(ruimte, kaart) {
-  if (kaart._cameraInput) kaart._cameraInput.click();
 }
 
 // --- Foto's ---
@@ -1930,6 +1928,95 @@ function bepaalVerplichteFotos() {
   const relevanteFotos = state.fotos.filter(f => !f.archief);
   const gemaakt = relevanteFotos.map(f => f.categorie + '::' + (f.instantie || 0));
   return items.map((item, i) => ({ ...item, klaar: gemaakt.includes((item.categorie) + '::' + (item.instantie || 0)) || relevanteFotos.some(f => f.ruimte_label === item.naam) }));
+}
+
+// --- Controle ---
+// Arno (13-09-2026): "knop Controle toevoegen aan app. Hiermee wordt gecontroleerd of alle verplichte
+// velden zijn ingevuld in de app. Velden isolatie, bouw-/installatiejaren, verplichte foto's ed.
+// Breiden we later nog uit" — bewust een lijst van {titel, items:[{tekst,ok,tab}]}-groepen, zodat een
+// volgende sessie makkelijk een nieuwe groep kan toevoegen zonder de rest te hoeven aanpassen.
+function berekenControleResultaten() {
+  const t = state.taxatie;
+  const groepen = [];
+
+  groepen.push({
+    titel: 'Objectkenmerken',
+    items: [
+      { tekst: 'Woningtype ingevuld', ok: !!(t.bewoning.woningtype && t.bewoning.woningtype.trim()), tab: 'objectkenmerken' },
+      { tekst: 'Bouwjaar ingevuld', ok: !!(t.bewoning.bouwjaar && String(t.bewoning.bouwjaar).trim()), tab: 'objectkenmerken' },
+    ],
+  });
+
+  // Bouwkundig: elk AANWEZIG bouwdeel met een 'jaar'-detail (Verwarmings-/Warmwatertoestel) moet dat
+  // jaartal ingevuld hebben.
+  const bouwkundigItems = [];
+  ['buitenzijde', 'binnenzijde', 'installaties'].forEach(hoofdId => {
+    Object.entries(BOUWKUNDIG_SCHEMA[hoofdId] || {}).forEach(([sectieId, defs]) => {
+      defs.forEach(def => {
+        if (!def.details || !def.details.some(d => d.type === 'jaar')) return;
+        const bouwdeel = t.bouwkundig[hoofdId] && t.bouwkundig[hoofdId][sectieId] && t.bouwkundig[hoofdId][sectieId][def.key];
+        if (!bouwdeel || !bouwdeel.aanwezig) return;
+        def.details.filter(d => d.type === 'jaar').forEach(d => {
+          const waarde = bouwdeel.details && bouwdeel.details[d.key];
+          bouwkundigItems.push({ tekst: `${def.label} — ${d.label}`, ok: !!(waarde && String(waarde).trim()), tab: 'bouwkundig' });
+        });
+      });
+    });
+  });
+  if (bouwkundigItems.length) groepen.push({ titel: 'Bouwkundig — bouwjaren', items: bouwkundigItems });
+
+  // Energetisch: elk AANWEZIG veld met een Installatiemoment-keuze (isolatie/installaties/
+  // energieopwekking delen allemaal hetzelfde installatiemoment/jaar-patroon) moet dat ingevuld
+  // hebben — en bij "Installatiejaar" ook het jaartal zelf.
+  const energetischItems = [];
+  const checkEnergetischVeld = (label, veld) => {
+    if (!veld || !veld.aanwezig || veld.installatiemoment === undefined) return;
+    const momentOk = !!(veld.installatiemoment && veld.installatiemoment.trim());
+    energetischItems.push({ tekst: `${label} — Installatiemoment`, ok: momentOk, tab: 'energetisch' });
+    if (veld.installatiemoment === 'Installatiejaar') {
+      energetischItems.push({ tekst: `${label} — Installatiejaar`, ok: !!(veld.jaar && String(veld.jaar).trim()), tab: 'energetisch' });
+    }
+  };
+  ['isolatie', 'installaties'].forEach(hoofdId => {
+    Object.entries(ENERGETISCH_SCHEMA[hoofdId] || {}).forEach(([sectieId, defs]) => {
+      defs.forEach(def => checkEnergetischVeld(def.label, t.energetisch[hoofdId] && t.energetisch[hoofdId][sectieId] && t.energetisch[hoofdId][sectieId][def.key]));
+    });
+  });
+  ENERGETISCH_SCHEMA.energieopwekking.forEach(def => checkEnergetischVeld(def.label, t.energetisch.energieopwekking && t.energetisch.energieopwekking[def.key]));
+  if (energetischItems.length) groepen.push({ titel: 'Energetisch — isolatie/installaties', items: energetischItems });
+
+  // Verplichte foto's — bestaande checklist hergebruikt.
+  groepen.push({ titel: "Verplichte foto's", items: bepaalVerplichteFotos().map(f => ({ tekst: f.naam, ok: f.klaar, tab: 'fotos' })) });
+
+  return groepen;
+}
+
+function renderControleTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+  const groepen = berekenControleResultaten();
+  const totaalOntbrekend = groepen.reduce((som, g) => som + g.items.filter(i => !i.ok).length, 0);
+  wrap.appendChild(el('div', { class: 'controle-samenvatting' + (totaalOntbrekend === 0 ? ' klaar' : '') },
+    totaalOntbrekend === 0 ? '✓ Alle gecontroleerde velden zijn ingevuld' : `⚠ ${totaalOntbrekend} veld(en) nog niet ingevuld`));
+  groepen.forEach(groep => {
+    wrap.appendChild(el('div', { class: 'section-label' }, groep.titel));
+    if (groep.items.length === 0) {
+      wrap.appendChild(el('div', { class: 'checklist-item klaar' }, el('span', { class: 'vinkje' }, '—'), el('span', { class: 'naam' }, 'Niets van toepassing')));
+      return;
+    }
+    const kaart = el('div', { class: 'checklist-kaart' });
+    groep.items.forEach(item => {
+      kaart.appendChild(el('button', {
+        type: 'button', class: 'checklist-item checklist-item-knop' + (item.ok ? ' klaar' : ''),
+        onclick: () => { location.hash = '#/opname/' + encodeURIComponent(t.rapport_id) + '/' + item.tab; },
+      },
+        el('span', { class: 'vinkje' }, item.ok ? '✓' : '⚠'),
+        el('span', { class: 'naam' }, item.tekst),
+      ));
+    });
+    wrap.appendChild(kaart);
+  });
+  return wrap;
 }
 
 function renderFotosTab() {
