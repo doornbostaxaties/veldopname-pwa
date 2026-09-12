@@ -80,6 +80,7 @@ function leegTaxatie(rapportId) {
     bewoning: leegBewoning(),
     bouwkundig: leegBouwkundig(),
     energetisch: leegEnergetisch(),
+    omgeving: leegOmgeving(),
     lokaalGewijzigd: false,
   };
 }
@@ -105,6 +106,33 @@ function leegBewoning() {
     aanvragerBlijftWonen: null, aanvragerBlijftWonenToelichting: '',
     andereInfoOntdekt: null, andereInfoOntdektToelichting: '',
   };
+}
+// Nieuwe tab "Omgeving" (13-09-2026, Arno's advies-antwoord: "Zet er maar in. H.3 Fundering moet er
+// ook in. Wellicht dat deze zaken een aparte knop nodig hebben") — Taxatieweb's H.2 Omgeving en
+// H.3 Fundering volledig, plus alleen het ZICHTBARE/op-locatie-deel van K. Verontreiniging
+// (K.1-C "Zie ik een risico..." en K.2-B/C over asbest zien/denken) — de rest van K (welke bronnen
+// geraadpleegd) is bewust weggelaten, dat is kantoorwerk, geen locatie-observatie (zie het advies
+// hierboven in de projectmemory). Live nagekeken op Spade 21.
+function leegOmgeving() {
+  return {
+    // H.2 Omgeving
+    locatie: '', gebouwenRondom: '', bereikbaarheid: '', voorzieningen: '',
+    bijzonderhedenOmgeving: null, bijzonderhedenOmgevingToelichting: '',
+    // H.3 Fundering
+    funderingEigenaarBewoner: null, funderingOnderzoeksrapport: null, funderingAndereBronnen: null,
+    funderingProblemen: null, funderingProblemenToelichting: '',
+    // K. Verontreiniging — alleen het op-locatie-observatiedeel
+    risicoVervuildeGrond: null, risicoVervuildeGrondToelichting: '',
+    asbestGezien: null, asbestGezienToelichting: '',
+    asbestAanwezigDenken: null, asbestAanwezigDenkenToelichting: '',
+  };
+}
+// Zelfde migratie-patroon als de andere fases — vult alleen ontbrekende velden aan.
+function metVolledigOmgeving(o) {
+  const leeg = leegOmgeving();
+  if (!o || typeof o !== 'object') return leeg;
+  Object.keys(leeg).forEach(key => { if (o[key] === undefined) o[key] = leeg[key]; });
+  return o;
 }
 // Exacte tekst van Taxatieweb's eigen keuzelijst (F. Wat is de situatie van de woning?) — bewust
 // woordelijk overgenomen, niet herschreven, zodat de importknop straks op exacte tekst kan matchen.
@@ -855,6 +883,7 @@ async function cloudOpslaan(taxatie) {
     bewoning_data: JSON.stringify(taxatie.bewoning || leegBewoning()),
     bouwkundig_data: JSON.stringify(taxatie.bouwkundig || leegBouwkundig()),
     energetisch_data: JSON.stringify(taxatie.energetisch || leegEnergetisch()),
+    omgeving_data: JSON.stringify(taxatie.omgeving || leegOmgeving()),
   };
   // adres/postcode/plaats alleen meesturen als we ze lokaal ECHT kennen — nooit een lege waarde
   // sturen die het bestaande veld in Airtable zou overschrijven. Zonder deze guard overschreef een
@@ -995,6 +1024,7 @@ async function laadOpname(rapportId, tab) {
   if (lokaal.bewoning.bouwjaar === undefined) lokaal.bewoning.bouwjaar = '';
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
+  lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -1004,7 +1034,7 @@ async function laadOpname(rapportId, tab) {
   // wachtrij staat, anders zouden we eigen niet-verzonden werk overschrijven.
   if (state.online && !lokaal.lokaalGewijzigd) {
     try {
-      const { data, bewoning_data, bouwkundig_data, energetisch_data, aantekeningen } = await cloudOphalen(rapportId);
+      const { data, bewoning_data, bouwkundig_data, energetisch_data, omgeving_data, aantekeningen } = await cloudOphalen(rapportId);
       // Let op: `data` (en sinds Fase 1/2 "volledige opname" ook bewoning_data/bouwkundig_data) komt
       // al als object terug (de Make-respons splitst 'm rechtstreeks in de JSON-body,
       // {"data":{{...}}} zonder quotes) — GEEN JSON.parse() erover heen, dat gaf hier "[object
@@ -1019,6 +1049,7 @@ async function laadOpname(rapportId, tab) {
       }
       if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
       if (energetisch_data && typeof energetisch_data === 'object') { state.taxatie.energetisch = metVolledigEnergetisch(energetisch_data); gewijzigd = true; }
+      if (omgeving_data && typeof omgeving_data === 'object') { state.taxatie.omgeving = metVolledigOmgeving(omgeving_data); gewijzigd = true; }
       // aantekeningen alleen overnemen als lokaal nog leeg is — anders zou een cloud-versie die (door
       // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
       if (aantekeningen && !state.taxatie.aantekeningen) { state.taxatie.aantekeningen = aantekeningen; gewijzigd = true; }
@@ -1386,6 +1417,7 @@ const TABS = [
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'energetisch', icon: '♻️', label: 'Energetisch' },
+  { id: 'omgeving', icon: '🏞️', label: 'Omgeving' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
@@ -1431,6 +1463,7 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'objectkenmerken') inhoud.appendChild(renderObjectkenmerkenTab());
   else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
   else if (state.route.tab === 'energetisch') inhoud.appendChild(renderEnergetischTab());
+  else if (state.route.tab === 'omgeving') inhoud.appendChild(renderOmgevingTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
   else if (state.route.tab === 'macros') inhoud.appendChild(renderMacrosTab());
@@ -2667,6 +2700,71 @@ function renderEnergetischTab() {
   const lijst = el('div', { class: 'bouwdeel-lijst' });
   defs.forEach(def => lijst.appendChild(renderEnergetischKaart(sectieObj, def)));
   wrap.appendChild(lijst);
+  return wrap;
+}
+
+// --- Omgeving (H.2 Omgeving, H.3 Fundering, K. Verontreiniging/Asbest zichtbaar-deel) ---
+function renderOmgevingVrijeTekst(labelText, waarde, onChange) {
+  const veld = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: labelText + '…',
+    oninput: (e) => { onChange(e.target.value); planOpslaan(); },
+  });
+  veld.value = waarde || '';
+  return el('div', { class: 'omgeving-veld' }, el('div', { class: 'bouwdeel-veld-label' }, labelText), veld);
+}
+function renderOmgevingTab() {
+  const o = state.taxatie.omgeving;
+  const wrap = el('div', {});
+
+  const groepOmgeving = el('div', { class: 'macro-groep' });
+  groepOmgeving.appendChild(el('h3', {}, 'H.2 Omgeving'));
+  groepOmgeving.appendChild(renderOmgevingVrijeTekst('A. Locatie', o.locatie, (v) => { o.locatie = v; }));
+  groepOmgeving.appendChild(renderOmgevingVrijeTekst('B. Gebouwen rondom', o.gebouwenRondom, (v) => { o.gebouwenRondom = v; }));
+  groepOmgeving.appendChild(renderOmgevingVrijeTekst('C. Bereikbaarheid', o.bereikbaarheid, (v) => { o.bereikbaarheid = v; }));
+  groepOmgeving.appendChild(renderOmgevingVrijeTekst('D. Voorzieningen', o.voorzieningen, (v) => { o.voorzieningen = v; }));
+  groepOmgeving.appendChild(jaNeeMetToelichtingRij(
+    'E. Bijzonderheden in de omgeving die veel invloed kunnen hebben op de waarde?',
+    o.bijzonderhedenOmgeving, (w) => { o.bijzonderhedenOmgeving = w; planOpslaan(); },
+    o.bijzonderhedenOmgevingToelichting, (v) => { o.bijzonderhedenOmgevingToelichting = v; planOpslaan(); },
+    'Toelichting bijzonderheden omgeving…',
+  ));
+  wrap.appendChild(groepOmgeving);
+
+  const groepFundering = el('div', { class: 'macro-groep' });
+  groepFundering.appendChild(el('h3', {}, 'H.3 Fundering'));
+  groepFundering.appendChild(renderJaNeeToggle('A. Eigenaar of bewoner geraadpleegd', o.funderingEigenaarBewoner, (w) => { o.funderingEigenaarBewoner = w; }));
+  groepFundering.appendChild(renderJaNeeToggle('B. Funderingsonderzoeksrapport (KCAF/F3O) geraadpleegd', o.funderingOnderzoeksrapport, (w) => { o.funderingOnderzoeksrapport = w; }));
+  groepFundering.appendChild(renderJaNeeToggle('C. Andere bronnen en rapportages geraadpleegd', o.funderingAndereBronnen, (w) => { o.funderingAndereBronnen = w; }));
+  groepFundering.appendChild(jaNeeMetToelichtingRij(
+    'D. Weet ik van problemen of heb ik problemen gezien?',
+    o.funderingProblemen, (w) => { o.funderingProblemen = w; planOpslaan(); },
+    o.funderingProblemenToelichting, (v) => { o.funderingProblemenToelichting = v; planOpslaan(); },
+    'Toelichting funderingsproblemen…',
+  ));
+  wrap.appendChild(groepFundering);
+
+  const groepVerontreiniging = el('div', { class: 'macro-groep' });
+  groepVerontreiniging.appendChild(el('h3', {}, 'K. Verontreiniging / Asbest'));
+  groepVerontreiniging.appendChild(jaNeeMetToelichtingRij(
+    'Zie ik een risico dat er vervuilde grond of grondwater is (bij de woning of in de buurt)?',
+    o.risicoVervuildeGrond, (w) => { o.risicoVervuildeGrond = w; planOpslaan(); },
+    o.risicoVervuildeGrondToelichting, (v) => { o.risicoVervuildeGrondToelichting = v; planOpslaan(); },
+    'Toelichting risico vervuilde grond…',
+  ));
+  groepVerontreiniging.appendChild(jaNeeMetToelichtingRij(
+    'Heb ik asbest gezien?',
+    o.asbestGezien, (w) => { o.asbestGezien = w; planOpslaan(); },
+    o.asbestGezienToelichting, (v) => { o.asbestGezienToelichting = v; planOpslaan(); },
+    'Toelichting asbest gezien…',
+  ));
+  groepVerontreiniging.appendChild(jaNeeMetToelichtingRij(
+    'Denk ik dat er asbest aanwezig is?',
+    o.asbestAanwezigDenken, (w) => { o.asbestAanwezigDenken = w; planOpslaan(); },
+    o.asbestAanwezigDenkenToelichting, (v) => { o.asbestAanwezigDenkenToelichting = v; planOpslaan(); },
+    'Toelichting asbest aanwezig…',
+  ));
+  wrap.appendChild(groepVerontreiniging);
+
   return wrap;
 }
 
