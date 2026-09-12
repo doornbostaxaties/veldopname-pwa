@@ -33,8 +33,11 @@ const QR_CATEGORIEEN = [
 // 'C.V.-ketel' toegevoegd op Arno's verzoek (12-09-2026): Verwarmingstoestel is net als Meterkast
 // een verplichte foto — de bouwkundig-tab-fotoknop bij dat bouwdeel gebruikt dezelfde categorienaam,
 // zodat die éne foto ook meteen deze checklist-regel afvinkt (zie ook FOTO_CATEGORIE_PER_BOUWDEEL).
+// 'Tuin' is sinds 13-09-2026 GEEN vaste verplichting meer — alleen verplicht als "Tuin aanwezig" op
+// Objectkenmerken op Ja staat (zie bepaalVerplichteFotos()), Arno: "Tuinfoto is ook verplicht als
+// tuin geselecteerd is."
 const VASTE_VERPLICHTE_FOTOS = [
-  'Vooraanzicht', 'Straatbeeld', 'Achtergevel', 'Tuin', 'Badkamer', 'Keuken', 'Woonkamer',
+  'Vooraanzicht', 'Straatbeeld', 'Achtergevel', 'Badkamer', 'Keuken', 'Woonkamer',
   'Toilet', 'Meterkast', 'C.V.-ketel',
 ];
 
@@ -134,7 +137,7 @@ function leegTaxatie(rapportId) {
 // automatisch voorgevuld uit het vooronderzoek zodra ze nog leeg zijn, zie renderObjectkenmerkenTab().
 function leegBewoning() {
   return {
-    woningtype: '', bouwjaar: '',
+    woningtype: '', bouwjaar: '', tuinAanwezig: null,
     gezochtEigenaarBewoner: null, gezochtEigenaarBewonerToelichting: '',
     gezochtMakelaar: null, gezochtMakelaarToelichting: '',
     gezochtAndereBronnen: null, gezochtAndereBronnenToelichting: '',
@@ -461,6 +464,11 @@ const WONINGTYPE_OPTIES = [
   'Waterwoning', 'Woon-/winkelpand', 'Woonboot', 'Woonwagen/stacaravan',
   'Woonwagenstandplaats/Stacaravanstandplaats',
 ];
+// Arno (13-09-2026): "Selecteer tuin automatisch als het geen appartement betreft" — deze
+// woningtypes hebben geen eigen tuin (appartement-achtig, gestapeld); de rest krijgt Tuin aanwezig
+// standaard op "Ja" (zie de auto-invul in renderObjectkenmerkenTab()) — altijd handmatig te
+// corrigeren via de eigen toggle, dit is alleen een startwaarde.
+const APPARTEMENTACHTIGE_WONINGTYPES = ['Benedenwoning', 'Bovenwoning', 'Corridorflat', 'Galerijflat', 'Maisonnette', 'Portiekflat', 'Portiekwoning'];
 // Keuzelijst bouwjaren, aflopend vanaf het huidige jaar (Arno's verzoek 13-09-2026: "keuzelijst met
 // bouwjaren teruglopend vanaf het huidige bouwjaar" i.p.v. een vrij getalveld) — 1850 als praktische
 // ondergrens, ruim voor vrijwel elke Nederlandse woning.
@@ -1090,6 +1098,7 @@ async function laadOpname(rapportId, tab) {
   // taxaties van vóór de Objectkenmerken-velden (12-09-2026):
   if (lokaal.bewoning.woningtype === undefined) lokaal.bewoning.woningtype = '';
   if (lokaal.bewoning.bouwjaar === undefined) lokaal.bewoning.bouwjaar = '';
+  if (lokaal.bewoning.tuinAanwezig === undefined) lokaal.bewoning.tuinAanwezig = null; // vóór de Tuin-verplichte-foto-logica (13-09-2026)
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
   lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
@@ -1114,6 +1123,7 @@ async function laadOpname(rapportId, tab) {
       if (bewoning_data && typeof bewoning_data === 'object') {
         if (bewoning_data.woningtype === undefined) bewoning_data.woningtype = '';
         if (bewoning_data.bouwjaar === undefined) bewoning_data.bouwjaar = '';
+        if (bewoning_data.tuinAanwezig === undefined) bewoning_data.tuinAanwezig = null;
         state.taxatie.bewoning = bewoning_data; gewijzigd = true;
       }
       if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
@@ -1907,8 +1917,24 @@ function bepaalQRCategorieVoorRuimte(ruimteNaam) {
   return treffer || null;
 }
 
+// Arno (13-09-2026): "Zolderfoto is ook verplicht als de zolder aanwezig is" — een zolder kan een
+// WOONLAAG zijn (Meting/Indeling) zonder dat er per se een losse "ruimte" voor is aangemaakt, dus
+// niet alleen via alleRuimtes() (die alleen Indeling-ruimtes ziet) maar ook de woonlaagnamen zelf
+// checken.
+function heeftZolder() {
+  const t = state.taxatie;
+  const bevatZolder = (naam) => /zolder/i.test(naam || '');
+  const woonlagen = [...(t.data.afmetingen.woonlagen || []), ...(t.data.indeling.woonlagen || [])];
+  if (woonlagen.some(w => bevatZolder(w.naam))) return true;
+  return alleRuimtes().some(r => bevatZolder(r.naam));
+}
+
 function bepaalVerplichteFotos() {
+  const t = state.taxatie;
   const items = VASTE_VERPLICHTE_FOTOS.map(naam => ({ naam, categorie: naam }));
+  // Arno (13-09-2026): "Tuinfoto is ook verplicht als tuin geselecteerd is" — tuinAanwezig===null
+  // (nog geen woningtype/keuze) telt ook als verplicht, alleen een expliciete "Nee" sluit 'm uit.
+  if (t.bewoning.tuinAanwezig !== false) items.push({ naam: 'Tuin', categorie: 'Tuin' });
   // per ruimte-instantie uit Indeling — gegroepeerd per categorie zodat "3 slaapkamers" ook echt
   // 3 losse verplichte foto's oplevert i.p.v. 1.
   const groepen = {};
@@ -1918,11 +1944,14 @@ function bepaalVerplichteFotos() {
     groepen[cat].push(r.naam);
   });
   Object.entries(groepen).forEach(([cat, namen]) => {
-    if (VASTE_VERPLICHTE_FOTOS.includes(cat) && namen.length <= 1) return; // al gedekt door de vaste lijst
+    if ((VASTE_VERPLICHTE_FOTOS.includes(cat) || cat === 'Tuin') && namen.length <= 1) return; // al gedekt
     namen.forEach((naam, i) => {
       items.push({ naam: namen.length > 1 ? `${cat} ${i + 1}/${namen.length}` : cat, categorie: cat, instantie: i });
     });
   });
+  // Zolder: alleen aanvullen als er nog geen "Zolder"-item via de ruimte-groepering hierboven bij zit
+  // (bv. een ruimte die letterlijk "Zolder" heet levert dat al op).
+  if (heeftZolder() && !items.some(i => i.categorie === 'Zolder')) items.push({ naam: 'Zolder', categorie: 'Zolder' });
   // Foto's die als "eigen archief" gemarkeerd zijn tellen niet mee voor de checklist — dat zijn
   // bewust extra opnamen voor Arno's eigen naslag, niet bedoeld voor Q/R.
   const relevanteFotos = state.fotos.filter(f => !f.archief);
@@ -2376,6 +2405,13 @@ function renderObjectkenmerkenTab() {
     if (!t.bewoning.woningtype && vo.fields.woningtype_funda) { t.bewoning.woningtype = vo.fields.woningtype_funda; planOpslaan(); }
     if (!t.bewoning.bouwjaar && vo.fields.bouwjaar) { t.bewoning.bouwjaar = String(vo.fields.bouwjaar); planOpslaan(); }
   }
+  // Arno (13-09-2026): "Selecteer tuin automatisch als het geen appartement betreft" — alleen de
+  // ALLEREERSTE keer (tuinAanwezig nog null, dus nooit eerder gezet/aangeraakt); een handmatige
+  // correctie via de toggle hieronder wordt nooit stilzwijgend teruggedraaid.
+  if (t.bewoning.tuinAanwezig === null && t.bewoning.woningtype) {
+    t.bewoning.tuinAanwezig = !APPARTEMENTACHTIGE_WONINGTYPES.includes(t.bewoning.woningtype);
+    planOpslaan();
+  }
 
   const groepKenmerken = el('div', { class: 'macro-groep' });
   groepKenmerken.appendChild(el('h3', {}, 'Objectkenmerken'));
@@ -2386,7 +2422,11 @@ function renderObjectkenmerkenTab() {
   // toont dan gewoon "Selecteer", de taxateur kiest zelf de juiste.
   const woningtypeVeld = el('select', {
     class: 'energetisch-select',
-    onchange: (e) => { t.bewoning.woningtype = e.target.value; planOpslaan(); },
+    onchange: (e) => {
+      t.bewoning.woningtype = e.target.value;
+      if (t.bewoning.tuinAanwezig === null && e.target.value) t.bewoning.tuinAanwezig = !APPARTEMENTACHTIGE_WONINGTYPES.includes(e.target.value);
+      planOpslaan(); render();
+    },
   },
     el('option', { value: '' }, 'Selecteer'),
     ...WONINGTYPE_OPTIES.map(o => el('option', { value: o, selected: t.bewoning.woningtype === o ? 'selected' : null }, o)));
@@ -2394,7 +2434,19 @@ function renderObjectkenmerkenTab() {
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Woningtype', woningtypeVeld));
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
   groepKenmerken.appendChild(kenmerkenRij);
+  groepKenmerken.appendChild(renderJaNeeToggle('Tuin aanwezig', t.bewoning.tuinAanwezig, (w) => { t.bewoning.tuinAanwezig = w; }));
   wrap.appendChild(groepKenmerken);
+
+  // Arno (13-09-2026): "Voeg de fotoknoppen toe aan objectkenmerken" — Vooraanzicht/Achtergevel/
+  // Straatbeeld zijn altijd verplicht (zie VASTE_VERPLICHTE_FOTOS) maar hadden nergens een eigen
+  // maakknop; Tuin idem, maar alleen als "Tuin aanwezig" op Ja staat.
+  const groepFotos = el('div', { class: 'macro-groep' });
+  groepFotos.appendChild(el('h3', {}, "Verplichte foto's"));
+  groepFotos.appendChild(renderFotoKnopRij('Vooraanzicht', 'Vooraanzicht', true));
+  groepFotos.appendChild(renderFotoKnopRij('Achtergevel', 'Achtergevel', true));
+  groepFotos.appendChild(renderFotoKnopRij('Straatbeeld', 'Straatbeeld', true));
+  if (t.bewoning.tuinAanwezig) groepFotos.appendChild(renderFotoKnopRij('Tuin', 'Tuin', true));
+  wrap.appendChild(groepFotos);
 
   const groepA = el('div', { class: 'macro-groep' });
   groepA.appendChild(el('h3', {}, 'A. Waar heb ik gezocht naar informatie?'));
