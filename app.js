@@ -1023,6 +1023,25 @@ function pasAfgeleideRegelsToe() {
     koeling.materialen = koeling.materialen || [];
     if (!koeling.materialen.includes('Airconditioning')) koeling.materialen.push('Airconditioning');
   }
+
+  // Zelfde regel als hierboven, nu voor I.4 Energetisch (Arno's verzoek 13-09-2026): daar heeft
+  // Warmwatertoestel ook een eigen Installatiemoment (Bouwjaar/Installatiejaar) + jaar-select i.p.v.
+  // het platte Bouwjaar-veld van J.4 Bouwkundig — bij "Geïntegreerd in cv" is dat identiek aan het
+  // Verwarmingstoestel, dus beide velden overnemen, niet alleen het jaar.
+  if (t.energetisch && t.energetisch.installaties) {
+    const eVerwarmingstoestel = t.energetisch.installaties.verwarming.verwarmingstoestel;
+    const eWarmwatertoestel = t.energetisch.installaties.warmWater.warmwatertoestel;
+    const eMaterialenVerwarming = eVerwarmingstoestel.materialen || [];
+    if (['CV-ketel', 'HR combi ketel', 'Hybride warmtepomp'].some(x => eMaterialenVerwarming.includes(x))) {
+      eWarmwatertoestel.aanwezig = true;
+      eWarmwatertoestel.materialen = eWarmwatertoestel.materialen || [];
+      if (!eWarmwatertoestel.materialen.includes('Geïntegreerd in cv')) eWarmwatertoestel.materialen.push('Geïntegreerd in cv');
+    }
+    if ((eWarmwatertoestel.materialen || []).includes('Geïntegreerd in cv') && eVerwarmingstoestel.installatiemoment) {
+      eWarmwatertoestel.installatiemoment = eVerwarmingstoestel.installatiemoment;
+      eWarmwatertoestel.jaar = eVerwarmingstoestel.jaar;
+    }
+  }
 }
 function planOpslaan() {
   if (!state.taxatie) return;
