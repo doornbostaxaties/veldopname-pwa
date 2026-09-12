@@ -238,7 +238,19 @@ function standaardDetailWaarde(type) {
 function vulOntbrekendeDetails(bouwdeel, def) {
   if (!def.details) return;
   if (!bouwdeel.details) bouwdeel.details = {};
-  def.details.forEach(d => { if (!(d.key in bouwdeel.details)) bouwdeel.details[d.key] = standaardDetailWaarde(d.type); });
+  def.details.forEach(d => {
+    if (d.key in bouwdeel.details) return;
+    // Migratie (13-09-2026, Installatiemoment-veld toegevoegd bij Verwarmings-/Warmwatertoestel):
+    // stond er al een jaartal vóórdat dit Installatiemoment-veld bestond, dan dat jaartal niet
+    // onzichtbaar laten worden — installatiemoment dan default op de waarde waarbij dat jaartal
+    // zichtbaar hoort (meestal "Bouwjaar", de oude standaardbetekenis van een los jaartal-veld).
+    if (d.type === 'installatiemoment') {
+      const afhankelijke = def.details.find(dd => dd.zichtbaarBij && dd.zichtbaarBij.key === d.key && bouwdeel.details[dd.key]);
+      bouwdeel.details[d.key] = afhankelijke ? afhankelijke.zichtbaarBij.waarde : '';
+    } else {
+      bouwdeel.details[d.key] = standaardDetailWaarde(d.type);
+    }
+  });
 }
 function maakGroep(bouwdelen) {
   const groep = {};
@@ -379,12 +391,12 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'riolering', label: 'Riolering', type: 'tekst', standaardAan: true, standaardConditie: 0 },
     ],
     verwarming: [
-      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
+      { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'installatiemoment', label: 'Installatiemoment', type: 'installatiemoment' }, { key: 'bouwjaar', label: 'Installatiejaar', type: 'jaar', zichtbaarBij: { key: 'installatiemoment', waarde: 'Installatiejaar' } }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
       { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
       { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
     ],
     warmwater: [
-      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
+      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'installatiemoment', label: 'Installatiemoment', type: 'installatiemoment' }, { key: 'bouwjaar', label: 'Installatiejaar', type: 'jaar', zichtbaarBij: { key: 'installatiemoment', waarde: 'Installatiejaar' } }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
     ],
     ventilatieKoeling: [
       { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'], standaardAan: true },
@@ -855,30 +867,32 @@ function toonAdresSuggesties(input, items, onKies) {
 // plain-<datalist>-aanpak (zie uitleg hierboven).
 function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
   // Arno (13-09-2026): "Kun je ook zorgen dat deze makkelijker te selecteren zijn (en standaard geen
-  // toetsenbord in beeld)?" — eerst geprobeerd met readOnly (onderdrukt het schermtoetsenbord zonder
-  // focus/klik-events te blokkeren), maar dat bleek niet betrouwbaar terug te draaien voor "Zelf
-  // typen": readOnly aan/uit zetten op een AL focust veld triggert op iOS Safari niet consequent het
-  // opnieuw verschijnen van het toetsenbord. inputMode='none' is wél specifiek voor precies dit
-  // scenario bedoeld (tekstveld met een eigen keuzelijst-UI, standaard geen systeemtoetsenbord) en
-  // browsers reageren daar, anders dan bij readOnly, wél live op een wijziging terwijl het veld al
-  // focust is — geen blur/refocus-trucje meer nodig.
+  // toetsenbord in beeld)?" — inputMode='none' onderdrukt het schermtoetsenbord voor de normale
+  // "kies uit de lijst"-interactie, blijvend (nooit meer teruggezet naar 'text' — zie staTypenToe()
+  // hieronder voor hoe vrij typen nu wél werkt, zonder aan deze stand te hoeven sleutelen). Eerdere
+  // pogingen om ditzelfde veld tussentijds weer typbaar te maken (readOnly togglen, daarna inputMode
+  // togglen) bleken op een iPad in de praktijk onbetrouwbaar: het toetsenbord verscheen dan niet
+  // (Arno, herhaaldelijk getest, 13-09-2026).
   input.inputMode = 'none';
   input.addEventListener('focus', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('blur', () => setTimeout(() => {
     if (actieveSuggestieInput === input) verbergEigenSuggesties();
-    if (document.activeElement !== input) input.inputMode = 'none'; // val terug op "geen toetsenbord"
   }, 150));
 }
 
-// Zet een via koppelDatalist() beheerd veld om naar vrij typen — geklikt vanuit het
-// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()). Het veld is op dit
-// moment al focust (de suggestielijst stond al open); alleen inputMode wijzigen is genoeg om het
-// toetsenbord alsnog te laten verschijnen. focus() erna is een defensieve fallback voor het geval het
-// veld ondertussen toch de focus kwijt was.
+// Vrij typen voor een via koppelDatalist() beheerd veld — geklikt vanuit het "✏️ Zelf typen…"-item
+// bovenaan de suggestielijst (zie toonEigenSuggesties()). Gebruikt bewust een native prompt() i.p.v.
+// het veld zelf tijdelijk typbaar te maken: elke poging om diezelfde <input> tussentijds van
+// inputMode/readOnly te wisselen bleek op een iPad het toetsenbord niet betrouwbaar te tonen (zie de
+// toelichting bij koppelDatalist() hierboven) — een prompt()-dialoog is een native OS-dialoog en
+// toont altijd gegarandeerd een toetsenbord, op elk platform.
 function staTypenToe(input) {
-  input.inputMode = 'text';
-  input.focus();
+  const nieuweWaarde = prompt('Zelf typen:', input.value || '');
+  if (nieuweWaarde === null) return; // geannuleerd
+  input.value = nieuweWaarde;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 let opslaanTimer = null;
@@ -2414,7 +2428,23 @@ function renderRisicoBouwdeelKaart(bouwdeel, def) {
 // Renderfunctie per detail-veldtype (Bouwjaar/Eigendom bij Verwarmings-/Warmwatertoestel, Aantal
 // groepen/aardlekschakelaars/Krachtstroom/Oplaadpunt bij Meterkast — live nagekeken in Taxatieweb).
 function renderDetailVeld(bouwdeel, d) {
+  // Arno (13-09-2026): "Keuze bouwjaar/installatiejaar gelijk aan Taxatieweb. Bij bouwjaar geen
+  // vervolgkeuze. Bij installatiejaar keuzelijst jaartal" — een detail kan nu afhankelijk zijn van
+  // de waarde van een ANDER detail (zie 'installatiemoment' hieronder + de bijbehorende
+  // zichtbaarBij-schema's bij Verwarmings-/Warmwatertoestel); niet zichtbaar → null teruggeven, de
+  // aanroeper (renderBouwdeelKaart) slaat een null-resultaat over.
+  if (d.zichtbaarBij && bouwdeel.details[d.zichtbaarBij.key] !== d.zichtbaarBij.waarde) return null;
   const waarde = bouwdeel.details[d.key];
+  if (d.type === 'installatiemoment') {
+    return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
+      el('select', {
+        class: 'bouwdeel-detail-select',
+        // render() nodig: een wijziging hier bepaalt of het afhankelijke jaartal-veld zichtbaar wordt.
+        onchange: (e) => { bouwdeel.details[d.key] = e.target.value; planOpslaan(); render(); },
+      },
+        el('option', { value: '' }, 'Selecteer'),
+        ...INSTALLATIEMOMENT_OPTIES.map(o => el('option', { value: o, selected: waarde === o ? 'selected' : null }, o))));
+  }
   if (d.type === 'select') {
     return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
       el('select', {
@@ -2498,7 +2528,7 @@ function renderBouwdeelKaart(sectieObj, def) {
 
   if (def.details) {
     const grid = el('div', { class: 'bouwdeel-details-grid' });
-    def.details.forEach(d => grid.appendChild(renderDetailVeld(bouwdeel, d)));
+    def.details.forEach(d => { const veld = renderDetailVeld(bouwdeel, d); if (veld) grid.appendChild(veld); });
     kaart.appendChild(grid);
   }
 
