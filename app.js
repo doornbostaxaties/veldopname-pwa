@@ -2205,6 +2205,7 @@ function renderObjectkenmerkenTab() {
   // bouwjaar-aanpak — een auto-ingevulde waarde die niet exact matcht (bv. rechtstreeks uit Funda)
   // toont dan gewoon "Selecteer", de taxateur kiest zelf de juiste.
   const woningtypeVeld = el('select', {
+    class: 'energetisch-select',
     onchange: (e) => { t.bewoning.woningtype = e.target.value; planOpslaan(); },
   },
     el('option', { value: '' }, 'Selecteer'),
