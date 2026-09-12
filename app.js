@@ -2442,10 +2442,12 @@ function renderObjectkenmerkenTab() {
   // maakknop; Tuin idem, maar alleen als "Tuin aanwezig" op Ja staat.
   const groepFotos = el('div', { class: 'macro-groep' });
   groepFotos.appendChild(el('h3', {}, "Verplichte foto's"));
-  groepFotos.appendChild(renderFotoKnopRij('Vooraanzicht', 'Vooraanzicht', true));
-  groepFotos.appendChild(renderFotoKnopRij('Achtergevel', 'Achtergevel', true));
-  groepFotos.appendChild(renderFotoKnopRij('Straatbeeld', 'Straatbeeld', true));
-  if (t.bewoning.tuinAanwezig) groepFotos.appendChild(renderFotoKnopRij('Tuin', 'Tuin', true));
+  const fotoMetNaam = (naam, categorie) => el('div', { class: 'foto-knop-met-naam' },
+    el('span', { class: 'foto-knop-naam' }, naam), renderFotoKnopRij(naam, categorie, true));
+  groepFotos.appendChild(fotoMetNaam('Vooraanzicht', 'Vooraanzicht'));
+  groepFotos.appendChild(fotoMetNaam('Achtergevel', 'Achtergevel'));
+  groepFotos.appendChild(fotoMetNaam('Straatbeeld', 'Straatbeeld'));
+  if (t.bewoning.tuinAanwezig) groepFotos.appendChild(fotoMetNaam('Tuin', 'Tuin'));
   wrap.appendChild(groepFotos);
 
   const groepA = el('div', { class: 'macro-groep' });

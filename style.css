@@ -421,6 +421,11 @@ h1, h2, h3, p { margin: 0; }
 /* Fotoknop bij verplichte bouwkundig-foto's (Meterkast/Verwarmingstoestel altijd, overige
    bouwdelen zodra de conditie slecht/matig is) — Arno's verzoek 12-09-2026. */
 .bouwdeel-foto-rij { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+/* Naam boven de fotoknop op Objectkenmerken (Vooraanzicht/Achtergevel/Straatbeeld/Tuin) —
+   die knoppen staan los onder elkaar zonder eigen kaarttitel, dus anders is niet duidelijk
+   waarvoor elke knop is (Arno's verzoek 13-09-2026). */
+.foto-knop-met-naam + .foto-knop-met-naam { margin-top: 4px; }
+.foto-knop-naam { display: block; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .bouwdeel-foto-mini { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; border: none; padding: 0; cursor: pointer; flex-shrink: 0; }
 .bouwdeel-foto-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bouwdeel-foto-knop {
