@@ -319,8 +319,9 @@ h1, h2, h3, p { margin: 0; }
   .meting-weergaven { display: flex; gap: 14px; align-items: flex-start; }
   .weergave-kolom { display: block; }
   /* Arno (13-09-2026): "Maak het tekenveld smaller en de invulvelden breder (is nu niet goed
-     leesbaar)" — de lijst krijgt nu de meeste ruimte, het tekenvenster een vaste, kleinere breedte. */
-  .weergave-tekening { flex: 0 0 220px; }
+     leesbaar)", daarna bijgesteld: "Tekenvenster minimaal 350px" — de lijst krijgt de meeste ruimte,
+     het tekenvenster een vaste breedte die nooit onder 350px zakt. */
+  .weergave-tekening { flex: 0 0 380px; min-width: 350px; }
   .weergave-lijst { flex: 1 1 auto; min-width: 0; }
 }
 .tekenkader { overflow: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); margin-bottom: 10px; max-height: 60vh; -webkit-overflow-scrolling: touch; }

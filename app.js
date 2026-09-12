@@ -855,33 +855,29 @@ function toonAdresSuggesties(input, items, onKies) {
 // plain-<datalist>-aanpak (zie uitleg hierboven).
 function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
   // Arno (13-09-2026): "Kun je ook zorgen dat deze makkelijker te selecteren zijn (en standaard geen
-  // toetsenbord in beeld)?" — readOnly onderdrukt het schermtoetsenbord op zowel iOS als Android
-  // zonder de focus/klik-events te blokkeren, dus de suggestielijst blijft gewoon verschijnen en een
-  // suggestie aanklikken werkt gewoon (readOnly blokkeert alleen TYPEN door de gebruiker, niet een
-  // programmatische input.value-toewijzing). Dit verklaart meteen ook de eerder gemelde klacht "lijst
-  // staat niet direct bij het veld": zonder toetsenbord schuift Safari de pagina niet meer omhoog na
-  // het tikken, dus de bij focus() berekende positie van de suggestielijst blijft kloppen.
-  input.readOnly = true;
+  // toetsenbord in beeld)?" — eerst geprobeerd met readOnly (onderdrukt het schermtoetsenbord zonder
+  // focus/klik-events te blokkeren), maar dat bleek niet betrouwbaar terug te draaien voor "Zelf
+  // typen": readOnly aan/uit zetten op een AL focust veld triggert op iOS Safari niet consequent het
+  // opnieuw verschijnen van het toetsenbord. inputMode='none' is wél specifiek voor precies dit
+  // scenario bedoeld (tekstveld met een eigen keuzelijst-UI, standaard geen systeemtoetsenbord) en
+  // browsers reageren daar, anders dan bij readOnly, wél live op een wijziging terwijl het veld al
+  // focust is — geen blur/refocus-trucje meer nodig.
+  input.inputMode = 'none';
   input.addEventListener('focus', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('blur', () => setTimeout(() => {
     if (actieveSuggestieInput === input) verbergEigenSuggesties();
-    // Arno (13-09-2026): "Zelf typen optie is mooi maar zet het veld vast (er verschijnt geen
-    // toetsenbord)" — oorzaak: deze VERTRAAGDE (150ms) opruimactie van de VORIGE blur hoorde soms
-    // pas ná staTypenToe() (hieronder) af, en zette readOnly toen alweer stiekem terug op true, vlak
-    // nadat het veld net typbaar was gemaakt — het toetsenbord kreeg zo geen kans om te verschijnen.
-    // Alleen terugzetten als dit veld NIET zojuist opnieuw gefocust is (staTypenToe doet dat wél).
-    if (document.activeElement !== input) input.readOnly = true;
+    if (document.activeElement !== input) input.inputMode = 'none'; // val terug op "geen toetsenbord"
   }, 150));
 }
 
-// Zet een via koppelDatalist() beheerd veld tijdelijk om naar vrij typen — geklikt vanuit het
-// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()). blur() vóór focus()
-// dwingt een ECHTE nieuwe focus af (het veld was al focust toen de lijst verscheen) — zonder dat
-// negeert iOS Safari een focus()-aanroep op een al-focust element en verschijnt het toetsenbord niet.
+// Zet een via koppelDatalist() beheerd veld om naar vrij typen — geklikt vanuit het
+// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()). Het veld is op dit
+// moment al focust (de suggestielijst stond al open); alleen inputMode wijzigen is genoeg om het
+// toetsenbord alsnog te laten verschijnen. focus() erna is een defensieve fallback voor het geval het
+// veld ondertussen toch de focus kwijt was.
 function staTypenToe(input) {
-  input.readOnly = false;
-  input.blur();
+  input.inputMode = 'text';
   input.focus();
 }
 
@@ -2600,9 +2596,11 @@ function renderInstallatiemomentEnOpmerkingen(veld) {
   const wrap = el('div', {});
   const rij = el('div', { class: 'bouwdeel-details-grid' });
   rij.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
-  // Bouwjaar-veld naast Installatiemoment, alleen zichtbaar bij Bouwjaar/Installatiejaar (Arno's
-  // verzoek 13-09-2026: "past er prima naast").
-  if (veld.installatiemoment === 'Bouwjaar' || veld.installatiemoment === 'Installatiejaar') {
+  // Jaar-keuzelijst naast Installatiemoment, alleen bij "Installatiejaar" (Arno's verzoek
+  // 13-09-2026: "past er prima naast" — daarna weer aangepast: "Bij keuze bouwjaar in opnamestaat
+  // geen keuzeveld weergeven, want dan is het bouwjaar gelijk aan het bouwjaar van de woning" — dat
+  // staat al bij Objectkenmerken, dus bij "Bouwjaar" is een los jaartal hier overbodig).
+  if (veld.installatiemoment === 'Installatiejaar') {
     rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
       el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
       renderJaarSelect(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
