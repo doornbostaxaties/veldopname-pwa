@@ -66,6 +66,44 @@ function leegData() {
     indeling: { woonlagen: [], extern: [] },
   };
 }
+// Arno (13-09-2026): "Kun je ook de woonlagen en meting woonlagen gelijk houden?" — Meting
+// (data.afmetingen.woonlagen, met blokken) en Indeling (data.indeling.woonlagen, met ruimtes) waren
+// bewust twee losse lijsten (zie de architectuur-notitie bovenaan dit bestand — beide tabbladen delen
+// verder wél dezelfde `data`-vorm met taxatieweb-opname.user.js). Vanaf nu blijven de NAMEN en het
+// AANTAL woonlagen in beide lijsten gelijk: renderMetingTab()/renderIndelingTab() schrijven een naam-
+// wijziging en een "+ Woonlaag toevoegen"-klik voortaan naar BEIDE lijsten tegelijk (zie
+// zorgVoorAfmetingenWoonlaag()/zorgVoorIndelingWoonlaag() hieronder). Deze functie doet de eenmalige
+// reconciliatie bij het laden, voor taxaties die al bestonden vóór dit verzoek en waar de twee lijsten
+// dus uit de pas kunnen lopen (verschillende lengte, of een naam die maar aan één kant is ingevuld).
+function synchroniseerWoonlagen(data) {
+  if (!data.afmetingen) data.afmetingen = { woonlagen: [] };
+  if (!data.afmetingen.woonlagen) data.afmetingen.woonlagen = [];
+  if (!data.indeling) data.indeling = { woonlagen: [], extern: [] };
+  if (!data.indeling.woonlagen) data.indeling.woonlagen = [];
+  const afm = data.afmetingen.woonlagen;
+  const ind = data.indeling.woonlagen;
+  const lengte = Math.max(afm.length, ind.length);
+  for (let i = 0; i < lengte; i++) {
+    if (!afm[i]) afm[i] = leegWoonlaag();
+    if (!ind[i]) ind[i] = leegIndelingWoonlaag();
+    const naamAfm = (afm[i].naam || '').trim();
+    const naamInd = (ind[i].naam || '').trim();
+    // Staat er maar aan één kant al een naam, dan die overnemen naar de andere kant. Hebben beide
+    // kanten al een (verschillende) naam, dan bewust laten staan — dat is bestaande, moedwillig
+    // ingevoerde data van vóór deze koppeling, niet zomaar overschrijven.
+    if (naamAfm && !naamInd) ind[i].naam = afm[i].naam;
+    else if (naamInd && !naamAfm) afm[i].naam = ind[i].naam;
+  }
+  return data;
+}
+function zorgVoorIndelingWoonlaag(data, idx) {
+  while (data.indeling.woonlagen.length <= idx) data.indeling.woonlagen.push(leegIndelingWoonlaag());
+  return data.indeling.woonlagen[idx];
+}
+function zorgVoorAfmetingenWoonlaag(data, idx) {
+  while (data.afmetingen.woonlagen.length <= idx) data.afmetingen.woonlagen.push(leegWoonlaag());
+  return data.afmetingen.woonlagen[idx];
+}
 function leegTaxatie(rapportId) {
   return {
     rapport_id: rapportId,
@@ -721,7 +759,7 @@ window.addEventListener('scroll', (e) => {
 // ruimte geen zin om nogmaals te kiezen).
 // Verdiepingen/ruimtes/ruimteblokken blijven ongefilterd — dezelfde naam mag daar wél vaker
 // voorkomen (twee ruimtes die allebei "Slaapkamer" heten).
-function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
+function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, magZelfTypen) {
   const opgelost = typeof macroSleutel === 'function' ? macroSleutel() : macroSleutel;
   const sleutels = Array.isArray(opgelost) ? opgelost : [opgelost];
   let opties = [...new Set(sleutels.flatMap(s => state.macros[s] || []))];
@@ -731,9 +769,17 @@ function toonEigenSuggesties(input, macroSleutel, uitgeslotenFn) {
   }
   const zoekterm = input.value.trim().toLowerCase();
   const gefilterd = opties.filter(o => !zoekterm || o.toLowerCase().includes(zoekterm));
-  if (gefilterd.length === 0) { verbergEigenSuggesties(); return; }
+  if (gefilterd.length === 0 && !magZelfTypen) { verbergEigenSuggesties(); return; }
   actieveSuggestieInput = input;
   eigenSuggestiesLijst.innerHTML = '';
+  // Arno (13-09-2026): "makkelijker te selecteren... standaard geen toetsenbord in beeld" — dit veld
+  // staat via koppelDatalist() standaard op readOnly (zie daar), dus typen kan pas na een expliciete
+  // tik op dit item (staTypenToe() haalt readOnly eraf en focust opnieuw, wat het toetsenbord toont).
+  if (magZelfTypen) {
+    const zelfTypenItem = el('div', { class: 'eigen-suggestie-item eigen-suggestie-typen' }, '✏️ Zelf typen…');
+    zelfTypenItem.addEventListener('click', () => { verbergEigenSuggesties(); staTypenToe(input); });
+    eigenSuggestiesLijst.appendChild(zelfTypenItem);
+  }
   gefilterd.forEach(optie => {
     const item = el('div', { class: 'eigen-suggestie-item' }, optie);
     item.addEventListener('click', () => {
@@ -808,11 +854,27 @@ function toonAdresSuggesties(input, items, onKies) {
 // Koppelt een tekstveld aan een macro-lijst mét eigen, overal werkende dropdown — vervangt de eerdere
 // plain-<datalist>-aanpak (zie uitleg hierboven).
 function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
-  input.addEventListener('focus', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn));
-  input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn));
+  // Arno (13-09-2026): "Kun je ook zorgen dat deze makkelijker te selecteren zijn (en standaard geen
+  // toetsenbord in beeld)?" — readOnly onderdrukt het schermtoetsenbord op zowel iOS als Android
+  // zonder de focus/klik-events te blokkeren, dus de suggestielijst blijft gewoon verschijnen en een
+  // suggestie aanklikken werkt gewoon (readOnly blokkeert alleen TYPEN door de gebruiker, niet een
+  // programmatische input.value-toewijzing). Dit verklaart meteen ook de eerder gemelde klacht "lijst
+  // staat niet direct bij het veld": zonder toetsenbord schuift Safari de pagina niet meer omhoog na
+  // het tikken, dus de bij focus() berekende positie van de suggestielijst blijft kloppen.
+  input.readOnly = true;
+  input.addEventListener('focus', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
+  input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('blur', () => setTimeout(() => {
     if (actieveSuggestieInput === input) verbergEigenSuggesties();
+    input.readOnly = true; // val terug op "geen toetsenbord" tot de volgende "Zelf typen…"-tik
   }, 150));
+}
+
+// Zet een via koppelDatalist() beheerd veld tijdelijk om naar vrij typen — geklikt vanuit het
+// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()).
+function staTypenToe(input) {
+  input.readOnly = false;
+  input.focus();
 }
 
 let opslaanTimer = null;
@@ -1025,6 +1087,7 @@ async function laadOpname(rapportId, tab) {
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
   lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
+  lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -1041,7 +1104,7 @@ async function laadOpname(rapportId, tab) {
       // Object] is not valid JSON". Vergelijk taxatieweb-opname.user.js, waar cloudData ook
       // rechtstreeks als object gebruikt wordt.
       let gewijzigd = false;
-      if (data && typeof data === 'object') { state.taxatie.data = data; gewijzigd = true; }
+      if (data && typeof data === 'object') { state.taxatie.data = synchroniseerWoonlagen(data); gewijzigd = true; }
       if (bewoning_data && typeof bewoning_data === 'object') {
         if (bewoning_data.woningtype === undefined) bewoning_data.woningtype = '';
         if (bewoning_data.bouwjaar === undefined) bewoning_data.bouwjaar = '';
@@ -1524,10 +1587,14 @@ function renderMetingTab() {
 
   wrap.appendChild(el('div', { class: 'section-label' }, 'Woonlagen'));
   t.data.afmetingen.woonlagen.forEach((woonlaag, wIdx) => {
-    const kaart = el('div', { class: 'woonlaag-kaart' });
+    const kaart = el('div', { class: 'woonlaag-kaart modus-' + state.afmetingenWeergave });
     const naamInput = el('input', {
       value: woonlaag.naam || `${wIdx + 1}e woonlaag`, placeholder: `${wIdx + 1}e woonlaag`,
-      oninput: (e) => { woonlaag.naam = e.target.value; planOpslaan(); },
+      oninput: (e) => {
+        woonlaag.naam = e.target.value;
+        zorgVoorIndelingWoonlaag(t.data, wIdx).naam = e.target.value; // gelijk houden met Indeling
+        planOpslaan();
+      },
     });
     koppelDatalist(naamInput, 'verdiepingen');
     kaart.appendChild(el('div', { class: 'woonlaag-titel' },
@@ -1535,37 +1602,45 @@ function renderMetingTab() {
       el('span', { class: 'totaal' }, formatM2(woonlaagTotaal(woonlaag)) + ' m²'),
     ));
 
-    if (state.afmetingenWeergave === 'tekening') {
-      kaart.appendChild(renderTekenkader(woonlaag, wIdx));
-    } else {
-      (woonlaag.blokken || []).forEach((blok, bIdx) => {
-        const blokNaamInput = el('input', { value: blok.naam || '', placeholder: 'Basis', oninput: (e) => { blok.naam = e.target.value; planOpslaan(); } });
-        koppelDatalist(blokNaamInput, 'ruimteblokken');
-        const rij = el('div', { class: 'blok-rij' },
-          blokNaamInput,
-          el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); } }),
-          el('span', { class: 'maal' }, '×'),
-          el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); } }),
-          (() => {
-            const sel = el('select', { onchange: (e) => { blok.type = e.target.value; planOpslaan(); } });
-            [['wonen', 'Wonen'], ['overig', 'Overig inpandig'], ['buitenruimte', 'Buitenruimte'], ['correctie', 'Correctie']].forEach(([val, label]) => {
-              const optie = el('option', { value: val }, label);
-              if (blok.type === val) optie.selected = true;
-              sel.appendChild(optie);
-            });
-            return sel;
-          })(),
-          el('button', { class: 'verwijder', onclick: () => { woonlaag.blokken.splice(bIdx, 1); planOpslaan(); render(); } }, '✕'),
-        );
-        kaart.appendChild(rij);
-      });
-    }
+    // Arno (13-09-2026): "in Meting het tekenvenster en lijst naast elkaar zetten als de
+    // schermbreedte voldoende is (vanaf iPhone in liggende stand)" — beide weergaven worden nu altijd
+    // allebei gebouwd (ze bewerken toch al dezelfde blok-data); CSS bepaalt of alleen de actieve
+    // weergave zichtbaar is (smal scherm, zie de 'modus-'-klasse op .woonlaag-kaart hierboven) of
+    // beide naast elkaar (vanaf 650px, ruim genoeg voor de smalste iPhone in liggende stand).
+    const lijstKolom = el('div', { class: 'weergave-kolom weergave-lijst' });
+    (woonlaag.blokken || []).forEach((blok, bIdx) => {
+      const blokNaamInput = el('input', { value: blok.naam || '', placeholder: 'Basis', oninput: (e) => { blok.naam = e.target.value; planOpslaan(); } });
+      koppelDatalist(blokNaamInput, 'ruimteblokken');
+      const rij = el('div', { class: 'blok-rij' },
+        blokNaamInput,
+        el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); } }),
+        el('span', { class: 'maal' }, '×'),
+        el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); } }),
+        (() => {
+          const sel = el('select', { onchange: (e) => { blok.type = e.target.value; planOpslaan(); } });
+          [['wonen', 'Wonen'], ['overig', 'Overig inpandig'], ['buitenruimte', 'Buitenruimte'], ['correctie', 'Correctie']].forEach(([val, label]) => {
+            const optie = el('option', { value: val }, label);
+            if (blok.type === val) optie.selected = true;
+            sel.appendChild(optie);
+          });
+          return sel;
+        })(),
+        el('button', { class: 'verwijder', onclick: () => { woonlaag.blokken.splice(bIdx, 1); planOpslaan(); render(); } }, '✕'),
+      );
+      lijstKolom.appendChild(rij);
+    });
+    const tekenKolom = el('div', { class: 'weergave-kolom weergave-tekening' }, renderTekenkader(woonlaag, wIdx));
+    kaart.appendChild(el('div', { class: 'meting-weergaven' }, tekenKolom, lijstKolom));
     kaart.appendChild(el('button', { class: 'knop spook klein', onclick: () => { woonlaag.blokken.push(leegBlok()); planOpslaan(); render(); } }, '+ Blok toevoegen'));
     wrap.appendChild(kaart);
   });
   wrap.appendChild(el('button', {
     class: 'knop spook', style: 'margin-bottom:14px;',
-    onclick: () => { t.data.afmetingen.woonlagen.push(leegWoonlaag()); planOpslaan(); render(); },
+    onclick: () => {
+      t.data.afmetingen.woonlagen.push(leegWoonlaag());
+      t.data.indeling.woonlagen.push(leegIndelingWoonlaag()); // gelijk houden met Indeling
+      planOpslaan(); render();
+    },
   }, '+ Woonlaag toevoegen'));
 
   wrap.appendChild(el('div', { class: 'section-label' }, 'Externe bergruimte'));
@@ -1712,7 +1787,11 @@ function renderIndelingTab() {
     const naamInput = el('input', {
       value: woonlaag.naam || '', placeholder: `Naam woonlaag (bv. "Begane grond")`,
       style: 'width:100%;margin-bottom:8px;padding:8px 10px;border-radius:9px;border:1px solid var(--divider);',
-      oninput: (e) => { woonlaag.naam = e.target.value; planOpslaan(); },
+      oninput: (e) => {
+        woonlaag.naam = e.target.value;
+        zorgVoorAfmetingenWoonlaag(t.data, wIdx).naam = e.target.value; // gelijk houden met Meting
+        planOpslaan();
+      },
     });
     koppelDatalist(naamInput, 'verdiepingen');
     wrap.appendChild(naamInput);
@@ -1727,7 +1806,11 @@ function renderIndelingTab() {
   });
   wrap.appendChild(el('button', {
     class: 'knop spook', style: 'margin-bottom:16px;',
-    onclick: () => { t.data.indeling.woonlagen.push(leegIndelingWoonlaag()); planOpslaan(); render(); },
+    onclick: () => {
+      t.data.indeling.woonlagen.push(leegIndelingWoonlaag());
+      t.data.afmetingen.woonlagen.push(leegWoonlaag()); // gelijk houden met Meting
+      planOpslaan(); render();
+    },
   }, '+ Woonlaag toevoegen'));
 
   wrap.appendChild(el('div', { class: 'section-label' }, 'Extern'));

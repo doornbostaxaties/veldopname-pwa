@@ -292,6 +292,10 @@ h1, h2, h3, p { margin: 0; }
 .eigen-suggestie-item { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid var(--divider); cursor: pointer; }
 .eigen-suggestie-item:last-child { border-bottom: none; }
 .eigen-suggestie-item:active { background: var(--navy-100); }
+/* "Zelf typen…"-item bovenaan de suggestielijst (koppelDatalist staat standaard op readOnly, zie
+   toonEigenSuggesties()/staTypenToe() in app.js) — optisch losgekoppeld van de echte macro-opties. */
+.eigen-suggestie-typen { font-style: italic; color: var(--text-dim); background: var(--bg); }
+.eigen-suggestie-typen:active { background: var(--navy-100); }
 
 /* --- plattegrondschetser --- */
 .weergave-wissel { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -300,6 +304,21 @@ h1, h2, h3, p { margin: 0; }
   border: 1px solid var(--divider); background: var(--surface); color: var(--text-dim); cursor: pointer;
 }
 .weergave-wissel button.actief { background: var(--navy); border-color: var(--navy); color: #fff; }
+/* Arno (13-09-2026): "in Meting het tekenvenster en lijst naast elkaar zetten als de schermbreedte
+   voldoende is (vanaf iPhone in liggende stand)" — beide weergaven staan altijd allebei in de DOM
+   (zie renderMetingTab() in app.js); op een smal scherm toont alleen de actieve weergave (bepaald
+   door de 'modus-tekening'/'modus-lijst'-klasse op .woonlaag-kaart), vanaf 650px (net onder de
+   smalste iPhone-liggende-breedte van 667px) staan ze naast elkaar en is de wissel overbodig. */
+.weergave-kolom { display: none; }
+.woonlaag-kaart.modus-tekening .weergave-tekening { display: block; }
+.woonlaag-kaart.modus-lijst .weergave-lijst { display: block; }
+@media (min-width: 650px) {
+  .weergave-wissel { display: none; }
+  .meting-weergaven { display: flex; gap: 14px; align-items: flex-start; }
+  .weergave-kolom { display: block; }
+  .weergave-tekening { flex: 1 1 auto; min-width: 0; }
+  .weergave-lijst { flex: 0 0 260px; }
+}
 .tekenkader { overflow: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); margin-bottom: 10px; max-height: 60vh; -webkit-overflow-scrolling: touch; }
 .tekenkader svg { display: block; touch-action: none; }
 .blok-rect { cursor: grab; touch-action: none; }
