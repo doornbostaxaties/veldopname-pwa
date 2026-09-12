@@ -313,11 +313,15 @@ h1, h2, h3, p { margin: 0; }
 .woonlaag-kaart.modus-tekening .weergave-tekening { display: block; }
 .woonlaag-kaart.modus-lijst .weergave-lijst { display: block; }
 @media (min-width: 650px) {
-  .weergave-wissel { display: none; }
+  /* .meting-wissel (NIET het gedeelde .weergave-wissel — dat gebruiken J.4/I.4 ook voor hun eigen
+     hoofd-/subtabbladen, zie de toelichting bij app.js' renderMetingTab()). */
+  .meting-wissel { display: none; }
   .meting-weergaven { display: flex; gap: 14px; align-items: flex-start; }
   .weergave-kolom { display: block; }
-  .weergave-tekening { flex: 1 1 auto; min-width: 0; }
-  .weergave-lijst { flex: 0 0 260px; }
+  /* Arno (13-09-2026): "Maak het tekenveld smaller en de invulvelden breder (is nu niet goed
+     leesbaar)" — de lijst krijgt nu de meeste ruimte, het tekenvenster een vaste, kleinere breedte. */
+  .weergave-tekening { flex: 0 0 220px; }
+  .weergave-lijst { flex: 1 1 auto; min-width: 0; }
 }
 .tekenkader { overflow: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); margin-bottom: 10px; max-height: 60vh; -webkit-overflow-scrolling: touch; }
 .tekenkader svg { display: block; touch-action: none; }

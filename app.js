@@ -866,14 +866,22 @@ function koppelDatalist(input, macroSleutel, uitgeslotenFn) {
   input.addEventListener('input', () => toonEigenSuggesties(input, macroSleutel, uitgeslotenFn, true));
   input.addEventListener('blur', () => setTimeout(() => {
     if (actieveSuggestieInput === input) verbergEigenSuggesties();
-    input.readOnly = true; // val terug op "geen toetsenbord" tot de volgende "Zelf typen…"-tik
+    // Arno (13-09-2026): "Zelf typen optie is mooi maar zet het veld vast (er verschijnt geen
+    // toetsenbord)" — oorzaak: deze VERTRAAGDE (150ms) opruimactie van de VORIGE blur hoorde soms
+    // pas ná staTypenToe() (hieronder) af, en zette readOnly toen alweer stiekem terug op true, vlak
+    // nadat het veld net typbaar was gemaakt — het toetsenbord kreeg zo geen kans om te verschijnen.
+    // Alleen terugzetten als dit veld NIET zojuist opnieuw gefocust is (staTypenToe doet dat wél).
+    if (document.activeElement !== input) input.readOnly = true;
   }, 150));
 }
 
 // Zet een via koppelDatalist() beheerd veld tijdelijk om naar vrij typen — geklikt vanuit het
-// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()).
+// "✏️ Zelf typen…"-item bovenaan de suggestielijst (zie toonEigenSuggesties()). blur() vóór focus()
+// dwingt een ECHTE nieuwe focus af (het veld was al focust toen de lijst verscheen) — zonder dat
+// negeert iOS Safari een focus()-aanroep op een al-focust element en verschijnt het toetsenbord niet.
 function staTypenToe(input) {
   input.readOnly = false;
+  input.blur();
   input.focus();
 }
 
@@ -1576,7 +1584,11 @@ function renderMetingTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
 
-  const wissel = el('div', { class: 'weergave-wissel' });
+  // Eigen 'meting-wissel'-klasse naast de gedeelde 'weergave-wissel'-styling (J.4/I.4 gebruiken die
+  // laatste óók voor hun hoofd-/subtabbladen) — anders raakt de "beide naast elkaar op brede
+  // schermen"-CSS hieronder per ongeluk ook die tabbladen (live gemeld door Arno: "Tabs (en subtabs)
+  // in bouwkundige en energetische opnamestaat zijn verdwenen").
+  const wissel = el('div', { class: 'weergave-wissel meting-wissel' });
   [['tekening', '✏️ Tekenen'], ['lijst', '📋 Lijst']].forEach(([modus, label]) => {
     wissel.appendChild(el('button', {
       class: state.afmetingenWeergave === modus ? 'actief' : '',
