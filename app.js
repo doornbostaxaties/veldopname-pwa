@@ -117,6 +117,11 @@ function leegTaxatie(rapportId) {
     // geen BAG-adres). Zie project_taxatieweb_opname_bridge in memory voor de koppel-flow: het
     // Taxatieweb-script herkent deze taxaties op adres en biedt een importknop.
     voorlopig: false, kavelnummer: '', bouwplan: '',
+    // Moment waarop deze taxatie voor het eerst op locatie geopend is — proxy voor "start van de
+    // inspectie", gebruikt om Omgeving/Inspectie's begin-/eindtijd automatisch voor te stellen
+    // (Arno's verzoek 13-09-2026: "tijdstip kan overgenomen worden van start opname moment op
+    // locatie"). Wordt in laadOpname() precies 1x gezet, bij de allereerste keer laden.
+    begintijdOpname: null,
     data: leegData(),
     bewoning: leegBewoning(),
     bouwkundig: leegBouwkundig(),
@@ -156,6 +161,11 @@ function leegBewoning() {
 // hierboven in de projectmemory). Live nagekeken op Spade 21.
 function leegOmgeving() {
   return {
+    // Inspectie (Arno's verzoek 13-09-2026, naar analogie van Provadie's Vragenlijst > Bewoning) —
+    // begintijd/eindtijd worden automatisch voorgesteld vanuit begintijdOpname (zie renderOmgevingTab),
+    // maar blijven gewoon aanpasbaar.
+    weersomstandigheden: '', aanwezigenInspectie: '',
+    begintijdInspectie: null, eindtijdInspectie: null,
     // H.2 Omgeving
     locatie: '', gebouwenRondom: '', bereikbaarheid: '', voorzieningen: '',
     bijzonderhedenOmgeving: null, bijzonderhedenOmgevingToelichting: '',
@@ -1121,6 +1131,7 @@ async function laadOpname(rapportId, tab) {
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
   lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
+  if (!lokaal.begintijdOpname) lokaal.begintijdOpname = new Date().toISOString(); // eerste keer laden = start inspectie
   lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
@@ -1511,11 +1522,13 @@ function renderNieuweTaxatieScherm() {
 // het Instellingen-menu rechtsboven (zie renderOpnameScherm/renderInstellingenMenu).
 const TABS = [
   { id: 'objectkenmerken', icon: '🔑', label: 'Objectkenmerken' },
+  // Omgeving naar voren (13-09-2026, Arno: "Omgeving inderdaad naar voren") — buitenkant/fundering/
+  // asbest bekijk je in de praktijk bij aankomst, vóórdat je naar binnen gaat voor Meting/Indeling.
+  { id: 'omgeving', icon: '🏞️', label: 'Omgeving' },
   { id: 'meting', icon: '📐', label: 'Meting' },
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'energetisch', icon: '♻️', label: 'Energetisch' },
-  { id: 'omgeving', icon: '🏞️', label: 'Omgeving' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
@@ -2968,9 +2981,44 @@ function renderOmgevingVrijeTekst(labelText, waarde, onChange) {
   veld.value = waarde || '';
   return el('div', { class: 'omgeving-veld' }, el('div', { class: 'bouwdeel-veld-label' }, labelText), veld);
 }
+// HH:MM, zelfde notatie als een <input type="time">-veld verwacht.
+function formatTijdHHMM(datum) {
+  return datum.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+}
 function renderOmgevingTab() {
-  const o = state.taxatie.omgeving;
+  const t = state.taxatie;
+  const o = t.omgeving;
   const wrap = el('div', {});
+
+  // Inspectie (Arno's verzoek 13-09-2026, naar analogie van Provadie's "Aanwezig bij inspectie" +
+  // "Weersomstandigheden" + begin-/eindtijd) — begin-/eindtijd worden eenmalig voorgesteld vanuit
+  // het moment dat deze taxatie voor het eerst op locatie geopend werd (begintijdOpname),
+  // eindtijd = begintijd + 45 minuten (Arno's eigen inschatting van een gemiddelde opnameduur).
+  // Blijven daarna gewoon los aanpasbaar — dit is alleen een voorstel, geen vaste waarde.
+  if (o.begintijdInspectie === null && t.begintijdOpname) {
+    const start = new Date(t.begintijdOpname);
+    o.begintijdInspectie = formatTijdHHMM(start);
+    o.eindtijdInspectie = formatTijdHHMM(new Date(start.getTime() + 45 * 60000));
+    planOpslaan();
+  }
+  const groepInspectie = el('div', { class: 'macro-groep' });
+  groepInspectie.appendChild(el('h3', {}, 'Inspectie'));
+  groepInspectie.appendChild(renderSelectVeld('Weersomstandigheden', o.weersomstandigheden, ['Droog', 'Regen', 'Sneeuw'], (w) => { o.weersomstandigheden = w; }));
+  const aanwezigenVeld = el('input', {
+    type: 'text', placeholder: 'Bijv. eigenaar, verkopend makelaar…',
+    oninput: (e) => { o.aanwezigenInspectie = e.target.value; planOpslaan(); },
+  });
+  aanwezigenVeld.value = o.aanwezigenInspectie || '';
+  groepInspectie.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Aanwezig bij inspectie', aanwezigenVeld));
+  const tijdenRij = el('div', { class: 'objectkenmerken-rij' });
+  const begintijdVeld = el('input', { type: 'time', onchange: (e) => { o.begintijdInspectie = e.target.value; planOpslaan(); } });
+  begintijdVeld.value = o.begintijdInspectie || '';
+  const eindtijdVeld = el('input', { type: 'time', onchange: (e) => { o.eindtijdInspectie = e.target.value; planOpslaan(); } });
+  eindtijdVeld.value = o.eindtijdInspectie || '';
+  tijdenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Begintijd', begintijdVeld));
+  tijdenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Eindtijd', eindtijdVeld));
+  groepInspectie.appendChild(tijdenRij);
+  wrap.appendChild(groepInspectie);
 
   const groepOmgeving = el('div', { class: 'macro-groep' });
   groepOmgeving.appendChild(el('h3', {}, 'H.2 Omgeving'));
