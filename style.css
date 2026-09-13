@@ -289,6 +289,16 @@ h1, h2, h3, p { margin: 0; }
 .macro-groep h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
 .omgeving-veld { margin-bottom: 12px; }
 .omgeving-veld .bouwdeel-veld-label { display: block; margin-bottom: 4px; }
+/* H.2 Omgeving's 4 vrije-tekstvelden naast elkaar vanaf tablet-breedte i.p.v. steeds de volle
+   breedte (Arno's verzoek 13-09-2026: "compacter, bijv. kolommen") — op een smal scherm gewoon 1
+   kolom onder elkaar, net als voorheen. */
+.omgeving-tekst-grid { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
+@media (min-width: 600px) { .omgeving-tekst-grid { grid-template-columns: 1fr 1fr; } }
+.omgeving-tekst-grid .omgeving-veld { margin-bottom: 12px; }
+/* Compactere varianten voor de Inspectie-groep (13-09-2026) — minder ruimte dan de standaard
+   bouwdeel-veld-label/omschrijving, want dit staat bovenaan een toch al drukke tab. */
+.bouwdeel-veld-label-compact { margin: 8px 0 4px; }
+.bouwdeel-omschrijving-compact { min-height: 40px; margin-top: 6px; margin-bottom: 0; }
 .macro-uitleg { font-size: 11.5px; color: var(--text-dim); margin-bottom: 16px; }
 
 /* Eigen suggestie-dropdown (koppelDatalist) — vervangt native <datalist>, die op iOS Safari niet
@@ -426,6 +436,12 @@ h1, h2, h3, p { margin: 0; }
    waarvoor elke knop is (Arno's verzoek 13-09-2026). */
 .foto-knop-met-naam + .foto-knop-met-naam { margin-top: 4px; }
 .foto-knop-naam { display: block; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+/* Verplichte-foto's-knoppen op Objectkenmerken in kolommen i.p.v. onder elkaar (Arno's verzoek
+   13-09-2026: "kan compacter, bijv. kolommen") — 2 op telefoon, 4 vanaf tablet-breedte. De
+   margin-top-regel hierboven (voor de oude, gestapelde weergave) doet in een grid niets meer, maar
+   is onschadelijk om te laten staan. */
+.foto-knop-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; }
+@media (max-width: 600px) { .foto-knop-grid { grid-template-columns: repeat(2, 1fr); } }
 .bouwdeel-foto-mini { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; border: none; padding: 0; cursor: pointer; flex-shrink: 0; }
 .bouwdeel-foto-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bouwdeel-foto-knop {

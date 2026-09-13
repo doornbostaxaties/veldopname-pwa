@@ -2499,12 +2499,16 @@ function renderObjectkenmerkenTab() {
   // maakknop; Tuin idem, maar alleen als "Tuin aanwezig" op Ja staat.
   const groepFotos = el('div', { class: 'macro-groep' });
   groepFotos.appendChild(el('h3', {}, "Verplichte foto's"));
+  // In kolommen i.p.v. elk een eigen volle-breedte regel (Arno: "compacter, bijv. kolommen",
+  // 13-09-2026) — 2 op telefoon, meer op een bredere iPad (zie .foto-knop-grid in style.css).
+  const fotoGrid = el('div', { class: 'foto-knop-grid' });
   const fotoMetNaam = (naam, categorie) => el('div', { class: 'foto-knop-met-naam' },
     el('span', { class: 'foto-knop-naam' }, naam), renderFotoKnopRij(naam, categorie, true));
-  groepFotos.appendChild(fotoMetNaam('Vooraanzicht', 'Vooraanzicht'));
-  groepFotos.appendChild(fotoMetNaam('Achtergevel', 'Achtergevel'));
-  groepFotos.appendChild(fotoMetNaam('Straatbeeld', 'Straatbeeld'));
-  if (t.bewoning.tuinAanwezig) groepFotos.appendChild(fotoMetNaam('Tuin', 'Tuin'));
+  fotoGrid.appendChild(fotoMetNaam('Vooraanzicht', 'Vooraanzicht'));
+  fotoGrid.appendChild(fotoMetNaam('Achtergevel', 'Achtergevel'));
+  fotoGrid.appendChild(fotoMetNaam('Straatbeeld', 'Straatbeeld'));
+  if (t.bewoning.tuinAanwezig) fotoGrid.appendChild(fotoMetNaam('Tuin', 'Tuin'));
+  groepFotos.appendChild(fotoGrid);
   wrap.appendChild(groepFotos);
 
   const groepA = el('div', { class: 'macro-groep' });
@@ -3026,12 +3030,28 @@ function renderOmgevingTab() {
     o.eindtijdInspectie = formatTijdHHMM(new Date(start.getTime() + 45 * 60000));
     planOpslaan();
   }
+  // Compacter (13-09-2026, Arno: "Inspectie ... kan compacter, bijv. kolommen") — Weersomstandigheden
+  // + Begintijd + Eindtijd op één regel i.p.v. 3 losse regels; de aanwezigen-checkboxes blijven een
+  // eigen grid (die stonden al compact) met een kleiner toelichtingsveld eronder, alleen zichtbaar
+  // zodra er iets is aangevinkt — een lege toelichting nam anders altijd 60px in.
   const groepInspectie = el('div', { class: 'macro-groep' });
   groepInspectie.appendChild(el('h3', {}, 'Inspectie'));
-  groepInspectie.appendChild(renderSelectVeld('Weersomstandigheden', o.weersomstandigheden, ['Droog', 'Regen', 'Sneeuw'], (w) => { o.weersomstandigheden = w; }));
+  const inspectieRij = el('div', { class: 'objectkenmerken-rij' });
+  const weerVeld = el('select', {
+    class: 'energetisch-select', onchange: (e) => { o.weersomstandigheden = e.target.value; planOpslaan(); },
+  }, el('option', { value: '' }, 'Selecteer'),
+    ...['Droog', 'Regen', 'Sneeuw'].map(w => el('option', { value: w, selected: o.weersomstandigheden === w ? 'selected' : null }, w)));
+  const begintijdVeld = el('input', { type: 'time', onchange: (e) => { o.begintijdInspectie = e.target.value; planOpslaan(); } });
+  begintijdVeld.value = o.begintijdInspectie || '';
+  const eindtijdVeld = el('input', { type: 'time', onchange: (e) => { o.eindtijdInspectie = e.target.value; planOpslaan(); } });
+  eindtijdVeld.value = o.eindtijdInspectie || '';
+  inspectieRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Weersomstandigheden', weerVeld));
+  inspectieRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Begintijd', begintijdVeld));
+  inspectieRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Eindtijd', eindtijdVeld));
+  groepInspectie.appendChild(inspectieRij);
   // Exacte checkbox-opties van Taxatieweb's B. Inspectie > "Anderen aanwezig bij inspectie" (live
   // bevestigd 13-09-2026), zodat dit later 1-op-1 door "Vul in bij Taxatieweb" over te nemen is.
-  groepInspectie.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Aanwezig bij inspectie'));
+  groepInspectie.appendChild(el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-label-compact' }, 'Aanwezig bij inspectie'));
   const aanwezigenGrid = el('div', { class: 'bouwdeel-materiaal-grid' });
   ['Verkopende makelaar', 'Aankopende makelaar', 'Eigenaar', 'Huurder/gebruiker', 'Anderen'].forEach(optie => {
     const aan = (o.aanwezigenInspectie || []).includes(optie);
@@ -3047,28 +3067,27 @@ function renderOmgevingTab() {
       }), optie));
   });
   groepInspectie.appendChild(aanwezigenGrid);
-  const aanwezigenToelichtingVeld = el('textarea', {
-    class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aanwezigen…',
-    oninput: (e) => { o.aanwezigenInspectieToelichting = e.target.value; planOpslaan(); },
-  });
-  aanwezigenToelichtingVeld.value = o.aanwezigenInspectieToelichting || '';
-  groepInspectie.appendChild(aanwezigenToelichtingVeld);
-  const tijdenRij = el('div', { class: 'objectkenmerken-rij' });
-  const begintijdVeld = el('input', { type: 'time', onchange: (e) => { o.begintijdInspectie = e.target.value; planOpslaan(); } });
-  begintijdVeld.value = o.begintijdInspectie || '';
-  const eindtijdVeld = el('input', { type: 'time', onchange: (e) => { o.eindtijdInspectie = e.target.value; planOpslaan(); } });
-  eindtijdVeld.value = o.eindtijdInspectie || '';
-  tijdenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Begintijd', begintijdVeld));
-  tijdenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Eindtijd', eindtijdVeld));
-  groepInspectie.appendChild(tijdenRij);
+  if ((o.aanwezigenInspectie || []).length > 0) {
+    const aanwezigenToelichtingVeld = el('textarea', {
+      class: 'bouwdeel-omschrijving bouwdeel-omschrijving-compact', placeholder: 'Toelichting aanwezigen…',
+      oninput: (e) => { o.aanwezigenInspectieToelichting = e.target.value; planOpslaan(); },
+    });
+    aanwezigenToelichtingVeld.value = o.aanwezigenInspectieToelichting || '';
+    groepInspectie.appendChild(aanwezigenToelichtingVeld);
+  }
   wrap.appendChild(groepInspectie);
 
   const groepOmgeving = el('div', { class: 'macro-groep' });
   groepOmgeving.appendChild(el('h3', {}, 'H.2 Omgeving'));
-  groepOmgeving.appendChild(renderOmgevingVrijeTekst('A. Locatie', o.locatie, (v) => { o.locatie = v; }));
-  groepOmgeving.appendChild(renderOmgevingVrijeTekst('B. Gebouwen rondom', o.gebouwenRondom, (v) => { o.gebouwenRondom = v; }));
-  groepOmgeving.appendChild(renderOmgevingVrijeTekst('C. Bereikbaarheid', o.bereikbaarheid, (v) => { o.bereikbaarheid = v; }));
-  groepOmgeving.appendChild(renderOmgevingVrijeTekst('D. Voorzieningen', o.voorzieningen, (v) => { o.voorzieningen = v; }));
+  // 2 kolommen vanaf tablet-breedte (zelfde grid-aanpak als elders) — 4 losse volle-breedte
+  // tekstvelden onder elkaar was onnodig veel scrollwerk op een iPad (Arno: "compacter, bijv.
+  // kolommen", 13-09-2026).
+  const omgevingTekstGrid = el('div', { class: 'omgeving-tekst-grid' });
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('A. Locatie', o.locatie, (v) => { o.locatie = v; }));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('B. Gebouwen rondom', o.gebouwenRondom, (v) => { o.gebouwenRondom = v; }));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('C. Bereikbaarheid', o.bereikbaarheid, (v) => { o.bereikbaarheid = v; }));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('D. Voorzieningen', o.voorzieningen, (v) => { o.voorzieningen = v; }));
+  groepOmgeving.appendChild(omgevingTekstGrid);
   groepOmgeving.appendChild(jaNeeMetToelichtingRij(
     'E. Bijzonderheden in de omgeving die veel invloed kunnen hebben op de waarde?',
     o.bijzonderhedenOmgeving, (w) => { o.bijzonderhedenOmgeving = w; planOpslaan(); },
