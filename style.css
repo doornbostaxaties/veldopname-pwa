@@ -118,18 +118,30 @@ h1, h2, h3, p { margin: 0; }
 }
 
 /* --- taxatielijst --- */
+/* Sinds 13-09-2026: vooraanzicht-miniatuur + Google Maps-route-knop op elke kaart (Arno's verzoek)
+   — kaart werd hiervoor een flex-RIJ (duimnagel + infokolom) i.p.v. alleen een kolom. */
 .taxatie-kaart {
   background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; cursor: pointer;
+  padding: 12px 16px; display: flex; flex-direction: row; align-items: center; gap: 12px;
+  margin-bottom: 10px; cursor: pointer;
 }
-.taxatie-kaart .adres { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
+.taxatie-thumb {
+  width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--surface-3);
+}
+.taxatie-thumb-placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.taxatie-kaart-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.taxatie-kaart-info .adres { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
 .badge-voorlopig {
   font-size: 10.5px; font-weight: 700; background: var(--goud-100); color: var(--goud-700);
   border-radius: 999px; padding: 2px 8px;
 }
-.taxatie-kaart .plaats { font-size: 12.5px; color: var(--text-dim); }
-.taxatie-kaart .meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
-.taxatie-kaart .afspraak { font-size: 12.5px; font-weight: 600; color: var(--navy); }
+.taxatie-kaart-info .plaats { font-size: 12.5px; color: var(--text-dim); }
+.taxatie-kaart-info .meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.taxatie-kaart-info .afspraak { font-size: 12.5px; font-weight: 600; color: var(--navy); }
+.taxatie-maps-knop {
+  font-size: 11.5px; font-weight: 600; color: var(--navy); background: var(--navy-100);
+  padding: 4px 10px; border-radius: 999px; text-decoration: none; white-space: nowrap; flex-shrink: 0;
+}
 .lege-lijst { text-align: center; color: var(--text-dim); padding: 40px 20px; font-size: 13.5px; }
 
 .section-label {

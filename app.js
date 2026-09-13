@@ -1349,6 +1349,24 @@ function formatAfspraak(iso) {
   return `${datumTekst} ${tijdTekst}`;
 }
 
+// Vooraanzicht-miniatuur op de taxatielijst (Arno's verzoek 13-09-2026: "voeg de vooraanzicht foto
+// toe ... zodra deze bestaat, anders een placeholder"). state.fotos is alleen gevuld voor de
+// OPEN taxatie (zie laadOpname), dus hier per kaart een losse IndexedDB-opzoeking — met een cache
+// zodat dat maar 1x per taxatie gebeurt en er nooit een render→fetch→render-lus kan ontstaan (zie
+// de credit-runaway-waarschuwing bij laadTaxatielijst() hierboven, dezelfde valkuil moet hier
+// vermeden worden).
+const vooraanzichtCache = {};
+function vooraanzichtThumbnailUrl(rapportId) {
+  const c = vooraanzichtCache[rapportId];
+  if (c) return c.laden ? null : c.url;
+  vooraanzichtCache[rapportId] = { laden: true, url: null };
+  VeldopnameDB.fotosVoorTaxatie(rapportId).then((fotos) => {
+    const foto = fotos.find(f => f.ruimte_label === 'Vooraanzicht' && !f.archief);
+    vooraanzichtCache[rapportId] = { laden: false, url: foto ? URL.createObjectURL(foto.blob) : null };
+    if (state.route.naam === 'lijst') render();
+  }).catch(() => { vooraanzichtCache[rapportId] = { laden: false, url: null }; });
+  return null;
+}
 function renderLijstScherm() {
   const wrap = el('div', {});
   wrap.appendChild(el('div', { class: 'statusbalk' },
@@ -1366,16 +1384,32 @@ function renderLijstScherm() {
     inhoud.appendChild(el('div', { class: 'lege-lijst' }, 'Nog geen taxaties gevonden. Trek naar beneden om te vernieuwen zodra er verbinding is.'));
   } else {
     state.taxatielijst.forEach(t => {
+      const thumbUrl = vooraanzichtThumbnailUrl(t.rapport_id);
+      const thumb = thumbUrl
+        ? el('img', { src: thumbUrl, class: 'taxatie-thumb', alt: '' })
+        : el('div', { class: 'taxatie-thumb taxatie-thumb-placeholder' }, '🏠');
+      // Google Maps-link — eigen <a> met stopPropagation, anders opent een klik erop ook meteen de
+      // taxatie (de hele kaart heeft al een eigen onclick voor "open taxatie"). Adres+plaats is
+      // genoeg voor een betrouwbare route (Google Maps zoekt zelf de exacte locatie op).
+      const heeftAdres = !!(t.adres || t.plaats);
+      const mapsLink = heeftAdres ? el('a', {
+        href: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([t.adres, t.plaats].filter(Boolean).join(', ')),
+        target: '_blank', rel: 'noopener', class: 'taxatie-maps-knop',
+        onclick: (e) => e.stopPropagation(),
+      }, '📍 Route') : null;
       inhoud.appendChild(el('div', {
         class: 'taxatie-kaart',
         onclick: () => { location.hash = '#/opname/' + encodeURIComponent(t.rapport_id) + '/meting'; },
       },
-        el('div', { class: 'adres' },
-          t.adres || '(adres onbekend)',
-          t.voorlopig ? el('span', { class: 'badge-voorlopig' }, '⏳ Voorlopig') : null,
+        thumb,
+        el('div', { class: 'taxatie-kaart-info' },
+          el('div', { class: 'adres' },
+            t.adres || '(adres onbekend)',
+            t.voorlopig ? el('span', { class: 'badge-voorlopig' }, '⏳ Voorlopig') : null,
+          ),
+          el('div', { class: 'plaats' }, t.plaats || ''),
+          el('div', { class: 'meta' }, el('span', { class: 'afspraak' }, formatAfspraak(t.afspraak_datumtijd)), mapsLink),
         ),
-        el('div', { class: 'plaats' }, t.plaats || ''),
-        el('div', { class: 'meta' }, el('span', { class: 'afspraak' }, formatAfspraak(t.afspraak_datumtijd))),
       ));
     });
   }
