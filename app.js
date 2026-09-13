@@ -2240,6 +2240,10 @@ async function slaFotoOp(file, ruimteLabel, categorie) {
   state.fotos.push(foto);
   await VeldopnameDB.voegWachtrijItemToe({ type: 'foto', fotoId: id });
   verstuurFotoWachtrij();
+  // De taxatielijst cachet de Vooraanzicht-miniatuur per rapport_id (zie vooraanzichtThumbnailUrl) —
+  // ongeldig maken zodra er een nieuwe/eerste Vooraanzicht-foto bijkomt, anders blijft de lijst de
+  // oude placeholder tonen totdat de hele pagina herladen wordt.
+  if (ruimteLabel === 'Vooraanzicht') delete vooraanzichtCache[foto.rapport_id];
   return foto;
 }
 async function verwerkGekozenFoto(file, ruimteNaam) {
