@@ -143,6 +143,10 @@ function leegTaxatie(rapportId) {
 function leegBewoning() {
   return {
     woningtype: '', bouwjaar: '', tuinAanwezig: null,
+    // Taxatieweb H.1.D "Zijn er grote verbouwingen of uitbreidingen geweest?" — bevestigd live
+    // aanwezig als eigen Ja/Nee+toelichting-veld (13-09-2026), dus wel de moeite waard als los veld
+    // (i.t.t. Tuin-detailvelden die toch alleen in vrije tekst terecht zouden komen).
+    grootVerbouwingGeweest: null, grootVerbouwingToelichting: '',
     gezochtEigenaarBewoner: null, gezochtEigenaarBewonerToelichting: '',
     gezochtMakelaar: null, gezochtMakelaarToelichting: '',
     gezochtAndereBronnen: null, gezochtAndereBronnenToelichting: '',
@@ -164,7 +168,11 @@ function leegOmgeving() {
     // Inspectie (Arno's verzoek 13-09-2026, naar analogie van Provadie's Vragenlijst > Bewoning) —
     // begintijd/eindtijd worden automatisch voorgesteld vanuit begintijdOpname (zie renderOmgevingTab),
     // maar blijven gewoon aanpasbaar.
-    weersomstandigheden: '', aanwezigenInspectie: '',
+    // Live bevestigd in Taxatieweb's B. Inspectie (13-09-2026): "Anderen aanwezig bij inspectie" is
+    // daar een checkbox-lijst (Verkopende makelaar/Aankopende makelaar/Eigenaar/Huurder-gebruiker/
+    // Anderen) + los toelichtingsveld — aanwezigenInspectie daarom een lijst i.p.v. vrije tekst, voor
+    // een 1-op-1 "Vul in bij Taxatieweb"-koppeling later (zelfde aanpak als Bewoning).
+    weersomstandigheden: '', aanwezigenInspectie: [], aanwezigenInspectieToelichting: '',
     begintijdInspectie: null, eindtijdInspectie: null,
     // H.2 Omgeving
     locatie: '', gebouwenRondom: '', bereikbaarheid: '', voorzieningen: '',
@@ -183,6 +191,13 @@ function metVolledigOmgeving(o) {
   const leeg = leegOmgeving();
   if (!o || typeof o !== 'object') return leeg;
   Object.keys(leeg).forEach(key => { if (o[key] === undefined) o[key] = leeg[key]; });
+  // aanwezigenInspectie was heel kort een vrij tekstveld (13-09-2026) vóór de omzetting naar
+  // checkboxes — een eerder als tekst opgeslagen waarde alsnog als toelichting bewaren i.p.v. weg te
+  // gooien.
+  if (typeof o.aanwezigenInspectie === 'string') {
+    if (!o.aanwezigenInspectieToelichting) o.aanwezigenInspectieToelichting = o.aanwezigenInspectie;
+    o.aanwezigenInspectie = [];
+  }
   return o;
 }
 // Exacte tekst van Taxatieweb's eigen keuzelijst (F. Wat is de situatie van de woning?) — bewust
@@ -1128,6 +1143,7 @@ async function laadOpname(rapportId, tab) {
   if (lokaal.bewoning.woningtype === undefined) lokaal.bewoning.woningtype = '';
   if (lokaal.bewoning.bouwjaar === undefined) lokaal.bewoning.bouwjaar = '';
   if (lokaal.bewoning.tuinAanwezig === undefined) lokaal.bewoning.tuinAanwezig = null; // vóór de Tuin-verplichte-foto-logica (13-09-2026)
+  if (lokaal.bewoning.grootVerbouwingGeweest === undefined) { lokaal.bewoning.grootVerbouwingGeweest = null; lokaal.bewoning.grootVerbouwingToelichting = ''; }
   lokaal.bouwkundig = metVolledigBouwkundig(lokaal.bouwkundig); // taxaties van vóór Fase 2 "volledige opname"
   lokaal.energetisch = metVolledigEnergetisch(lokaal.energetisch); // taxaties van vóór Fase 3 "volledige opname"
   lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
@@ -1154,6 +1170,7 @@ async function laadOpname(rapportId, tab) {
         if (bewoning_data.woningtype === undefined) bewoning_data.woningtype = '';
         if (bewoning_data.bouwjaar === undefined) bewoning_data.bouwjaar = '';
         if (bewoning_data.tuinAanwezig === undefined) bewoning_data.tuinAanwezig = null;
+        if (bewoning_data.grootVerbouwingGeweest === undefined) { bewoning_data.grootVerbouwingGeweest = null; bewoning_data.grootVerbouwingToelichting = ''; }
         state.taxatie.bewoning = bewoning_data; gewijzigd = true;
       }
       if (bouwkundig_data && typeof bouwkundig_data === 'object') { state.taxatie.bouwkundig = metVolledigBouwkundig(bouwkundig_data); gewijzigd = true; }
@@ -2467,6 +2484,14 @@ function renderObjectkenmerkenTab() {
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
   groepKenmerken.appendChild(kenmerkenRij);
   groepKenmerken.appendChild(renderJaNeeToggle('Tuin aanwezig', t.bewoning.tuinAanwezig, (w) => { t.bewoning.tuinAanwezig = w; }));
+  // Taxatieweb H.1.D (live bevestigd 13-09-2026) — een eigen Ja/Nee+toelichting-veld, i.t.t.
+  // Tuin-detailvelden die toch alleen in vrije tekst terecht zouden komen wel de moeite waard.
+  groepKenmerken.appendChild(jaNeeMetToelichtingRij(
+    'Zijn er grote verbouwingen of uitbreidingen geweest?',
+    t.bewoning.grootVerbouwingGeweest, (w) => { t.bewoning.grootVerbouwingGeweest = w; planOpslaan(); },
+    t.bewoning.grootVerbouwingToelichting, (v) => { t.bewoning.grootVerbouwingToelichting = v; planOpslaan(); },
+    'Toelichting verbouwing/uitbreiding…',
+  ));
   wrap.appendChild(groepKenmerken);
 
   // Arno (13-09-2026): "Voeg de fotoknoppen toe aan objectkenmerken" — Vooraanzicht/Achtergevel/
@@ -3004,12 +3029,30 @@ function renderOmgevingTab() {
   const groepInspectie = el('div', { class: 'macro-groep' });
   groepInspectie.appendChild(el('h3', {}, 'Inspectie'));
   groepInspectie.appendChild(renderSelectVeld('Weersomstandigheden', o.weersomstandigheden, ['Droog', 'Regen', 'Sneeuw'], (w) => { o.weersomstandigheden = w; }));
-  const aanwezigenVeld = el('input', {
-    type: 'text', placeholder: 'Bijv. eigenaar, verkopend makelaar…',
-    oninput: (e) => { o.aanwezigenInspectie = e.target.value; planOpslaan(); },
+  // Exacte checkbox-opties van Taxatieweb's B. Inspectie > "Anderen aanwezig bij inspectie" (live
+  // bevestigd 13-09-2026), zodat dit later 1-op-1 door "Vul in bij Taxatieweb" over te nemen is.
+  groepInspectie.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Aanwezig bij inspectie'));
+  const aanwezigenGrid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  ['Verkopende makelaar', 'Aankopende makelaar', 'Eigenaar', 'Huurder/gebruiker', 'Anderen'].forEach(optie => {
+    const aan = (o.aanwezigenInspectie || []).includes(optie);
+    aanwezigenGrid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => {
+          o.aanwezigenInspectie = o.aanwezigenInspectie || [];
+          const i = o.aanwezigenInspectie.indexOf(optie);
+          if (i >= 0) o.aanwezigenInspectie.splice(i, 1); else o.aanwezigenInspectie.push(optie);
+          planOpslaan(); render();
+        },
+      }), optie));
   });
-  aanwezigenVeld.value = o.aanwezigenInspectie || '';
-  groepInspectie.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Aanwezig bij inspectie', aanwezigenVeld));
+  groepInspectie.appendChild(aanwezigenGrid);
+  const aanwezigenToelichtingVeld = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aanwezigen…',
+    oninput: (e) => { o.aanwezigenInspectieToelichting = e.target.value; planOpslaan(); },
+  });
+  aanwezigenToelichtingVeld.value = o.aanwezigenInspectieToelichting || '';
+  groepInspectie.appendChild(aanwezigenToelichtingVeld);
   const tijdenRij = el('div', { class: 'objectkenmerken-rij' });
   const begintijdVeld = el('input', { type: 'time', onchange: (e) => { o.begintijdInspectie = e.target.value; planOpslaan(); } });
   begintijdVeld.value = o.begintijdInspectie || '';
