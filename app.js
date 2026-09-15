@@ -704,6 +704,51 @@ function standaardMacros() {
       'oven', 'magnetron', 'combi-oven', 'combi-magnetron', 'stoomoven', 'koelkast', 'vriezer',
       'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker',
     ],
+    // Tik-chips per vrije-tekst-bouwdeel in Bouwkundig (13-09-2026, Arno's verzoek: "ook op de
+    // overige tekstvelden", en bewerkbaar als macro — zie BOUWDEEL_CHIP_GROEPEN/renderChipEditor
+    // hieronder). Sleutel = def.key uit BOUWKUNDIG_SCHEMA. Bewust korte, algemene startlijsten —
+    // Arno kan ze zelf aanvullen/herordenen/verwijderen via het ✎-knopje per bouwdeel.
+    bouwdeelChips: {
+      dakconstructie: ['Houten kap', 'Betonnen kap', 'Systeemkap', 'Doorzakking zichtbaar'],
+      dakkapellen: ['Voorzijde', 'Achterzijde', 'Kunststof', 'Hout'],
+      schoorstenen: ['In gebruik', 'Buiten gebruik', 'Rookkanaal geveegd'],
+      goten: ['Zink', 'Kunststof', 'Verouderd'],
+      loodwerk: ['Goed onderhouden', 'Verouderd', 'Lekkage zichtbaar'],
+      balkon: ['Frans balkon', 'Vrijstaand balkon', 'Balkonhek verouderd'],
+      kozijnen: ['Kunststof', 'Hout', 'Aluminium', 'Onderhoud nodig'],
+      buitendeuren: ['Kunststof', 'Hout', 'Aluminium'],
+      hangEnSluitwerk: ['Inbraakwerend hang- en sluitwerk', 'Verouderd'],
+      buitenschilderwerk: ['Recent geschilderd', 'Onderhoud nodig', 'Verouderd'],
+      glas1eWoonlaag: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas'],
+      glas2eWoonlaag: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas'],
+      glas3eWoonlaag: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas'],
+      glasOverigeWoonlagen: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas'],
+      schuurBerging: ['Vrijstaande houten berging', 'Aangebouwde berging', 'Stenen berging', 'Fietsenberging', 'Tuinhuisje'],
+      garage: ['Vrijstaande stenen garage', 'Aangebouwde garage', 'Elektrische garagedeur'],
+      overigeBijgebouwen: ['Aangebouwde overkapping', 'Vrijstaande overkapping', 'Carport', 'Buitenkeuken', 'Prieel'],
+      tuinaanleg: ['Voortuin', 'Achtertuin', 'Zijtuin', 'Verzorgd', 'Eenvoudig'],
+      nietStandaardBuitenVoorzieningen: ['Achterom', 'Parkeerplaats op eigen terrein', 'Oprit', 'Schutting', 'Buitenkraan', 'Buitenverlichting'],
+      overigeWaarnemingenBuitenzijde: ['Geen bijzonderheden', 'Scheurvorming zichtbaar', 'Vochtplekken zichtbaar'],
+      overigeWaarnemingenBijgebouwenEnPerceel: ['Geen bijzonderheden', 'Scheurvorming zichtbaar', 'Vochtplekken zichtbaar'],
+      kelder: ['Droog', 'Vochtig', 'In gebruik als bergruimte'],
+      kruipruimte: ['Droog', 'Vochtig', 'Slecht bereikbaar'],
+      wandenEnBinnenmuren: ['Stucwerk', 'Behang', 'Tegelwerk'],
+      plafonds: ['Stucwerk', 'Spanplafond', 'Verlaagd plafond'],
+      trappen: ['Vaste trap', 'Vaste trappen', 'Vlizotrap', 'Losse trap'],
+      binnenschilderwerk: ['Recent geschilderd', 'Onderhoud nodig'],
+      toilet1: ['Hangend toilet', 'Staand toilet', 'Fonteintje aanwezig'],
+      toilet2: ['Hangend toilet', 'Staand toilet', 'Fonteintje aanwezig'],
+      toilet3: ['Hangend toilet', 'Staand toilet', 'Fonteintje aanwezig'],
+      overigeWaarnemingenBinnenzijde: ['Geen bijzonderheden', 'Scheurvorming zichtbaar', 'Vochtplekken zichtbaar'],
+      gas: ['Aardgasaansluiting', 'Geen gasaansluiting'],
+      water: ['Waterleidingbedrijf-aansluiting'],
+      riolering: ['Gemeentelijk riool', 'IBA / septic tank'],
+      meterkast: ['In hal', 'In meterkastnis', 'Verouderd'],
+      ictDomotica: ['Glasvezel aanwezig', 'Domotica-systeem aanwezig'],
+      brandveiligheid: ['Rookmelders aanwezig', 'Brandblusser aanwezig'],
+      brandmeldinstallatie: ['Aanwezig', 'Niet aanwezig'],
+      overigeWaarnemingenInstallaties: ['Geen bijzonderheden'],
+    },
   };
 }
 
@@ -726,6 +771,13 @@ function metNieuweMacroCategorieen(m) {
   const standaard = standaardMacros();
   if (!Array.isArray(m.sanitair)) m.sanitair = standaard.sanitair;
   if (!Array.isArray(m.keuken)) m.keuken = standaard.keuken;
+  // bouwdeelChips (13-09-2026): per-sleutel aanvullen i.p.v. de hele groep in één keer, zodat een
+  // toekomstige NIEUWE bouwdeel-sleutel z'n startlijst alsnog krijgt zonder Arno's eigen eerder
+  // bewerkte lijsten (bv. al aangepaste Trappen-chips) te overschrijven.
+  if (!m.bouwdeelChips || typeof m.bouwdeelChips !== 'object') m.bouwdeelChips = {};
+  Object.keys(standaard.bouwdeelChips).forEach((sleutel) => {
+    if (!Array.isArray(m.bouwdeelChips[sleutel])) m.bouwdeelChips[sleutel] = standaard.bouwdeelChips[sleutel];
+  });
   return m;
 }
 
@@ -2700,17 +2752,47 @@ function renderDetailVeld(bouwdeel, d) {
 // vrije-tekst-bouwdeel — Arno's verzoek 13-09-2026, n.a.v. de vergelijking met Taxatieweb's eigen
 // "Toon macro's": deze bouwdelen hebben in Taxatieweb GEEN checkbox-multiselect (in tegenstelling
 // tot bv. Keuken/Badkamer, die al hun eigen materialen-lijst hebben), alleen een vrij tekstveld —
-// dus is een eigen, snellere manier om dat veld te vullen op locatie de enige optie. Bewust gestart
-// met de 4 bouwdelen die Arno in de praktijk het vaakst gebruikt (zie project-memory); de overige
-// "Overige waarnemingen"-vangnetvelden blijven kaal, die staan in een echt taxatierapport bijna
-// altijd op "nee". Blijft, net als voorheen, gewoon vrij te typen/aan te vullen — de chips voegen
-// alleen toe, ze vervangen niets.
-const BOUWDEEL_TEKST_CHIPS = {
-  trappen: ['Vaste trap', 'Vaste trappen', 'Vlizotrap', 'Losse trap'],
-  schuurBerging: ['Vrijstaande houten berging', 'Aangebouwde berging', 'Stenen berging', 'Fietsenberging', 'Tuinhuisje'],
-  overigeBijgebouwen: ['Aangebouwde overkapping', 'Vrijstaande overkapping', 'Carport', 'Buitenkeuken', 'Prieel'],
-  nietStandaardBuitenVoorzieningen: ['Achterom', 'Parkeerplaats op eigen terrein', 'Oprit', 'Schutting', 'Buitenkraan', 'Buitenverlichting'],
-};
+// dus is een eigen, snellere manier om dat veld te vullen op locatie de enige optie. Sinds Arno's
+// vervolgverzoek (13-09-2026, "graag ook op de overige tekstvelden... en als macro's bewerkbaar")
+// zitten deze lijsten nu in state.macros.bouwdeelChips (zie standaardMacros()) i.p.v. een vaste
+// constante — per bouwdeel aanpasbaar/herordenbaar via het ✎-knopje, zie renderChipEditor().
+// bouwdeelChipEditorOpen: welk bouwdeel z'n editor nu openstaat — bewust NIET in state/opgeslagen,
+// puur een tijdelijke UI-schakelaar die bij een paginaherlaad weer dichtklapt.
+const bouwdeelChipEditorOpen = {};
+function renderChipEditor(lijst, opslaanFn) {
+  const wrap = el('div', { class: 'chip-editor' });
+  const chipRij = el('div', { class: 'chip-rij' });
+  lijst.forEach((item, i) => {
+    const chip = el('span', { class: 'chip chip-sleepbaar', draggable: 'true' },
+      el('span', { class: 'chip-handvat' }, '⠿'),
+      item,
+      el('button', { onclick: () => { lijst.splice(i, 1); opslaanFn(); render(); } }, '✕'),
+    );
+    // Zelfde sleep-herorden-patroon als gevraagd ("de mogelijkheden zoals verplaatsen"): een echte
+    // HTML5-drag i.p.v. ↑/↓-knoppen — bewust hier apart gebouwd (i.t.t. de userscript-variant) want
+    // dit is de eerste plek in de PWA zelf waar chip-volgorde ertoe doet.
+    chip.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(i)); });
+    chip.addEventListener('dragover', (e) => e.preventDefault());
+    chip.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const van = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(van) || van === i) return;
+      const [verplaatst] = lijst.splice(van, 1);
+      lijst.splice(i, 0, verplaatst);
+      opslaanFn(); render();
+    });
+    chipRij.appendChild(chip);
+  });
+  wrap.appendChild(chipRij);
+  const invoer = el('input', { placeholder: 'Nieuwe chip toevoegen…' });
+  invoer.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !invoer.value.trim()) return;
+    lijst.push(invoer.value.trim());
+    opslaanFn(); render();
+  });
+  wrap.appendChild(el('div', { class: 'chip-toevoegen' }, invoer));
+  return wrap;
+}
 // Sinds 13-09-2026 (Arno's verzoek): een chip voegt een NIEUWE opsommingsregel toe ("- tekst")
 // i.p.v. achter de bestaande tekst te plakken — elke tik is dus een eigen regel, net als de
 // "- Ruimte met toevoeging." opsomming die componeerIndelingTekst() ook al gebruikt.
@@ -2782,15 +2864,27 @@ function renderBouwdeelKaart(sectieObj, def) {
       kaart.appendChild(overigeVeld);
     }
   } else {
-    if (BOUWDEEL_TEKST_CHIPS[def.key]) {
+    const chipLijst = state.macros.bouwdeelChips && state.macros.bouwdeelChips[def.key];
+    if (chipLijst) {
+      const header = el('div', { class: 'bouwdeel-chip-header' });
       const chipRij = el('div', { class: 'chip-rij bouwdeel-chip-rij' });
-      BOUWDEEL_TEKST_CHIPS[def.key].forEach(tekst => {
+      chipLijst.forEach(tekst => {
         chipRij.appendChild(el('button', {
           type: 'button', class: 'chip-knop',
           onclick: () => voegOmschrijvingChipToe(bouwdeel, tekst),
         }, tekst));
       });
-      kaart.appendChild(chipRij);
+      header.appendChild(chipRij);
+      // ✎-knopje (Arno's verzoek 13-09-2026: "net zoiets als in Provadie") — klapt een editor open/
+      // dicht voor PRECIES deze ene chip-lijst, i.p.v. naar een aparte instellingenpagina te moeten.
+      header.appendChild(el('button', {
+        type: 'button', class: 'chip-bewerk-knop', title: 'Chips bewerken',
+        onclick: () => { bouwdeelChipEditorOpen[def.key] = !bouwdeelChipEditorOpen[def.key]; render(); },
+      }, '✎'));
+      kaart.appendChild(header);
+      if (bouwdeelChipEditorOpen[def.key]) {
+        kaart.appendChild(renderChipEditor(chipLijst, bewaarMacros));
+      }
     }
     if (def.key === 'trappen') {
       const trapTypes = bepaalTrapTypesUitIndeling();

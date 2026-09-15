@@ -229,7 +229,20 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 .chip-knop:active { background: var(--navy-100); color: var(--navy); border-color: var(--navy); }
-.bouwdeel-chip-rij { margin: 8px 0; }
+.bouwdeel-chip-rij { margin: 0; flex: 1; }
+/* ✎-knopje + editor per bouwdeel-chiplijst (13-09-2026, Arno: "net zoiets als in Provadie", en
+   sleepbaar herordenen net als de rest van dit project al kan). */
+.bouwdeel-chip-header { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+.chip-bewerk-knop {
+  flex-shrink: 0; border: none; background: var(--bg); color: var(--text-faint); width: 26px; height: 26px;
+  border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.chip-bewerk-knop:active { background: var(--navy-100); color: var(--navy); }
+.chip-editor {
+  margin: 0 0 10px; padding: 10px; border: 1px dashed var(--divider); border-radius: 10px; background: var(--surface-2);
+}
+.chip-sleepbaar { cursor: grab; }
+.chip-handvat { opacity: .55; margin-right: 2px; }
 .chip-toevoegen { display: flex; }
 .toevoeging-invoeren { display: flex; gap: 6px; width: 100%; }
 .toevoeging-invoeren input {
