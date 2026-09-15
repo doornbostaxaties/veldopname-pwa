@@ -689,7 +689,7 @@ function standaardMacros() {
       'knieschotten', 'bergruimte achter de knieschotten', 'markiezen', 'pantry', 'rolluik',
       'rolluiken', 'screens', 'sauna', 'schouw', 'serre', 'uitstortgootsteen', 'verlaagd plafond',
       'vide', 'videofoon', 'vloerverwarming', 'dakramen', 'taatsdeuren', 'tuindeur', 'tuindeuren',
-      'bergruimte', 'bergvliering', 'bergzolder',
+      'bergruimte', 'bergvliering', 'bergzolder', 'inbouwspots', 'waterontharder',
     ],
     // Alleen bij badkamer/toiletruimte gesuggereerd (naast de algemene toevoegingen).
     sanitair: [
@@ -748,6 +748,33 @@ function standaardMacros() {
       brandveiligheid: ['Rookmelders aanwezig', 'Brandblusser aanwezig'],
       brandmeldinstallatie: ['Aanwezig', 'Niet aanwezig'],
       overigeWaarnemingenInstallaties: ['Geen bijzonderheden'],
+      // Energetisch (I.4) — sinds Arno's verzoek 13-09-2026: "graag ook voor energetisch". Deze
+      // velden heten in Taxatieweb "opmerkingen" i.p.v. "omschrijving", maar werken verder identiek.
+      gevelisolatie: ['Nagelvouw geïsoleerd', 'Spouwmuurisolatie', 'Buitengevelisolatie'],
+      gevelpanelen: ['Recent aangebracht', 'Verouderd'],
+      hellendDak: ['Volledig geïsoleerd', 'Gedeeltelijk geïsoleerd', 'Onbekende dikte'],
+      platDak: ['Volledig geïsoleerd', 'Gedeeltelijk geïsoleerd', 'Onbekende dikte'],
+      vloerisolatie1e: ['Onder de vloer aangebracht', 'Onbekende dikte'],
+      vloerisolatie2e: ['Onder de vloer aangebracht', 'Onbekende dikte'],
+      vloerisolatie3e: ['Onder de vloer aangebracht', 'Onbekende dikte'],
+      vloerisolatieOverige: ['Onder de vloer aangebracht', 'Onbekende dikte'],
+      kruipruimteisolatie: ['Bodemisolatie', 'Vloerisolatie vanuit kruipruimte'],
+      glas1e: ['Recent vervangen', 'Origineel enkel glas nog aanwezig'],
+      glas2e: ['Recent vervangen', 'Origineel enkel glas nog aanwezig'],
+      glas3e: ['Recent vervangen', 'Origineel enkel glas nog aanwezig'],
+      glasOverige: ['Recent vervangen', 'Origineel enkel glas nog aanwezig'],
+      leidingisolatie: ['CV-leidingen geïsoleerd', 'Gedeeltelijk geïsoleerd'],
+      energiezuinigeKozijnen: ['Volledig aanwezig', 'Gedeeltelijk aanwezig'],
+      verwarmingstoestel: ['Recent geplaatst', 'Einde levensduur'],
+      verwarmingssysteem1e: ['Goed werkend', 'Onderhoud nodig'],
+      verwarmingssysteem2e: ['Goed werkend', 'Onderhoud nodig'],
+      warmwatertoestel: ['Recent geplaatst', 'Einde levensduur'],
+      doucheWtw: ['Aanwezig bij douche begane grond', 'Aanwezig bij douche verdieping'],
+      zonneboilerInstallatie: ['Op dak gemonteerd', 'Recent geplaatst'],
+      ventilatie: ['Goed werkend', 'Onderhoud nodig'],
+      koeling: ['Split-unit', 'Centraal systeem'],
+      wind: ['Geen windenergie aanwezig'],
+      overigeEnergieopwekking: ['Geen bijzonderheden'],
     },
   };
 }
@@ -2766,7 +2793,12 @@ function renderChipEditor(lijst, opslaanFn) {
     const chip = el('span', { class: 'chip chip-sleepbaar', draggable: 'true' },
       el('span', { class: 'chip-handvat' }, '⠿'),
       item,
-      el('button', { onclick: () => { lijst.splice(i, 1); opslaanFn(); render(); } }, '✕'),
+      el('button', {
+        onclick: () => {
+          if (!confirm(`"${item}" verwijderen uit deze macro-lijst?`)) return;
+          lijst.splice(i, 1); opslaanFn(); render();
+        },
+      }, '✕'),
     );
     // Zelfde sleep-herorden-patroon als gevraagd ("de mogelijkheden zoals verplaatsen"): een echte
     // HTML5-drag i.p.v. ↑/↓-knoppen — bewust hier apart gebouwd (i.t.t. de userscript-variant) want
@@ -2784,7 +2816,7 @@ function renderChipEditor(lijst, opslaanFn) {
     chipRij.appendChild(chip);
   });
   wrap.appendChild(chipRij);
-  const invoer = el('input', { placeholder: 'Nieuwe chip toevoegen…' });
+  const invoer = el('input', { placeholder: 'Nieuwe macro toevoegen…' });
   invoer.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !invoer.value.trim()) return;
     lijst.push(invoer.value.trim());
@@ -2796,11 +2828,44 @@ function renderChipEditor(lijst, opslaanFn) {
 // Sinds 13-09-2026 (Arno's verzoek): een chip voegt een NIEUWE opsommingsregel toe ("- tekst")
 // i.p.v. achter de bestaande tekst te plakken — elke tik is dus een eigen regel, net als de
 // "- Ruimte met toevoeging." opsomming die componeerIndelingTekst() ook al gebruikt.
-function voegOmschrijvingChipToe(bouwdeel, tekst) {
-  const huidig = (bouwdeel.omschrijving || '').replace(/\n+$/, '');
+// veldNaam: 'omschrijving' (Bouwkundig) of 'opmerkingen' (Energetisch) — zelfde bouwsteen voor
+// beide hoofdstukken, want Taxatieweb noemt het veld daar nu eenmaal anders.
+function voegOmschrijvingChipToe(veld, tekst, veldNaam = 'omschrijving') {
+  const huidig = (veld[veldNaam] || '').replace(/\n+$/, '');
   const regel = '- ' + tekst;
-  bouwdeel.omschrijving = huidig.trim() ? huidig + '\n' + regel : regel;
+  veld[veldNaam] = huidig.trim() ? huidig + '\n' + regel : regel;
   planOpslaan(); render();
+}
+// Chip-rij + ✎-bewerkknopje voor één bouwdeel/energetisch-veld — gedeelde bouwsteen voor zowel
+// Bouwkundig (renderBouwdeelKaart, veldNaam 'omschrijving') als Energetisch (renderInstallatiemoment-
+// EnOpmerkingen/renderEnergetischSimpelKaart, veldNaam 'opmerkingen'), sinds Arno's verzoek
+// 13-09-2026: "graag ook voor energetisch". Geeft een lege wrapper terug (geen zichtbaar effect)
+// als dit def.key geen chip-lijst heeft — zo hoeft de aanroeper zelf niet te controleren of er iets
+// te tonen valt.
+function renderBouwdeelChips(veld, def, veldNaam) {
+  const wrap = el('div', {});
+  const chipLijst = state.macros.bouwdeelChips && state.macros.bouwdeelChips[def.key];
+  if (!chipLijst) return wrap;
+  const header = el('div', { class: 'bouwdeel-chip-header' });
+  const chipRij = el('div', { class: 'chip-rij bouwdeel-chip-rij' });
+  chipLijst.forEach(tekst => {
+    chipRij.appendChild(el('button', {
+      type: 'button', class: 'chip-knop',
+      onclick: () => voegOmschrijvingChipToe(veld, tekst, veldNaam),
+    }, tekst));
+  });
+  header.appendChild(chipRij);
+  // ✎-knopje (Arno's verzoek 13-09-2026: "net zoiets als in Provadie") — klapt een editor open/dicht
+  // voor PRECIES deze ene chip-lijst, i.p.v. naar een aparte instellingenpagina te moeten.
+  header.appendChild(el('button', {
+    type: 'button', class: 'chip-bewerk-knop', title: 'Chips bewerken',
+    onclick: () => { bouwdeelChipEditorOpen[def.key] = !bouwdeelChipEditorOpen[def.key]; render(); },
+  }, '✎'));
+  wrap.appendChild(header);
+  if (bouwdeelChipEditorOpen[def.key]) {
+    wrap.appendChild(renderChipEditor(chipLijst, bewaarMacros));
+  }
+  return wrap;
 }
 // "Overnemen"-knop bij Trappen (13-09-2026, Arno's verzoek): leest de trap-toevoegingen die al bij
 // losse ruimtes in Indeling staan (bv. "vaste trap naar de eerste verdieping" bij Hal, "vlizotrap
@@ -2864,28 +2929,7 @@ function renderBouwdeelKaart(sectieObj, def) {
       kaart.appendChild(overigeVeld);
     }
   } else {
-    const chipLijst = state.macros.bouwdeelChips && state.macros.bouwdeelChips[def.key];
-    if (chipLijst) {
-      const header = el('div', { class: 'bouwdeel-chip-header' });
-      const chipRij = el('div', { class: 'chip-rij bouwdeel-chip-rij' });
-      chipLijst.forEach(tekst => {
-        chipRij.appendChild(el('button', {
-          type: 'button', class: 'chip-knop',
-          onclick: () => voegOmschrijvingChipToe(bouwdeel, tekst),
-        }, tekst));
-      });
-      header.appendChild(chipRij);
-      // ✎-knopje (Arno's verzoek 13-09-2026: "net zoiets als in Provadie") — klapt een editor open/
-      // dicht voor PRECIES deze ene chip-lijst, i.p.v. naar een aparte instellingenpagina te moeten.
-      header.appendChild(el('button', {
-        type: 'button', class: 'chip-bewerk-knop', title: 'Chips bewerken',
-        onclick: () => { bouwdeelChipEditorOpen[def.key] = !bouwdeelChipEditorOpen[def.key]; render(); },
-      }, '✎'));
-      kaart.appendChild(header);
-      if (bouwdeelChipEditorOpen[def.key]) {
-        kaart.appendChild(renderChipEditor(chipLijst, bewaarMacros));
-      }
-    }
+    kaart.appendChild(renderBouwdeelChips(bouwdeel, def, 'omschrijving'));
     if (def.key === 'trappen') {
       const trapTypes = bepaalTrapTypesUitIndeling();
       if (trapTypes.length) {
@@ -3000,7 +3044,7 @@ function renderSelectVeld(labelText, waarde, opties, onChange) {
 }
 // Installatiemoment (Bouwjaar/Installatiejaar/Onbekend) + vrij opmerkingenveld — komt terug bij
 // vrijwel elk I.4-onderdeel in Taxatieweb.
-function renderInstallatiemomentEnOpmerkingen(veld) {
+function renderInstallatiemomentEnOpmerkingen(veld, def) {
   const wrap = el('div', {});
   const rij = el('div', { class: 'bouwdeel-details-grid' });
   rij.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
@@ -3014,6 +3058,7 @@ function renderInstallatiemomentEnOpmerkingen(veld) {
       renderJaarSelect(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
   }
   wrap.appendChild(rij);
+  if (def) wrap.appendChild(renderBouwdeelChips(veld, def, 'opmerkingen'));
   const opmerkingen = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
     oninput: (e) => { veld.opmerkingen = e.target.value; planOpslaan(); },
@@ -3035,7 +3080,7 @@ function renderIsolatieKaart(veld, def) {
   kaart.appendChild(renderEnergetischKop(veld, def));
   if (!veld.aanwezig) return kaart;
   kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
   return kaart;
 }
 function renderDakKaart(veld, def) {
@@ -3044,7 +3089,7 @@ function renderDakKaart(veld, def) {
   if (!veld.aanwezig) return kaart;
   kaart.appendChild(renderJaNeeToggle('Geïsoleerd', veld.geisoleerd, (w) => { veld.geisoleerd = w; }));
   kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
   return kaart;
 }
 function renderMateriaalTijdKaart(veld, def) {
@@ -3074,13 +3119,14 @@ function renderMateriaalTijdKaart(veld, def) {
     overigeVeld.value = veld.overigeTekst || '';
     kaart.appendChild(overigeVeld);
   }
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
   return kaart;
 }
 function renderEnergetischSimpelKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderEnergetischKop(veld, def));
   if (!veld.aanwezig) return kaart;
+  kaart.appendChild(renderBouwdeelChips(veld, def, 'opmerkingen'));
   const opmerkingen = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
     oninput: (e) => { veld.opmerkingen = e.target.value; planOpslaan(); },
@@ -3121,7 +3167,7 @@ function renderZonnepanelenKaart(veld, def) {
   kaart.appendChild(el('span', { class: 'energetisch-veld-label' }, 'Oriëntatie'));
   kaart.appendChild(orientatieGrid);
   kaart.appendChild(renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }));
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
   return kaart;
 }
 function renderEnergetischKaart(sectieObj, def) {
