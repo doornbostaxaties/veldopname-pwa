@@ -2250,6 +2250,10 @@ function renderFotosTab() {
     }),
   );
   grid.appendChild(toevoegen);
+  const tekenTegel = el('div', {
+    class: 'foto-add', onclick: () => openTekenScherm({ ruimteLabel: null, categorie: 'Anders' }),
+  }, el('span', { class: 'plus' }, '✏️'), 'Tekenen');
+  grid.appendChild(tekenTegel);
   wrap.appendChild(grid);
   return wrap;
 }
@@ -2274,20 +2278,670 @@ function openLightbox(foto) {
     el('div', { class: 'lightbox-beeld' }, el('img', { src: URL.createObjectURL(foto.blob) })),
     el('div', { class: 'lightbox-onder' },
       el('label', { class: 'archief-toggle' }, toggle, 'Eigen archief (niet verplicht, niet naar Q/R)'),
-      el('button', {
-        class: 'verwijder-foto-knop',
-        onclick: async () => {
-          if (!confirm('Deze foto verwijderen?')) return;
-          await VeldopnameDB.verwijderFoto(foto.id);
-          state.fotos = state.fotos.filter(f => f.id !== foto.id);
-          overlay.remove();
-          if (state.route.tab === 'fotos') render();
-        },
-      }, '🗑 Verwijderen'),
+      el('div', { style: 'display:flex;gap:8px;' },
+        el('button', {
+          class: 'verwijder-foto-knop', style: 'background:var(--navy-100);color:var(--navy);',
+          onclick: () => {
+            overlay.remove();
+            // Tekenen op een bestaande foto verandert het origineel nooit — de aangetekende versie
+            // wordt als NIEUWE foto opgeslagen (zelfde niet-destructieve principe als "eigen archief").
+            openTekenScherm({ ruimteLabel: foto.ruimte_label, categorie: foto.categorie, achtergrondBlob: foto.blob });
+          },
+        }, '✏️ Tekenen'),
+        el('button', {
+          class: 'verwijder-foto-knop',
+          onclick: async () => {
+            if (!confirm('Deze foto verwijderen?')) return;
+            await VeldopnameDB.verwijderFoto(foto.id);
+            state.fotos = state.fotos.filter(f => f.id !== foto.id);
+            overlay.remove();
+            if (state.route.tab === 'fotos') render();
+          },
+        }, '🗑 Verwijderen'),
+      ),
     ),
   );
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
+}
+
+// ================================================================================================
+// TEKENEN — vrije aantekeningen/markeringen en vormen (pen/markeerstift/gum/lijn/rechthoek/cirkel/
+// driehoek/selecteren), incl. 2-vinger zoomen/pannen en rotatie/verslepen/vergroten van vormen.
+// Volle-scherm overlay net als openLightbox hierboven, met een eigen werkbalk. Het resultaat wordt
+// bij "Opslaan" gewoon als foto weggeschreven via slaFotoOp() — dus automatisch mee in de bestaande
+// foto-sync/wachtrij, geen aparte opslagvorm nodig.
+// Uitgebreid getest door Arno op een losse testpagina vóór inbouw (15-09-2026), incl. een paar
+// niet-voor-de-hand-liggende iOS-eigenaardigheden die hieronder zijn opgelost:
+//  - Palmafwijzing: zodra de Apple Pencil één keer is gezien, wordt vingercontact genegeerd.
+//  - Incrementeel tekenen (alleen het nieuwe stukje, niet het hele blad opnieuw) i.p.v. volledige
+//    hertekening per beweging — dat laatste werd merkbaar trager naarmate er meer op het blad stond,
+//    met haperende/wegvallende losse letters bij snel schrijven tot gevolg.
+//  - Markeerstift als één doorlopend pad i.p.v. per-segment getekend — anders stapelt de
+//    semi-transparante overlap bij elke ronde lijn-cap zich op, waardoor geel geleidelijk naar
+//    rood/bruin verkleurt bij snel schrijven.
+//  - Expliciete preventDefault() op de ruwe touch-events: Safari/WebKit blijft anders bij twee
+//    snelle tikken op dezelfde plek ~300-500ms wachten om een dubbeltik-zoomgebaar te herkennen,
+//    waardoor de pen na snel optillen en weer neerzetten soms niet meteen reageert.
+function openTekenScherm(opties) {
+  const { ruimteLabel = null, categorie = 'Anders', achtergrondBlob = null } = opties || {};
+  const bestaand = document.querySelector('.tekenscherm');
+  if (bestaand) bestaand.remove();
+
+  // --- DOM-opbouw ---
+  const canvas = el('canvas', {});
+  const voorbeeldCanvas = el('canvas', { class: 'teken-voorbeeld' });
+  const ctx = canvas.getContext('2d');
+  const voorbeeldCtx = voorbeeldCanvas.getContext('2d');
+
+  const leegUploadKnop = el('button', { type: 'button' }, 'Afbeelding kiezen');
+  const leegmelding = el('div', { class: 'teken-leegmelding' },
+    el('p', {}, 'Kies een plattegrond of foto om op te tekenen.'), leegUploadKnop);
+  leegmelding.style.display = 'none';
+
+  const zoomPil = el('button', { type: 'button', class: 'teken-zoompil' }, '100%');
+  const wrap = el('div', { class: 'teken-canvaswrap blad' }, canvas, voorbeeldCanvas, leegmelding, zoomPil);
+
+  const modeBladKnop = el('button', { type: 'button', class: 'actief' }, 'Blanco blad');
+  const modeFotoKnop = el('button', { type: 'button' }, 'Plattegrond / foto');
+  const bestandInvoer = el('input', { type: 'file', accept: 'image/*' });
+  bestandInvoer.style.display = 'none';
+  const uploadTrigger = el('button', { type: 'button', class: 'teken-uploadknop' }, 'Andere afbeelding kiezen');
+  uploadTrigger.style.display = 'none';
+  const opslaanKnop = el('button', { type: 'button', class: 'teken-opslaan-knop' }, 'Opslaan');
+  const sluitKnop = el('button', { type: 'button', class: 'teken-sluitknop' }, '✕');
+
+  const top = el('div', { class: 'teken-top' },
+    el('div', { class: 'teken-titelblok' },
+      el('h2', {}, achtergrondBlob ? 'Tekenen op foto' : 'Tekenen'),
+      el('div', { class: 'teken-sub' }, ruimteLabel || categorie),
+    ),
+    el('div', { class: 'teken-modewissel' }, modeBladKnop, modeFotoKnop),
+    uploadTrigger, bestandInvoer, opslaanKnop, sluitKnop,
+  );
+
+  const KLEUREN = ['#000000', '#ec1c24', '#0b6dff', '#12b34c', '#ffd400'];
+  const kleurKnoppen = KLEUREN.map((hex, i) => {
+    const knop = el('button', { type: 'button', class: 'teken-kleur' + (i === 0 ? ' actief' : '') },
+      el('span', { class: 'stip', style: `background:${hex};` }));
+    knop.dataset.kleur = hex;
+    if (i === 0) knop.style.borderColor = hex;
+    return knop;
+  });
+  const kleurGroep = el('div', { class: 'teken-groep' }, el('span', { class: 'teken-groep-label' }, 'Kleur'), ...kleurKnoppen);
+
+  const diktestip = el('span', { style: 'display:block;width:3px;height:3px;border-radius:50%;background:var(--text);' });
+  const diktevoorbeeld = el('div', {
+    style: 'width:30px;height:30px;border-radius:8px;background:var(--surface-2);border:1px solid var(--divider);display:grid;place-items:center;',
+  }, diktestip);
+  const dikteSlider = el('input', { type: 'range', min: '1', max: '14', value: '3', step: '1' });
+  const dikteGroep = el('div', { class: 'teken-groep' }, el('span', { class: 'teken-groep-label' }, 'Dikte'), diktevoorbeeld, dikteSlider);
+
+  const penTool = el('button', { type: 'button', class: 'teken-toolknop actief', title: 'Pen' }, '✏️');
+  const markeerTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Markeerstift' }, '🖍️');
+  const gumTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Gum' }, '🧽');
+  const toolGroep = el('div', { class: 'teken-groep' }, penTool, markeerTool, gumTool);
+
+  const selecterenTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Selecteren (verplaatsen/vergroten/roteren)' }, '👆');
+  const lijnTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Lijn' }, '📏');
+  const rechthoekTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Rechthoek' }, '🟦');
+  const cirkelTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Cirkel' }, '⚪');
+  const driehoekTool = el('button', { type: 'button', class: 'teken-toolknop', title: 'Driehoek' }, '🔺');
+  const vormGroep = el('div', { class: 'teken-groep' },
+    el('span', { class: 'teken-groep-label' }, 'Vormen'), selecterenTool, lijnTool, rechthoekTool, cirkelTool, driehoekTool);
+
+  const ongedaanKnop = el('button', { type: 'button', class: 'teken-tekstknop' }, 'Ongedaan maken');
+  ongedaanKnop.disabled = true;
+  const wisKnop = el('button', { type: 'button', class: 'teken-tekstknop gevaar' }, 'Alles wissen');
+  const actieGroep = el('div', { class: 'teken-groep' }, ongedaanKnop, wisKnop);
+
+  const palmSchakelaar = el('input', { type: 'checkbox' });
+  palmSchakelaar.checked = true;
+  const palmGroep = el('div', { class: 'teken-groep' },
+    el('label', { class: 'teken-wisselaar' }, palmSchakelaar, el('span', {}, 'Handpalm negeren')));
+
+  const werkbalk = el('div', { class: 'teken-werkbalk' }, kleurGroep, dikteGroep, toolGroep, vormGroep, actieGroep, palmGroep);
+
+  const overlay = el('div', { class: 'tekenscherm' }, top, wrap, werkbalk);
+  document.body.appendChild(overlay);
+
+  // --- staat ---
+  let modus = achtergrondBlob ? 'foto' : 'blad'; // 'blad' | 'foto'
+  let achtergrondAfbeelding = null;
+  let gereedschap = 'pen';
+  let kleur = KLEUREN[0];
+  let dikte = 3;
+  let tekenend = false;
+  let huidigeStreek = null;
+  let streken = []; // vrije streken (tool:'pen'|'markeerstift'|'gum', punten:[...]) + vormen (tool:'vorm', vormType, x0,y0,x1,y1,rotatie)
+  let heeftPenGebruikt = false;
+  let actievePointerId = null;
+
+  let zoom = 1, panX = 0, panY = 0;
+  const aanrakingen = new Map();
+  let pinchStart = null;
+
+  const VORM_GEREEDSCHAPPEN = ['lijn', 'rechthoek', 'cirkel', 'driehoek'];
+  const isVormGereedschap = (g) => VORM_GEREEDSCHAPPEN.includes(g);
+  let geselecteerdeVormIndex = null;
+  let vormBewerking = null; // { modus:'nieuw'|'hoek'|'verplaatsen'|'rotatie', ... }
+  const VORM_GREEP_STRAAL = 16;
+  const VORM_ROTATIE_AFSTAND = 34;
+
+  const GEREEDSCHAP_KNOP_EL = {
+    pen: penTool, markeerstift: markeerTool, gum: gumTool,
+    selecteren: selecterenTool, lijn: lijnTool, rechthoek: rechthoekTool, cirkel: cirkelTool, driehoek: driehoekTool,
+  };
+
+  function zetZoomTransform() {
+    const transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    canvas.style.transform = transform;
+    voorbeeldCanvas.style.transform = transform;
+    zoomPil.classList.toggle('zichtbaar', Math.abs(zoom - 1) > 0.02 || Math.abs(panX) > 1 || Math.abs(panY) > 1);
+    zoomPil.textContent = Math.round(zoom * 100) + '%';
+  }
+  function resetZoom() { zoom = 1; panX = 0; panY = 0; zetZoomTransform(); }
+  zoomPil.addEventListener('click', resetZoom);
+
+  function updateDiktestip() {
+    const grootte = Math.max(3, Math.min(20, dikte * 1.3));
+    diktestip.style.width = grootte + 'px';
+    diktestip.style.height = grootte + 'px';
+  }
+
+  function pasCanvasGrootteAan() {
+    const rect = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    voorbeeldCanvas.width = canvas.width;
+    voorbeeldCanvas.height = canvas.height;
+    voorbeeldCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    resetZoom();
+    deselecteerVorm();
+    herteken();
+  }
+
+  function tekenAchtergrond() {
+    if (modus !== 'foto' || !achtergrondAfbeelding) return;
+    const rect = wrap.getBoundingClientRect();
+    const schaal = Math.min(rect.width / achtergrondAfbeelding.width, rect.height / achtergrondAfbeelding.height);
+    const w = achtergrondAfbeelding.width * schaal, h = achtergrondAfbeelding.height * schaal;
+    ctx.drawImage(achtergrondAfbeelding, (rect.width - w) / 2, (rect.height - h) / 2, w, h);
+  }
+
+  function zetStijl(ctxDoel, streek) {
+    ctxDoel.lineJoin = 'round';
+    ctxDoel.lineCap = 'round';
+    if (streek.tool === 'gum') {
+      ctxDoel.globalCompositeOperation = 'destination-out';
+      ctxDoel.strokeStyle = 'rgba(0,0,0,1)'; ctxDoel.fillStyle = 'rgba(0,0,0,1)';
+    } else if (streek.tool === 'markeerstift') {
+      ctxDoel.globalCompositeOperation = 'multiply';
+      ctxDoel.strokeStyle = streek.kleur; ctxDoel.fillStyle = streek.kleur; ctxDoel.globalAlpha = 0.35;
+    } else {
+      ctxDoel.globalCompositeOperation = 'source-over';
+      ctxDoel.strokeStyle = streek.kleur; ctxDoel.fillStyle = streek.kleur;
+    }
+  }
+
+  function effectieveDikte(streek) {
+    const factor = streek.tool === 'gum' ? 8 : streek.tool === 'pen' ? 0.4 : streek.tool === 'markeerstift' ? 14 : 1;
+    return streek.dikte * factor;
+  }
+
+  function tekenPunt(ctxDoel, streek, p) {
+    ctxDoel.save();
+    zetStijl(ctxDoel, streek);
+    ctxDoel.beginPath();
+    ctxDoel.arc(p.x, p.y, effectieveDikte(streek) / 2, 0, Math.PI * 2);
+    ctxDoel.fill();
+    ctxDoel.restore();
+  }
+
+  function tekenSegment(ctxDoel, streek, a, b) {
+    ctxDoel.save();
+    zetStijl(ctxDoel, streek);
+    ctxDoel.lineWidth = effectieveDikte(streek);
+    ctxDoel.beginPath();
+    ctxDoel.moveTo(a.x, a.y); ctxDoel.lineTo(b.x, b.y);
+    ctxDoel.stroke();
+    ctxDoel.restore();
+  }
+
+  // Eén hele streek als ÉÉN doorlopend pad (zie toelichting bovenaan dit blok — voorkomt
+  // kleurvervorming bij de markeerstift).
+  function tekenVolledigPad(ctxDoel, streek) {
+    if (streek.punten.length < 1) return;
+    if (streek.punten.length === 1) { tekenPunt(ctxDoel, streek, streek.punten[0]); return; }
+    ctxDoel.save();
+    zetStijl(ctxDoel, streek);
+    ctxDoel.lineWidth = effectieveDikte(streek);
+    ctxDoel.beginPath();
+    ctxDoel.moveTo(streek.punten[0].x, streek.punten[0].y);
+    for (let i = 1; i < streek.punten.length; i++) ctxDoel.lineTo(streek.punten[i].x, streek.punten[i].y);
+    ctxDoel.stroke();
+    ctxDoel.restore();
+  }
+
+  function vormCentrum(vorm) { return { cx: (vorm.x0 + vorm.x1) / 2, cy: (vorm.y0 + vorm.y1) / 2 }; }
+  function roteerPunt(p, c, hoek) {
+    const s = Math.sin(hoek), co = Math.cos(hoek);
+    const dx = p.x - c.cx, dy = p.y - c.cy;
+    return { x: c.cx + dx * co - dy * s, y: c.cy + dx * s + dy * co };
+  }
+
+  function tekenVormPad(ctxDoel, vorm) {
+    ctxDoel.save();
+    if (vorm.rotatie) {
+      const c = vormCentrum(vorm);
+      ctxDoel.translate(c.cx, c.cy); ctxDoel.rotate(vorm.rotatie); ctxDoel.translate(-c.cx, -c.cy);
+    }
+    zetStijl(ctxDoel, vorm);
+    ctxDoel.lineWidth = effectieveDikte(vorm);
+    const x0 = Math.min(vorm.x0, vorm.x1), x1 = Math.max(vorm.x0, vorm.x1);
+    const y0 = Math.min(vorm.y0, vorm.y1), y1 = Math.max(vorm.y0, vorm.y1);
+    ctxDoel.beginPath();
+    if (vorm.vormType === 'lijn') {
+      ctxDoel.moveTo(vorm.x0, vorm.y0); ctxDoel.lineTo(vorm.x1, vorm.y1);
+    } else if (vorm.vormType === 'rechthoek') {
+      ctxDoel.rect(x0, y0, Math.max(x1 - x0, 0.01), Math.max(y1 - y0, 0.01));
+    } else if (vorm.vormType === 'cirkel') {
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      ctxDoel.ellipse(cx, cy, Math.max((x1 - x0) / 2, 0.01), Math.max((y1 - y0) / 2, 0.01), 0, 0, Math.PI * 2);
+    } else if (vorm.vormType === 'driehoek') {
+      // Rechthoekige driehoek, rechte hoek linksonder (Arno's verzoek: "2 rechte zijdes").
+      ctxDoel.moveTo(x0, y0); ctxDoel.lineTo(x0, y1); ctxDoel.lineTo(x1, y1); ctxDoel.closePath();
+    }
+    ctxDoel.stroke();
+    ctxDoel.restore();
+  }
+
+  function tekenItem(ctxDoel, item) {
+    if (item.vormType) tekenVormPad(ctxDoel, item);
+    else tekenVolledigPad(ctxDoel, item);
+  }
+
+  function vormHoeken(vorm) {
+    const c = vormCentrum(vorm);
+    const hoek = vorm.rotatie || 0;
+    const ruw = vorm.vormType === 'lijn'
+      ? { start: { x: vorm.x0, y: vorm.y0 }, eind: { x: vorm.x1, y: vorm.y1 } }
+      : {
+          x0y0: { x: vorm.x0, y: vorm.y0 }, x1y0: { x: vorm.x1, y: vorm.y0 },
+          x0y1: { x: vorm.x0, y: vorm.y1 }, x1y1: { x: vorm.x1, y: vorm.y1 },
+        };
+    const resultaat = {};
+    Object.entries(ruw).forEach(([naam, p]) => { resultaat[naam] = roteerPunt(p, c, hoek); });
+    return resultaat;
+  }
+  function vormRotatieGreep(vorm) {
+    const c = vormCentrum(vorm);
+    const y0 = Math.min(vorm.y0, vorm.y1);
+    return roteerPunt({ x: c.cx, y: y0 - VORM_ROTATIE_AFSTAND }, c, vorm.rotatie || 0);
+  }
+  function vindHoekBijPunt(vorm, p) {
+    const rotatieGreep = vormRotatieGreep(vorm);
+    if (Math.hypot(rotatieGreep.x - p.x, rotatieGreep.y - p.y) <= VORM_GREEP_STRAAL) return 'rotatie';
+    const hoeken = vormHoeken(vorm);
+    for (const naam in hoeken) {
+      if (Math.hypot(hoeken[naam].x - p.x, hoeken[naam].y - p.y) <= VORM_GREEP_STRAAL) return naam;
+    }
+    return null;
+  }
+  function puntBinnenVorm(vorm, p) {
+    const lokaal = vorm.rotatie ? roteerPunt(p, vormCentrum(vorm), -vorm.rotatie) : p;
+    const marge = Math.max(effectieveDikte(vorm), 18) / 2 + 10;
+    const x0 = Math.min(vorm.x0, vorm.x1) - marge, x1 = Math.max(vorm.x0, vorm.x1) + marge;
+    const y0 = Math.min(vorm.y0, vorm.y1) - marge, y1 = Math.max(vorm.y0, vorm.y1) + marge;
+    return lokaal.x >= x0 && lokaal.x <= x1 && lokaal.y >= y0 && lokaal.y <= y1;
+  }
+  function zetHoekVanVorm(vorm, hoek, p, centrum, rotatie) {
+    const lokaal = rotatie ? roteerPunt(p, centrum, -rotatie) : p;
+    if (vorm.vormType === 'lijn') {
+      if (hoek === 'start') { vorm.x0 = lokaal.x; vorm.y0 = lokaal.y; } else { vorm.x1 = lokaal.x; vorm.y1 = lokaal.y; }
+      return;
+    }
+    if (hoek === 'x0y0') { vorm.x0 = lokaal.x; vorm.y0 = lokaal.y; }
+    else if (hoek === 'x1y0') { vorm.x1 = lokaal.x; vorm.y0 = lokaal.y; }
+    else if (hoek === 'x0y1') { vorm.x0 = lokaal.x; vorm.y1 = lokaal.y; }
+    else if (hoek === 'x1y1') { vorm.x1 = lokaal.x; vorm.y1 = lokaal.y; }
+  }
+
+  function verversSelectie() {
+    const rect = wrap.getBoundingClientRect();
+    voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+    if (geselecteerdeVormIndex === null) return;
+    const vorm = streken[geselecteerdeVormIndex];
+    if (!vorm) return;
+    voorbeeldCtx.save();
+    voorbeeldCtx.globalCompositeOperation = 'source-over';
+    voorbeeldCtx.globalAlpha = 1;
+    const hoeken = Object.values(vormHoeken(vorm));
+    const c = vormCentrum(vorm);
+    const rotatieGreep = vormRotatieGreep(vorm);
+    const bovenMidden = roteerPunt({ x: c.cx, y: Math.min(vorm.y0, vorm.y1) }, c, vorm.rotatie || 0);
+    voorbeeldCtx.setLineDash([3, 3]);
+    voorbeeldCtx.strokeStyle = '#8b959b';
+    voorbeeldCtx.lineWidth = 1.5;
+    voorbeeldCtx.beginPath();
+    voorbeeldCtx.moveTo(bovenMidden.x, bovenMidden.y); voorbeeldCtx.lineTo(rotatieGreep.x, rotatieGreep.y);
+    voorbeeldCtx.stroke();
+    voorbeeldCtx.setLineDash([]);
+    const tekenGreep = (p, greepKleur) => {
+      voorbeeldCtx.beginPath();
+      voorbeeldCtx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+      voorbeeldCtx.fillStyle = '#ffffff'; voorbeeldCtx.fill();
+      voorbeeldCtx.lineWidth = 2; voorbeeldCtx.strokeStyle = greepKleur; voorbeeldCtx.stroke();
+    };
+    hoeken.forEach((h) => tekenGreep(h, '#042a43'));
+    tekenGreep(rotatieGreep, '#ecb006');
+    voorbeeldCtx.restore();
+  }
+
+  function deselecteerVorm() {
+    if (geselecteerdeVormIndex === null && !vormBewerking) return;
+    geselecteerdeVormIndex = null;
+    vormBewerking = null;
+    const rect = wrap.getBoundingClientRect();
+    voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+  }
+
+  function herteken() {
+    const rect = wrap.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+    tekenAchtergrond();
+    streken.forEach((s) => tekenItem(ctx, s));
+    ongedaanKnop.disabled = streken.length === 0;
+  }
+
+  function positieUitEvent(e) {
+    const rect = wrap.getBoundingClientRect();
+    return { x: (e.clientX - rect.left - panX) / zoom, y: (e.clientY - rect.top - panY) / zoom, druk: 1 };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (modus === 'foto' && !achtergrondAfbeelding) return;
+    if (palmSchakelaar.checked && e.pointerType === 'touch' && heeftPenGebruikt) return;
+    if (actievePointerId !== null) {
+      if (e.pointerType !== 'pen') return;
+      beeindigStreek();
+    }
+    e.preventDefault();
+    if (e.pointerType === 'pen') heeftPenGebruikt = true;
+    const p = positieUitEvent(e);
+
+    function probeerSelectieSlepen() {
+      if (geselecteerdeVormIndex === null) return false;
+      const geselecteerd = streken[geselecteerdeVormIndex];
+      const hoek = vindHoekBijPunt(geselecteerd, p);
+      if (hoek) {
+        actievePointerId = e.pointerId; canvas.setPointerCapture(e.pointerId); tekenend = true;
+        if (hoek === 'rotatie') {
+          const c = vormCentrum(geselecteerd);
+          vormBewerking = { modus: 'rotatie', centrum: c, hoekBijStart: Math.atan2(p.y - c.cy, p.x - c.cx), rotatieBijStart: geselecteerd.rotatie || 0 };
+        } else {
+          vormBewerking = { modus: 'hoek', hoek, centrum: vormCentrum(geselecteerd), rotatieBijStart: geselecteerd.rotatie || 0 };
+        }
+        return true;
+      }
+      if (puntBinnenVorm(geselecteerd, p)) {
+        actievePointerId = e.pointerId; canvas.setPointerCapture(e.pointerId); tekenend = true;
+        vormBewerking = { modus: 'verplaatsen', startPunt: p, orig: { x0: geselecteerd.x0, y0: geselecteerd.y0, x1: geselecteerd.x1, y1: geselecteerd.y1 } };
+        return true;
+      }
+      deselecteerVorm();
+      return false;
+    }
+
+    if (isVormGereedschap(gereedschap)) {
+      if (probeerSelectieSlepen()) return;
+      actievePointerId = e.pointerId; canvas.setPointerCapture(e.pointerId); tekenend = true;
+      huidigeStreek = { tool: 'vorm', vormType: gereedschap, kleur, dikte, x0: p.x, y0: p.y, x1: p.x, y1: p.y, rotatie: 0 };
+      vormBewerking = { modus: 'nieuw' };
+      return;
+    }
+
+    if (gereedschap === 'selecteren') {
+      if (probeerSelectieSlepen()) return;
+      for (let i = streken.length - 1; i >= 0; i--) {
+        const item = streken[i];
+        if (item.vormType && puntBinnenVorm(item, p)) {
+          geselecteerdeVormIndex = i;
+          verversSelectie();
+          actievePointerId = e.pointerId; canvas.setPointerCapture(e.pointerId); tekenend = true;
+          vormBewerking = { modus: 'verplaatsen', startPunt: p, orig: { x0: item.x0, y0: item.y0, x1: item.x1, y1: item.y1 } };
+          return;
+        }
+      }
+      return;
+    }
+
+    actievePointerId = e.pointerId;
+    canvas.setPointerCapture(e.pointerId);
+    tekenend = true;
+    huidigeStreek = { tool: gereedschap, kleur, dikte, punten: [p] };
+    if (gereedschap === 'markeerstift') tekenPunt(voorbeeldCtx, huidigeStreek, p);
+    else tekenPunt(ctx, huidigeStreek, p);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!tekenend || e.pointerId !== actievePointerId) return;
+    e.preventDefault();
+
+    if (vormBewerking) {
+      const p = positieUitEvent(e);
+      if (vormBewerking.modus === 'nieuw' && huidigeStreek) {
+        huidigeStreek.x1 = p.x; huidigeStreek.y1 = p.y;
+        const rect = wrap.getBoundingClientRect();
+        voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+        tekenVormPad(voorbeeldCtx, huidigeStreek);
+      } else if (geselecteerdeVormIndex !== null) {
+        const vorm = streken[geselecteerdeVormIndex];
+        if (vormBewerking.modus === 'hoek') {
+          zetHoekVanVorm(vorm, vormBewerking.hoek, p, vormBewerking.centrum, vormBewerking.rotatieBijStart);
+        } else if (vormBewerking.modus === 'verplaatsen') {
+          const dx = p.x - vormBewerking.startPunt.x, dy = p.y - vormBewerking.startPunt.y;
+          vorm.x0 = vormBewerking.orig.x0 + dx; vorm.y0 = vormBewerking.orig.y0 + dy;
+          vorm.x1 = vormBewerking.orig.x1 + dx; vorm.y1 = vormBewerking.orig.y1 + dy;
+        } else if (vormBewerking.modus === 'rotatie') {
+          const c = vormBewerking.centrum;
+          const hoekNu = Math.atan2(p.y - c.cy, p.x - c.cx);
+          vorm.rotatie = vormBewerking.rotatieBijStart + (hoekNu - vormBewerking.hoekBijStart);
+        }
+        herteken();
+        verversSelectie();
+      }
+      return;
+    }
+
+    if (!huidigeStreek) return;
+    const deelevents = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+    (deelevents.length ? deelevents : [e]).forEach((deel) => {
+      const vorige = huidigeStreek.punten[huidigeStreek.punten.length - 1];
+      const nieuw = positieUitEvent(deel);
+      huidigeStreek.punten.push(nieuw);
+      if (huidigeStreek.tool !== 'markeerstift') tekenSegment(ctx, huidigeStreek, vorige, nieuw);
+    });
+    if (huidigeStreek.tool === 'markeerstift') {
+      const rect = wrap.getBoundingClientRect();
+      voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+      tekenVolledigPad(voorbeeldCtx, huidigeStreek);
+    }
+  });
+
+  function beeindigStreek(e) {
+    if (e && e.pointerId !== actievePointerId) return;
+
+    if (vormBewerking) {
+      if (vormBewerking.modus === 'nieuw' && huidigeStreek) {
+        streken.push(huidigeStreek);
+        geselecteerdeVormIndex = streken.length - 1;
+        huidigeStreek = null;
+        herteken();
+        verversSelectie();
+      }
+      vormBewerking = null;
+      tekenend = false;
+      actievePointerId = null;
+      return;
+    }
+
+    if (tekenend && huidigeStreek) {
+      if (huidigeStreek.tool === 'markeerstift') {
+        tekenVolledigPad(ctx, huidigeStreek);
+        const rect = wrap.getBoundingClientRect();
+        voorbeeldCtx.clearRect(0, 0, rect.width, rect.height);
+      }
+      streken.push(huidigeStreek);
+      huidigeStreek = null;
+      ongedaanKnop.disabled = streken.length === 0;
+    }
+    tekenend = false;
+    actievePointerId = null;
+  }
+  canvas.addEventListener('pointerup', beeindigStreek);
+  canvas.addEventListener('pointercancel', beeindigStreek);
+  canvas.addEventListener('pointerleave', beeindigStreek);
+  canvas.addEventListener('pointerout', beeindigStreek);
+
+  ['touchstart', 'touchmove', 'touchend'].forEach((naam) => {
+    canvas.addEventListener(naam, (e) => e.preventDefault(), { passive: false });
+  });
+
+  function afstandTussen(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function middenTussen(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    aanrakingen.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (aanrakingen.size === 2) {
+      if (tekenend) { huidigeStreek = null; tekenend = false; actievePointerId = null; deselecteerVorm(); herteken(); }
+      const [a, b] = Array.from(aanrakingen.values());
+      pinchStart = { afstand: afstandTussen(a, b), midden: middenTussen(a, b), zoom, panX, panY };
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch' || !aanrakingen.has(e.pointerId)) return;
+    aanrakingen.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (aanrakingen.size === 2 && pinchStart) {
+      const [a, b] = Array.from(aanrakingen.values());
+      const schaal = afstandTussen(a, b) / pinchStart.afstand;
+      const nieuwMidden = middenTussen(a, b);
+      zoom = Math.min(4, Math.max(1, pinchStart.zoom * schaal));
+      panX = pinchStart.panX + (nieuwMidden.x - pinchStart.midden.x);
+      panY = pinchStart.panY + (nieuwMidden.y - pinchStart.midden.y);
+      zetZoomTransform();
+    }
+  });
+  function beeindigAanraking(e) {
+    if (e.pointerType !== 'touch') return;
+    aanrakingen.delete(e.pointerId);
+    if (aanrakingen.size < 2) pinchStart = null;
+  }
+  canvas.addEventListener('pointerup', beeindigAanraking);
+  canvas.addEventListener('pointercancel', beeindigAanraking);
+  canvas.addEventListener('pointerleave', beeindigAanraking);
+  canvas.addEventListener('pointerout', beeindigAanraking);
+
+  function zetKleur(hex) {
+    kleur = hex;
+    kleurKnoppen.forEach((k) => {
+      const actief = k.dataset.kleur === hex;
+      k.classList.toggle('actief', actief);
+      k.style.borderColor = actief ? hex : 'transparent';
+    });
+  }
+  kleurKnoppen.forEach((knop) => {
+    knop.addEventListener('click', () => {
+      zetKleur(knop.dataset.kleur);
+      if (gereedschap === 'gum') setGereedschap('pen');
+    });
+  });
+
+  dikteSlider.addEventListener('input', () => { dikte = Number(dikteSlider.value); updateDiktestip(); });
+
+  function setGereedschap(naam) {
+    gereedschap = naam;
+    deselecteerVorm();
+    Object.entries(GEREEDSCHAP_KNOP_EL).forEach(([g, elRef]) => elRef.classList.toggle('actief', naam === g));
+    canvas.style.cursor = naam === 'gum' ? 'cell' : naam === 'selecteren' ? 'default' : 'crosshair';
+    if (naam === 'markeerstift') zetKleur('#ffd400');
+  }
+  Object.entries(GEREEDSCHAP_KNOP_EL).forEach(([g, elRef]) => elRef.addEventListener('click', () => setGereedschap(g)));
+
+  ongedaanKnop.addEventListener('click', () => { streken.pop(); deselecteerVorm(); herteken(); });
+  wisKnop.addEventListener('click', () => {
+    if (streken.length && !confirm('Alles wissen?')) return;
+    streken = []; huidigeStreek = null; deselecteerVorm(); herteken();
+  });
+
+  function zetModus(nieuw) {
+    modus = nieuw;
+    modeBladKnop.classList.toggle('actief', nieuw === 'blad');
+    modeFotoKnop.classList.toggle('actief', nieuw === 'foto');
+    wrap.classList.toggle('blad', nieuw === 'blad');
+    uploadTrigger.style.display = nieuw === 'foto' ? '' : 'none';
+    leegmelding.style.display = (nieuw === 'foto' && !achtergrondAfbeelding) ? 'flex' : 'none';
+    resetZoom(); deselecteerVorm(); herteken();
+  }
+  modeBladKnop.addEventListener('click', () => zetModus('blad'));
+  modeFotoKnop.addEventListener('click', () => zetModus('foto'));
+
+  function afbeeldingKiezen() { bestandInvoer.click(); }
+  uploadTrigger.addEventListener('click', afbeeldingKiezen);
+  leegUploadKnop.addEventListener('click', afbeeldingKiezen);
+  bestandInvoer.addEventListener('change', () => {
+    const bestand = bestandInvoer.files[0];
+    if (!bestand) return;
+    laadAfbeeldingAlsAchtergrond(bestand);
+  });
+
+  function laadAfbeeldingAlsAchtergrond(blobOfFile) {
+    const url = URL.createObjectURL(blobOfFile);
+    const img = new Image();
+    img.onload = () => {
+      achtergrondAfbeelding = img;
+      streken = [];
+      leegmelding.style.display = 'none';
+      resetZoom(); deselecteerVorm(); herteken();
+    };
+    img.src = url;
+  }
+
+  const observer = new ResizeObserver(() => pasCanvasGrootteAan());
+  // Zonder deze opruiming blijft de resize-listener op window na sluiten hangen — een geheugenlek
+  // dat bovendien een fout kan geven zodra 'ie een niet meer bestaand canvas probeert te herschalen.
+  function sluitOverlay() {
+    window.removeEventListener('resize', pasCanvasGrootteAan);
+    observer.disconnect();
+    overlay.remove();
+  }
+
+  sluitKnop.addEventListener('click', () => {
+    if (streken.length && !confirm('Sluiten zonder op te slaan? Je tekening gaat dan verloren.')) return;
+    sluitOverlay();
+  });
+
+  opslaanKnop.addEventListener('click', () => {
+    if (!streken.length) { sluitOverlay(); return; }
+    opslaanKnop.disabled = true;
+    opslaanKnop.textContent = 'Opslaan…';
+    canvas.toBlob(async (blob) => {
+      if (blob) await slaFotoOp(blob, ruimteLabel, categorie);
+      sluitOverlay();
+      render();
+    }, 'image/png');
+  });
+
+  window.addEventListener('resize', pasCanvasGrootteAan);
+  observer.observe(wrap);
+
+  pasCanvasGrootteAan();
+  updateDiktestip();
+  if (achtergrondBlob) laadAfbeeldingAlsAchtergrond(achtergrondBlob);
+  zetModus(modus);
 }
 
 // Verkleint een foto vóór opslag/verzending (max. lange zijde 1600px, JPEG kwaliteit 0.82) — een
@@ -2361,6 +3015,10 @@ function renderFotoKnopRij(label, categorie, verplicht) {
       type: 'file', accept: 'image/*', capture: 'environment',
       onchange: async (e) => { await slaFotoOp(e.target.files[0], label, categorie); render(); },
     })));
+  rij.appendChild(el('button', {
+    type: 'button', class: 'bouwdeel-teken-knop',
+    onclick: () => openTekenScherm({ ruimteLabel: label, categorie }),
+  }, '✏️ Tekenen'));
   return rij;
 }
 
