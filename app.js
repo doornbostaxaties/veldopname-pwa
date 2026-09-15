@@ -2464,8 +2464,26 @@ function openTekenScherm(opties) {
   }
 
   function tekenAchtergrond() {
-    if (modus !== 'foto' || !achtergrondAfbeelding) return;
     const rect = wrap.getBoundingClientRect();
+    if (modus === 'blad') {
+      // Een ECHTE ondoorzichtige laag op het canvas zelf — niet alleen de witte CSS-achtergrond van
+      // de wrapper erachter. Zonder dit blijft het canvas transparant, en de JPEG-export bij Opslaan
+      // (die geen transparantie kent) vult dat dan met zwart in, waardoor zowel het blad als de
+      // zwarte pen-lijnen zelf onzichtbaar worden — alles verdwijnt in een egale zwarte foto.
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.restore();
+      return;
+    }
+    if (modus !== 'foto' || !achtergrondAfbeelding) return;
+    // Ook hier eerst een opaque bodem: de foto wordt geschaald met behouden beeldverhouding, dus er
+    // blijft vaak een rand over (boven/onder of links/rechts) — zonder deze vulling is DIE rand
+    // transparant en dus (zie hierboven) zwart bij het opslaan als er in die rand getekend is.
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.restore();
     const schaal = Math.min(rect.width / achtergrondAfbeelding.width, rect.height / achtergrondAfbeelding.height);
     const w = achtergrondAfbeelding.width * schaal, h = achtergrondAfbeelding.height * schaal;
     ctx.drawImage(achtergrondAfbeelding, (rect.width - w) / 2, (rect.height - h) / 2, w, h);
