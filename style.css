@@ -53,16 +53,15 @@ h1, h2, h3, p { margin: 0; }
 .opname-scherm { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
 /* --- statusbalk (boven) --- */
-/* Sinds iOS 27 (Arno's melding 15-09-2026: "kop is wat wazig, titel iets laten zakken") lijkt het
-   veilige gebied bovenin (var(--safe-top)) net iets anders te vallen dan voorheen — de titel zat
-   daardoor vlak tegen de rand van het niet-veilige gebied (rond de dynamic island/statusbalk),
-   wat als "wazig" oogt. Balk iets hoger (16px i.p.v. 10px boven/onder) + de titel zelf nog een paar
-   px extra naar beneden, los van de rest van de balk (icoon/sync-pil/instellingenknop blijven op
-   hun oude positie, alleen de titeltekst zakt iets). */
+/* Sinds iOS 27 (Arno's melding 15-09-2026 + screenshot): de "wazige" kop bleek de eigen
+   black-translucent statusbalk-stijl te zijn (zie index.html — iOS tekent daar altíjd een
+   vervagend overlay-effect overheen, geen CSS-paddingtruc kan dat wegnemen). Nu op "black" gezet,
+   dus de statusbalk zelf is ondoorzichtig en dit is puur nog een kwestie van genoeg ruimte tussen
+   die statusbalk en onze titel — flink extra padding + de titel zelf nog verder naar beneden. */
 .statusbalk {
   background: var(--navy);
   color: #fff;
-  padding: calc(16px + var(--safe-top)) 14px 14px;
+  padding: calc(20px + var(--safe-top)) 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,7 +71,7 @@ h1, h2, h3, p { margin: 0; }
 .statusbalk .terug {
   background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px 4px 0;
 }
-.statusbalk h1 { font-size: 15px; font-weight: 700; flex: 1; margin-top: 3px; }
+.statusbalk h1 { font-size: 15px; font-weight: 700; flex: 1; margin-top: 6px; }
 .statusbalk h1 .letter { color: var(--goud); }
 .sync-pil {
   display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
@@ -503,8 +502,21 @@ h1, h2, h3, p { margin: 0; }
      tabs, sinds Omgeving erbij kwam) elke knop tot ~35px breed samen — onleesbaar/onoverzichtelijk.
      Horizontaal laten scrollen i.p.v. gelijk verdelen: elke knop krijgt weer een leesbare vaste
      breedte, de rest is met een veeg te bereiken (scrollIntoView in app.js houdt de actieve tab
-     altijd meteen in beeld bij het wisselen). */
-  .tabbalk { overflow-x: auto; -webkit-overflow-scrolling: touch; justify-content: flex-start; scrollbar-width: none; }
+     altijd meteen in beeld bij het wisselen).
+     EERSTE POGING GAF EEN NIEUWE BUG (live gezien op Arno's telefoon-screenshot): met alleen
+     min-width (geen vaste width/max-width) groeit een flex-item met "flex:0 0 auto" gewoon net zo
+     breed als nodig om zijn label op ÉÉN regel te passen — bij lange labels ("Objectkenmerken",
+     "Energetisch") werd elke knop dus veel breder dan 62px, zonder gap/scheiding zichtbaar, en de
+     labels van opeenvolgende knoppen liepen daardoor optisch in elkaar over (geen enkele wrap).
+     Fix: een ECHTE vaste breedte (width, niet min-width) dwingt het label om binnen die breedte te
+     wrappen i.p.v. de knop op te rekken; overflow-wrap breekt zo nodig ook midden in een lang woord
+     zonder spatie ("Objectkenmerken" past anders nooit op 68px, zelfs niet over 2 regels). */
+  .tabbalk { overflow-x: auto; -webkit-overflow-scrolling: touch; justify-content: flex-start; scrollbar-width: none; gap: 2px; }
   .tabbalk::-webkit-scrollbar { display: none; }
-  .tabbalk button { flex: 0 0 auto; min-width: 62px; padding-left: 4px; padding-right: 4px; }
+  .tabbalk button {
+    flex: 0 0 68px; width: 68px; min-width: 0; max-width: 68px;
+    padding-left: 2px; padding-right: 2px; font-size: 9.5px; line-height: 1.15;
+    overflow-wrap: break-word; word-break: break-word;
+  }
+  .tabbalk button .icon { font-size: 18px; }
 }
