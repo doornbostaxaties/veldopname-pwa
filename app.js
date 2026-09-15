@@ -1644,6 +1644,11 @@ function renderOpnameScherm() {
     }, el('span', { class: 'icon' }, tab.icon), tab.label));
   });
   wrap.appendChild(tabbalk);
+  // Op een smalle telefoon scrolt de tabbalk nu horizontaal i.p.v. 10 tabs samen te persen (zie
+  // style.css) — zorg dat de actieve tab bij het wisselen altijd meteen in beeld staat i.p.v. dat
+  // Arno zelf moet zoeken/scrollen naar waar hij net op tikte.
+  const actiefKnop = tabbalk.querySelector('button.actief');
+  if (actiefKnop) requestAnimationFrame(() => actiefKnop.scrollIntoView({ inline: 'center', block: 'nearest' }));
   return wrap;
 }
 

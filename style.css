@@ -53,10 +53,16 @@ h1, h2, h3, p { margin: 0; }
 .opname-scherm { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
 /* --- statusbalk (boven) --- */
+/* Sinds iOS 27 (Arno's melding 15-09-2026: "kop is wat wazig, titel iets laten zakken") lijkt het
+   veilige gebied bovenin (var(--safe-top)) net iets anders te vallen dan voorheen — de titel zat
+   daardoor vlak tegen de rand van het niet-veilige gebied (rond de dynamic island/statusbalk),
+   wat als "wazig" oogt. Balk iets hoger (16px i.p.v. 10px boven/onder) + de titel zelf nog een paar
+   px extra naar beneden, los van de rest van de balk (icoon/sync-pil/instellingenknop blijven op
+   hun oude positie, alleen de titeltekst zakt iets). */
 .statusbalk {
   background: var(--navy);
   color: #fff;
-  padding: calc(10px + var(--safe-top)) 14px 10px;
+  padding: calc(16px + var(--safe-top)) 14px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -66,7 +72,7 @@ h1, h2, h3, p { margin: 0; }
 .statusbalk .terug {
   background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px 4px 0;
 }
-.statusbalk h1 { font-size: 15px; font-weight: 700; flex: 1; }
+.statusbalk h1 { font-size: 15px; font-weight: 700; flex: 1; margin-top: 3px; }
 .statusbalk h1 .letter { color: var(--goud); }
 .sync-pil {
   display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
@@ -493,4 +499,12 @@ h1, h2, h3, p { margin: 0; }
   .checklist-kaart { grid-template-columns: repeat(2, 1fr); }
   .foto-grid { grid-template-columns: repeat(3, 1fr); }
   .bouwdeel-materiaal-grid, .bouwdeel-details-grid { grid-template-columns: repeat(2, 1fr); }
+  /* Arno's melding 15-09-2026: op een telefoon in staande stand knijpt de tabbalk (inmiddels 10
+     tabs, sinds Omgeving erbij kwam) elke knop tot ~35px breed samen — onleesbaar/onoverzichtelijk.
+     Horizontaal laten scrollen i.p.v. gelijk verdelen: elke knop krijgt weer een leesbare vaste
+     breedte, de rest is met een veeg te bereiken (scrollIntoView in app.js houdt de actieve tab
+     altijd meteen in beeld bij het wisselen). */
+  .tabbalk { overflow-x: auto; -webkit-overflow-scrolling: touch; justify-content: flex-start; scrollbar-width: none; }
+  .tabbalk::-webkit-scrollbar { display: none; }
+  .tabbalk button { flex: 0 0 auto; min-width: 62px; padding-left: 4px; padding-right: 4px; }
 }
