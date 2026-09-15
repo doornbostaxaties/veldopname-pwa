@@ -220,6 +220,16 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 12px; font-weight: 500;
 }
 .chip button { border: none; background: rgba(0,0,0,.08); color: inherit; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; cursor: pointer; }
+/* Tik-chips die een kant-en-klaar zinsdeel toevoegen aan een vrij-tekst-bouwdeel (Trappen/Schuur-
+   berging/Overige bijgebouwen/Niet standaard buiten voorzieningen — 13-09-2026) — géén verwijder-x
+   zoals .chip, dit is een simpele tapbare knop, geen "aangevinkte" chip. */
+.chip-knop {
+  font: inherit; display: inline-flex; align-items: center; background: var(--bg); color: var(--text-dim);
+  border: 1px solid var(--divider); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.chip-knop:active { background: var(--navy-100); color: var(--navy); border-color: var(--navy); }
+.bouwdeel-chip-rij { margin: 8px 0; }
 .chip-toevoegen { display: flex; }
 .toevoeging-invoeren { display: flex; gap: 6px; width: 100%; }
 .toevoeging-invoeren input {

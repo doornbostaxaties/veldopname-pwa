@@ -2693,6 +2693,26 @@ function renderDetailVeld(bouwdeel, d) {
   input.value = waarde || '';
   return el('label', { class: 'bouwdeel-detail-veld' }, d.label, input);
 }
+// Chips die met 1 tik een kant-en-klaar zinsdeel toevoegen aan het omschrijvingsveld van een
+// vrije-tekst-bouwdeel — Arno's verzoek 13-09-2026, n.a.v. de vergelijking met Taxatieweb's eigen
+// "Toon macro's": deze bouwdelen hebben in Taxatieweb GEEN checkbox-multiselect (in tegenstelling
+// tot bv. Keuken/Badkamer, die al hun eigen materialen-lijst hebben), alleen een vrij tekstveld —
+// dus is een eigen, snellere manier om dat veld te vullen op locatie de enige optie. Bewust gestart
+// met de 4 bouwdelen die Arno in de praktijk het vaakst gebruikt (zie project-memory); de overige
+// "Overige waarnemingen"-vangnetvelden blijven kaal, die staan in een echt taxatierapport bijna
+// altijd op "nee". Blijft, net als voorheen, gewoon vrij te typen/aan te vullen — de chips voegen
+// alleen toe, ze vervangen niets.
+const BOUWDEEL_TEKST_CHIPS = {
+  trappen: ['Vaste trap', 'Vlizotrap', 'Wenteltrap', 'Spiltrap', 'Traphek aanwezig', 'Goede conditie', 'Matige conditie'],
+  schuurBerging: ['Vrijstaande houten berging', 'Aangebouwde berging', 'Stenen berging', 'Fietsenberging', 'Tuinhuisje'],
+  overigeBijgebouwen: ['Aangebouwde overkapping', 'Vrijstaande overkapping', 'Carport', 'Buitenkeuken', 'Prieel'],
+  nietStandaardBuitenVoorzieningen: ['Achterom', 'Parkeerplaats op eigen terrein', 'Oprit', 'Schutting', 'Buitenkraan', 'Buitenverlichting'],
+};
+function voegOmschrijvingChipToe(bouwdeel, tekst) {
+  const huidig = (bouwdeel.omschrijving || '').trim();
+  bouwdeel.omschrijving = huidig ? huidig + ', ' + tekst : tekst;
+  planOpslaan(); render();
+}
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
   if (def.type === 'risico') return renderRisicoBouwdeelKaart(bouwdeel, def);
@@ -2735,6 +2755,16 @@ function renderBouwdeelKaart(sectieObj, def) {
       kaart.appendChild(overigeVeld);
     }
   } else {
+    if (BOUWDEEL_TEKST_CHIPS[def.key]) {
+      const chipRij = el('div', { class: 'chip-rij bouwdeel-chip-rij' });
+      BOUWDEEL_TEKST_CHIPS[def.key].forEach(tekst => {
+        chipRij.appendChild(el('button', {
+          type: 'button', class: 'chip-knop',
+          onclick: () => voegOmschrijvingChipToe(bouwdeel, tekst),
+        }, tekst));
+      });
+      kaart.appendChild(chipRij);
+    }
     const omschrijvingVeld = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
       oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
