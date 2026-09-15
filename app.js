@@ -677,6 +677,7 @@ function standaardMacros() {
     // Algemene toevoegingen — bij élke ruimte gesuggereerd (kasten, ketels, deuren, airco e.d.).
     toevoegingen: [
       'meterkast', 'vaste trap naar de eerste verdieping', 'vaste trap naar de zolderverdieping',
+      'vlizotrap naar de zolderverdieping', 'losse trap naar de zolderverdieping',
       'HR combi-ketel', 'C.V.-ketel', 'boiler', 'airconditioning', 'trapkast', 'kelderkast',
       'bergkast', 'walk-in closet', 'inbouwkast', 'inloopkast', 'garderobe', 'garderobekast',
       'kastenwand', 'schuifkastenwand', 'vaste kast', 'gas haard', 'open haard', 'houtkachel',
@@ -947,12 +948,14 @@ function berekenTotalen(data) {
   return { wonen, overig, buiten, extern, aantalWoonlagen };
 }
 
+// Was een lokale const binnen componeerIndelingTekst() — nu globaal, want ook nodig voor de
+// Trappen-"Overnemen"-knop (13-09-2026) die dezelfde en-opsomming-stijl gebruikt.
+function nederlandseLijst(items) {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  return items.slice(0, -1).join(', ') + ' en ' + items[items.length - 1];
+}
 function componeerIndelingTekst(indeling) {
-  const nederlandseLijst = (items) => {
-    if (items.length === 0) return '';
-    if (items.length === 1) return items[0];
-    return items.slice(0, -1).join(', ') + ' en ' + items[items.length - 1];
-  };
   const componeerRuimteZin = (ruimte) => {
     const items = (ruimte.toevoegingen || []).map(t => t.trim()).filter(Boolean);
     const zin = items.length ? ` met ${nederlandseLijst(items)}` : '';
@@ -2703,15 +2706,39 @@ function renderDetailVeld(bouwdeel, d) {
 // altijd op "nee". Blijft, net als voorheen, gewoon vrij te typen/aan te vullen — de chips voegen
 // alleen toe, ze vervangen niets.
 const BOUWDEEL_TEKST_CHIPS = {
-  trappen: ['Vaste trap', 'Vlizotrap', 'Wenteltrap', 'Spiltrap', 'Traphek aanwezig', 'Goede conditie', 'Matige conditie'],
+  trappen: ['Vaste trap', 'Vaste trappen', 'Vlizotrap', 'Losse trap'],
   schuurBerging: ['Vrijstaande houten berging', 'Aangebouwde berging', 'Stenen berging', 'Fietsenberging', 'Tuinhuisje'],
   overigeBijgebouwen: ['Aangebouwde overkapping', 'Vrijstaande overkapping', 'Carport', 'Buitenkeuken', 'Prieel'],
   nietStandaardBuitenVoorzieningen: ['Achterom', 'Parkeerplaats op eigen terrein', 'Oprit', 'Schutting', 'Buitenkraan', 'Buitenverlichting'],
 };
+// Sinds 13-09-2026 (Arno's verzoek): een chip voegt een NIEUWE opsommingsregel toe ("- tekst")
+// i.p.v. achter de bestaande tekst te plakken — elke tik is dus een eigen regel, net als de
+// "- Ruimte met toevoeging." opsomming die componeerIndelingTekst() ook al gebruikt.
 function voegOmschrijvingChipToe(bouwdeel, tekst) {
-  const huidig = (bouwdeel.omschrijving || '').trim();
-  bouwdeel.omschrijving = huidig ? huidig + ', ' + tekst : tekst;
+  const huidig = (bouwdeel.omschrijving || '').replace(/\n+$/, '');
+  const regel = '- ' + tekst;
+  bouwdeel.omschrijving = huidig.trim() ? huidig + '\n' + regel : regel;
   planOpslaan(); render();
+}
+// "Overnemen"-knop bij Trappen (13-09-2026, Arno's verzoek): leest de trap-toevoegingen die al bij
+// losse ruimtes in Indeling staan (bv. "vaste trap naar de eerste verdieping" bij Hal, "vlizotrap
+// naar de zolderverdieping" bij Overloop — dezelfde toevoegingen-macro's als hierboven) en zet er
+// één samengevatte, en-opgesomde zin van in het Trappen-omschrijvingsveld ("Vaste trap en
+// vlizotrap"). Herkent bewust dezelfde woorden als de TRAPPEN-chips hierboven, zodat "Overnemen"
+// en de chips altijd hetzelfde vocabulaire gebruiken. Vervangt de omschrijving (i.p.v. toe te
+// voegen) — dit is een samenvatting van wat er al elders staat, geen aanvulling.
+function bepaalTrapTypesUitIndeling() {
+  const woonlagen = (state.taxatie && state.taxatie.data && state.taxatie.data.indeling.woonlagen) || [];
+  const gevonden = [];
+  const voegToe = (label) => { if (!gevonden.includes(label)) gevonden.push(label); };
+  woonlagen.forEach(w => (w.ruimtes || []).forEach(r => (r.toevoegingen || []).forEach(t => {
+    const tekst = (t || '').toLowerCase();
+    if (tekst.includes('vlizotrap')) voegToe('Vlizotrap');
+    else if (tekst.includes('losse trap')) voegToe('Losse trap');
+    else if (tekst.includes('vaste trappen')) voegToe('Vaste trappen');
+    else if (tekst.includes('vaste trap')) voegToe('Vaste trap');
+  })));
+  return gevonden;
 }
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
@@ -2764,6 +2791,16 @@ function renderBouwdeelKaart(sectieObj, def) {
         }, tekst));
       });
       kaart.appendChild(chipRij);
+    }
+    if (def.key === 'trappen') {
+      const trapTypes = bepaalTrapTypesUitIndeling();
+      if (trapTypes.length) {
+        kaart.appendChild(el('button', {
+          type: 'button', class: 'knop spook klein',
+          style: 'margin-bottom:8px;',
+          onclick: () => { bouwdeel.omschrijving = nederlandseLijst(trapTypes); planOpslaan(); render(); },
+        }, `↺ Overnemen uit Indeling (${nederlandseLijst(trapTypes)})`));
+      }
     }
     const omschrijvingVeld = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
