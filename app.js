@@ -2190,9 +2190,305 @@ function berekenControleResultaten() {
   return groepen;
 }
 
+// ================================================================================================
+// PDF-OPNAMERAPPORT (Arno's verzoek 16-09-2026): "een PDF-rapportage met de gehele opname incl.
+// foto's en aantekeningen" — een eerste opzet, gegenereerd met jsPDF (via CDN, zie index.html).
+// Bewust GEEN poging om Taxatieweb's eigen rapportopmaak na te bootsen — dit is Arno's eigen
+// werkexemplaar/archiefkopie van de ruwe opname, geen extern op te leveren stuk. Loopt de bestaande
+// schema's (BOUWKUNDIG_SCHEMA/ENERGETISCH_SCHEMA) generiek langs zodat een later toegevoegd
+// bouwdeel automatisch meekomt, zonder deze functie te hoeven aanpassen.
+// ================================================================================================
+
+// camelCase-veldnaam → leesbaar label, voor de vlakke Objectkenmerken/Omgeving-data die (anders dan
+// Bouwkundig/Energetisch) geen eigen schema met labels heeft. Een paar veelgebruikte velden krijgen
+// hieronder een handgeschreven label; de rest valt terug op deze automatische omzetting.
+function vriendelijkeLabel(key) {
+  return key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
+}
+const OBJECTKENMERKEN_LABELS = {
+  woningtype: 'Woningtype', bouwjaar: 'Bouwjaar', tuinAanwezig: 'Tuin aanwezig',
+  grootVerbouwingGeweest: 'Grote verbouwing/uitbreiding geweest',
+  gezochtEigenaarBewoner: 'Contact gezocht met eigenaar/bewoner',
+  gezochtMakelaar: 'Contact gezocht met makelaar',
+  gezochtAndereBronnen: 'Contact gezocht met andere bronnen',
+  volledigGeinspecteerd: 'Volledig geïnspecteerd', situatie: 'Situatie van de woning',
+  situatieAnders: 'Situatie (nadere omschrijving)', aanvragerWoontAl: 'Aanvrager woont er al',
+  aanvragerBlijftWonen: 'Aanvrager blijft wonen', andereInfoOntdekt: 'Andere relevante info ontdekt',
+};
+const OMGEVING_LABELS = {
+  weersomstandigheden: 'Weersomstandigheden', aanwezigenInspectie: 'Aanwezigen bij inspectie',
+  begintijdInspectie: 'Begintijd inspectie', eindtijdInspectie: 'Eindtijd inspectie',
+  locatie: 'Locatie', gebouwenRondom: 'Gebouwen rondom', bereikbaarheid: 'Bereikbaarheid',
+  voorzieningen: 'Voorzieningen', bijzonderhedenOmgeving: 'Bijzonderheden omgeving',
+  funderingEigenaarBewoner: 'Fundering — info via eigenaar/bewoner',
+  funderingOnderzoeksrapport: 'Fundering — onderzoeksrapport aanwezig',
+  funderingAndereBronnen: 'Fundering — andere bronnen geraadpleegd',
+  funderingProblemen: 'Funderingsproblemen', risicoVervuildeGrond: 'Risico vervuilde grond',
+  asbestGezien: 'Asbest gezien', asbestAanwezigDenken: 'Asbest vermoed aanwezig',
+};
+// Een plat data-object (Objectkenmerken/Omgeving) omzetten naar "Label: waarde"-regels — slaat lege
+// velden over, en voegt een bijbehorend "...Toelichting"-veld achter de hoofdwaarde aan.
+function dumpFlatObject(obj, labelMap) {
+  const regels = [];
+  Object.keys(obj).forEach((key) => {
+    if (key.endsWith('Toelichting')) return; // hieronder al meegenomen bij het hoofdveld
+    const waarde = obj[key];
+    if (waarde === null || waarde === undefined || waarde === '') return;
+    if (Array.isArray(waarde) && waarde.length === 0) return;
+    const label = (labelMap && labelMap[key]) || vriendelijkeLabel(key);
+    let tekst = Array.isArray(waarde) ? waarde.join(', ') : waarde === true ? 'Ja' : waarde === false ? 'Nee' : String(waarde);
+    if (obj[key + 'Toelichting']) tekst += ' — ' + obj[key + 'Toelichting'];
+    regels.push(label + ': ' + tekst);
+  });
+  return regels;
+}
+// Eén bouwkundig bouwdeel samenvatten tot een tekstregel — null als het bouwdeel niet aanwezig is
+// (dan hoort het niet in het rapport thuis).
+function samenvatBouwdeel(bd, def) {
+  if (!bd || !bd.aanwezig) return null;
+  if (def.type === 'risico') {
+    const regels = [];
+    if (bd.risico === true) regels.push('risico geconstateerd');
+    else if (bd.risico === false) regels.push('geen risico geconstateerd');
+    if (bd.omschrijving) regels.push(bd.omschrijving);
+    return regels.length ? regels.join(' — ') : 'aanwezig';
+  }
+  const regels = [];
+  if (def.type !== 'simpel' && typeof bd.conditie === 'number' && CONDITIE_LABELS[bd.conditie]) {
+    regels.push('conditie ' + CONDITIE_LABELS[bd.conditie]);
+  }
+  if (Array.isArray(bd.materialen) && bd.materialen.length) {
+    regels.push(bd.materialen.join(', ') + (bd.overigeTekst ? ' (' + bd.overigeTekst + ')' : ''));
+  }
+  if (bd.omschrijving) regels.push(bd.omschrijving);
+  if (def.details && bd.details) {
+    def.details.forEach((d) => {
+      const w = bd.details[d.key];
+      if (w === '' || w === null || w === undefined) return;
+      regels.push(d.label + ': ' + (w === true ? 'ja' : w === false ? 'nee' : w));
+    });
+  }
+  if (bd.aandachtspuntenAanwezig && bd.aandachtspuntenToelichting) regels.push('aandachtspunt: ' + bd.aandachtspuntenToelichting);
+  return regels.length ? regels.join(' — ') : 'aanwezig';
+}
+// Eén energetisch veld samenvatten — de velden-vorm verschilt per def.type (zie leegIsolatieVeld/
+// leegDakVeld/leegMateriaalTijdVeld/leegZonnepanelenVeld hierboven).
+function samenvatEnergetischVeld(veld, def) {
+  if (!veld || !veld.aanwezig) return null;
+  const regels = [];
+  if (def.type === 'dak') {
+    if (veld.geisoleerd === true) regels.push('geïsoleerd' + (veld.gedeeltelijk ? ' (gedeeltelijk)' : ''));
+    else if (veld.geisoleerd === false) regels.push('niet geïsoleerd');
+  } else if (def.type === 'isolatie') {
+    regels.push('geïsoleerd' + (veld.gedeeltelijk ? ' (gedeeltelijk)' : ''));
+  } else if (def.type === 'materiaalTijd' && veld.materialen && veld.materialen.length) {
+    regels.push(veld.materialen.join(', ') + (veld.overigeTekst ? ' (' + veld.overigeTekst + ')' : ''));
+  } else if (def.type === 'zonnepanelen') {
+    const stukjes = [];
+    if (veld.aantal) stukjes.push(veld.aantal + (veld.metenType ? ' (' + veld.metenType + ')' : ''));
+    if (veld.orientaties && veld.orientaties.length) stukjes.push('oriëntatie ' + veld.orientaties.join(', '));
+    if (veld.eigendom) stukjes.push(veld.eigendom);
+    if (stukjes.length) regels.push(stukjes.join(', '));
+  }
+  if (veld.installatiemoment) regels.push(veld.installatiemoment + (veld.jaar ? ' ' + veld.jaar : ''));
+  if (veld.opmerkingen) regels.push(veld.opmerkingen);
+  return regels.length ? regels.join(' — ') : 'aanwezig';
+}
+
+// Foto-blob → data-URL, geschaald voor gebruik in de PDF (aspect-ratio is het enige dat telt, jsPDF
+// tekent op de opgegeven mm-afmeting ongeacht bron-resolutie).
+async function fotoNaarPdfAfbeelding(blob, maxBreedtePx = 1000) {
+  const bitmap = await createImageBitmap(blob);
+  const schaal = Math.min(1, maxBreedtePx / bitmap.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * schaal);
+  canvas.height = Math.round(bitmap.height * schaal);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return { dataUrl: canvas.toDataURL('image/jpeg', 0.82), breedtePx: canvas.width, hoogtePx: canvas.height };
+}
+
+async function genereerRapportPdf(knop) {
+  if (!window.jspdf) {
+    alert('De PDF-bibliotheek kon niet geladen worden — controleer de internetverbinding en probeer het opnieuw.');
+    return;
+  }
+  const oorspronkelijkeTekst = knop.textContent;
+  knop.disabled = true;
+  knop.textContent = 'Rapport wordt gemaakt…';
+  try {
+    const t = state.taxatie;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const breedte = doc.internal.pageSize.getWidth();
+    const hoogte = doc.internal.pageSize.getHeight();
+    const marge = 16;
+    let y = marge;
+
+    const nieuwePaginaIndienNodig = (nodig) => { if (y + nodig > hoogte - marge) { doc.addPage(); y = marge; } };
+    const schrijfKop = (tekst) => {
+      nieuwePaginaIndienNodig(14);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(4, 42, 67);
+      doc.text(tekst, marge, y);
+      y += 5;
+      doc.setDrawColor(221, 226, 229); doc.line(marge, y, breedte - marge, y);
+      y += 6;
+    };
+    const schrijfSubkop = (tekst) => {
+      nieuwePaginaIndienNodig(9);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20, 24, 27);
+      doc.text(tekst, marge, y);
+      y += 5.5;
+    };
+    const schrijfRegels = (regels) => {
+      if (!regels || !regels.length) return;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(60, 66, 71);
+      regels.forEach((regel) => {
+        const gewrapt = doc.splitTextToSize('•  ' + regel, breedte - marge * 2 - 2);
+        nieuwePaginaIndienNodig(gewrapt.length * 4.6);
+        doc.text(gewrapt, marge + 2, y);
+        y += gewrapt.length * 4.6 + 1.3;
+      });
+      y += 2.5;
+    };
+    const schrijfParagraaf = (tekst) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(60, 66, 71);
+      const gewrapt = doc.splitTextToSize(tekst, breedte - marge * 2);
+      nieuwePaginaIndienNodig(gewrapt.length * 4.6);
+      doc.text(gewrapt, marge, y);
+      y += gewrapt.length * 4.6 + 5;
+    };
+
+    // Kop
+    doc.setFillColor(4, 42, 67);
+    doc.rect(0, 0, breedte, 36, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text(t.adres || 'Taxatieopname', marge, 18);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    doc.text([t.postcode, t.plaats].filter(Boolean).join(' ') || ' ', marge, 26);
+    doc.setFontSize(8.5);
+    doc.text('Opnamerapport — gegenereerd op ' + new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }), marge, 32);
+    y = 46;
+
+    schrijfKop('Objectkenmerken');
+    const objectkenmerkenRegels = dumpFlatObject(t.bewoning || {}, OBJECTKENMERKEN_LABELS);
+    schrijfRegels(objectkenmerkenRegels.length ? objectkenmerkenRegels : ['Niets ingevuld.']);
+
+    schrijfKop('Omgeving');
+    const omgevingRegels = dumpFlatObject(t.omgeving || {}, OMGEVING_LABELS);
+    schrijfRegels(omgevingRegels.length ? omgevingRegels : ['Niets ingevuld.']);
+
+    schrijfKop('Indeling');
+    schrijfParagraaf(componeerIndelingTekst((t.data && t.data.indeling) || {}) || 'Geen indeling ingevoerd.');
+
+    schrijfKop('Bouwkundige opname');
+    let bouwkundigHeeftInhoud = false;
+    ['buitenzijde', 'binnenzijde', 'installaties'].forEach((hoofd) => {
+      Object.keys(BOUWKUNDIG_SCHEMA[hoofd]).forEach((sectie) => {
+        const regels = [];
+        BOUWKUNDIG_SCHEMA[hoofd][sectie].forEach((def) => {
+          const samenvatting = samenvatBouwdeel(t.bouwkundig[hoofd][sectie][def.key], def);
+          if (samenvatting) regels.push(def.label + ' — ' + samenvatting);
+        });
+        if (regels.length) {
+          bouwkundigHeeftInhoud = true;
+          const subtabDef = (BOUWKUNDIG_SUBTABS[hoofd] || []).find((s) => s.id === sectie);
+          schrijfSubkop(subtabDef ? subtabDef.label : sectie);
+          schrijfRegels(regels);
+        }
+      });
+    });
+    {
+      const regels = [];
+      BOUWKUNDIG_SCHEMA.overigeBijzonderheden.forEach((def) => {
+        const samenvatting = samenvatBouwdeel(t.bouwkundig.overigeBijzonderheden[def.key], def);
+        if (samenvatting) regels.push(def.label + ' — ' + samenvatting);
+      });
+      if (regels.length) { bouwkundigHeeftInhoud = true; schrijfSubkop('Overige bijzonderheden'); schrijfRegels(regels); }
+    }
+    if (!bouwkundigHeeftInhoud) schrijfRegels(['Niets ingevuld.']);
+
+    schrijfKop('Energetische opname');
+    let energetischHeeftInhoud = false;
+    const algemeen = t.energetisch.algemeen || {};
+    if ((algemeen.bron || []).length || (algemeen.bouwtype || []).length) {
+      energetischHeeftInhoud = true;
+      schrijfSubkop('Algemeen');
+      const regels = [];
+      if ((algemeen.bron || []).length) regels.push('Bron: ' + algemeen.bron.join(', '));
+      if ((algemeen.bouwtype || []).length) regels.push('Bouwtype: ' + algemeen.bouwtype.join(', '));
+      schrijfRegels(regels);
+    }
+    ['isolatie', 'installaties'].forEach((hoofd) => {
+      Object.keys(ENERGETISCH_SCHEMA[hoofd]).forEach((sectie) => {
+        const regels = [];
+        ENERGETISCH_SCHEMA[hoofd][sectie].forEach((def) => {
+          const samenvatting = samenvatEnergetischVeld(t.energetisch[hoofd][sectie][def.key], def);
+          if (samenvatting) regels.push(def.label + ' — ' + samenvatting);
+        });
+        if (regels.length) {
+          energetischHeeftInhoud = true;
+          const subtabDef = (ENERGETISCH_SUBTABS[hoofd] || []).find((s) => s.id === sectie);
+          schrijfSubkop(subtabDef ? subtabDef.label : sectie);
+          schrijfRegels(regels);
+        }
+      });
+    });
+    {
+      const regels = [];
+      ENERGETISCH_SCHEMA.energieopwekking.forEach((def) => {
+        const samenvatting = samenvatEnergetischVeld(t.energetisch.energieopwekking[def.key], def);
+        if (samenvatting) regels.push(def.label + ' — ' + samenvatting);
+      });
+      if (regels.length) { energetischHeeftInhoud = true; schrijfSubkop('Energieopwekking'); schrijfRegels(regels); }
+    }
+    if (!energetischHeeftInhoud) schrijfRegels(['Niets ingevuld.']);
+
+    schrijfKop('Aantekeningen');
+    schrijfParagraaf(t.aantekeningen && t.aantekeningen.trim() ? t.aantekeningen : 'Geen aantekeningen.');
+
+    const fotos = state.fotos.filter((f) => !f.archief);
+    if (fotos.length) {
+      doc.addPage(); y = marge;
+      schrijfKop("Foto's en schetsen (" + fotos.length + ')');
+      for (const foto of fotos) {
+        const { dataUrl, breedtePx, hoogtePx } = await fotoNaarPdfAfbeelding(foto.blob);
+        const maxW = breedte - marge * 2;
+        const maxH = 95;
+        let w = maxW, h = w * (hoogtePx / breedtePx);
+        if (h > maxH) { h = maxH; w = h * (breedtePx / hoogtePx); }
+        nieuwePaginaIndienNodig(h + 10);
+        const x = marge + (maxW - w) / 2;
+        doc.addImage(dataUrl, 'JPEG', x, y, w, h);
+        y += h + 4;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(120, 128, 133);
+        doc.text(foto.ruimte_label || foto.categorie || 'Anders', marge, y);
+        y += 8;
+      }
+    }
+
+    // Paginanummers, achteraf toegevoegd (nu pas is het totaal aantal pagina's bekend).
+    const totaalPaginas = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totaalPaginas; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140, 145, 150);
+      doc.text(String(p) + ' / ' + totaalPaginas, breedte - marge, hoogte - 8, { align: 'right' });
+    }
+
+    const bestandsnaam = (t.adres || 'Taxatieopname').replace(/[^a-z0-9]+/gi, '_') + '_opnamerapport.pdf';
+    doc.save(bestandsnaam);
+  } finally {
+    knop.disabled = false;
+    knop.textContent = oorspronkelijkeTekst;
+  }
+}
+
 function renderControleTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
+  const rapportKnop = el('button', { type: 'button', class: 'rapport-knop' }, '📄 Rapport genereren (PDF)');
+  rapportKnop.addEventListener('click', () => genereerRapportPdf(rapportKnop));
+  wrap.appendChild(rapportKnop);
   const groepen = berekenControleResultaten();
   const totaalOntbrekend = groepen.reduce((som, g) => som + g.items.filter(i => !i.ok).length, 0);
   wrap.appendChild(el('div', { class: 'controle-samenvatting' + (totaalOntbrekend === 0 ? ' klaar' : '') },

@@ -275,6 +275,11 @@ h1, h2, h3, p { margin: 0; }
   background: var(--pending-bg); color: var(--pending);
 }
 .controle-samenvatting.klaar { background: var(--ok-bg); color: var(--ok); }
+.rapport-knop {
+  display: block; width: 100%; margin-bottom: 14px; padding: 12px 16px; border-radius: 12px;
+  border: none; background: var(--navy); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.rapport-knop:disabled { opacity: .6; cursor: default; }
 
 /* Sinds Arno's verzoek: kleinere tegels (meer overzicht per scherm), tik voor lightbox. Sinds
    11-09-2026: 6 kolommen op tablet/desktop (default), 3 op telefoon (media-query onderaan). */

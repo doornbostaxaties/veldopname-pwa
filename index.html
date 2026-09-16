@@ -24,6 +24,12 @@
 <body>
   <div id="app"></div>
 
+  <!-- jsPDF voor het PDF-opnamerapport (renderControleTab > genereerRapportPdf in app.js) — bewust
+       via CDN i.p.v. vendoren: enige externe afhankelijkheid van de app, alleen nodig op het moment
+       dat Arno zelf op "Rapport genereren" klikt. LET OP: werkt dus niet zonder internet als de
+       browser 'm nog niet eerder gecachet heeft (de service worker cachet alleen bestanden van dit
+       eigen domein, geen CDN's — zie sw.js). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="db.js"></script>
   <script src="app.js"></script>
 </body>
