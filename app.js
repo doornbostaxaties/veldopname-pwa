@@ -1996,14 +1996,23 @@ function alleRuimtes() {
   return lijst;
 }
 
+// Ingeklapt-status per woonlaag — bewust NIET in taxatie.data (puur schermstatus, geen opnamedata),
+// zelfde soort los UI-state-object als bouwdeelChipEditorOpen elders in dit bestand. Sleutel = index
+// in woonlagen[], gereset bij een herlaadbeurt (allemaal weer uitgeklapt, dat is de veilige default).
+const indelingIngeklapt = new Set();
+
+// Arno's verzoek 16-09-2026: verdiepingnamen groter/dikgedrukt, elke verdieping inklapbaar en in een
+// eigen visueel "blok" met alle ruimtes erin — voor herkenbaarheid bij een opname met veel woonlagen.
 function renderIndelingTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
   t.data.indeling.woonlagen.forEach((woonlaag, wIdx) => {
-    wrap.appendChild(el('div', { class: 'section-label' }, woonlaag.naam || `Woonlaag ${wIdx + 1}`));
+    const ingeklapt = indelingIngeklapt.has(wIdx);
+    const blok = el('div', { class: 'woonlaag-blok' });
+
     const naamInput = el('input', {
+      class: 'woonlaag-naam-invoer',
       value: woonlaag.naam || '', placeholder: `Naam woonlaag (bv. "Begane grond")`,
-      style: 'width:100%;margin-bottom:8px;padding:8px 10px;border-radius:9px;border:1px solid var(--divider);',
       oninput: (e) => {
         woonlaag.naam = e.target.value;
         zorgVoorAfmetingenWoonlaag(t.data, wIdx).naam = e.target.value; // gelijk houden met Meting
@@ -2011,15 +2020,26 @@ function renderIndelingTab() {
       },
     });
     koppelDatalist(naamInput, 'verdiepingen');
-    wrap.appendChild(naamInput);
+    blok.appendChild(el('div', { class: 'woonlaag-kop' },
+      el('button', {
+        type: 'button', class: 'woonlaag-toggle',
+        onclick: () => { if (ingeklapt) indelingIngeklapt.delete(wIdx); else indelingIngeklapt.add(wIdx); render(); },
+      }, ingeklapt ? '▸' : '▾'),
+      naamInput,
+    ));
 
-    (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
-      wrap.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }));
-    });
-    wrap.appendChild(el('button', {
-      class: 'knop spook klein', style: 'margin-bottom:16px;',
-      onclick: () => { woonlaag.ruimtes.push(leegRuimte()); planOpslaan(); render(); },
-    }, '+ Ruimte toevoegen'));
+    if (!ingeklapt) {
+      const inhoud = el('div', { class: 'woonlaag-inhoud' });
+      (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
+        inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }));
+      });
+      inhoud.appendChild(el('button', {
+        class: 'knop spook klein',
+        onclick: () => { woonlaag.ruimtes.push(leegRuimte()); planOpslaan(); render(); },
+      }, '+ Ruimte toevoegen'));
+      blok.appendChild(inhoud);
+    }
+    wrap.appendChild(blok);
   });
   wrap.appendChild(el('button', {
     class: 'knop spook', style: 'margin-bottom:16px;',

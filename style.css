@@ -204,6 +204,22 @@ h1, h2, h3, p { margin: 0; }
 }
 
 /* --- Indeling --- */
+.woonlaag-blok {
+  border: 1.5px solid var(--divider); border-radius: 16px; background: var(--surface-2);
+  margin-bottom: 14px; overflow: hidden;
+}
+.woonlaag-kop { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--surface-3); }
+.woonlaag-toggle {
+  border: none; background: none; font-size: 16px; line-height: 1; color: var(--text-dim); cursor: pointer;
+  width: 26px; height: 26px; flex-shrink: 0; border-radius: 6px;
+}
+.woonlaag-toggle:hover { background: var(--surface); }
+.woonlaag-naam-invoer {
+  flex: 1; font: inherit; font-size: 17px; font-weight: 700; color: var(--text);
+  border: none; background: transparent; padding: 4px 2px; min-width: 0;
+}
+.woonlaag-naam-invoer:focus { outline: none; }
+.woonlaag-inhoud { padding: 12px; }
 .ruimte-kaart {
   background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
