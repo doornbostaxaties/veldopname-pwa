@@ -357,7 +357,10 @@ const BOUWKUNDIG_SCHEMA = {
     gevel: [
       { key: 'gevelwerk', label: 'Gevelwerk', type: 'materiaal', opties: ['Metselwerk', 'Gevelbetimmering', 'Gevelcement', 'Stucwerk', 'Composiet', 'Overige'], standaardAan: true },
       { key: 'balkon', label: 'Balkon', type: 'tekst' },
-      { key: 'kozijnen', label: 'Kozijnen', type: 'tekst', standaardAan: true },
+      // Multiselect i.p.v. vrije tekst (Arno's verzoek 16-09-2026) — opties komen live uit
+      // state.macros.kozijnen (macroSleutel, zie bepaalOpties), zelfde lijst als bij "Kenmerken
+      // verdieping" in Indeling.
+      { key: 'kozijnen', label: 'Kozijnen', type: 'materiaal', opties: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'], macroSleutel: 'kozijnen', standaardAan: true },
       { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst', standaardAan: true },
       { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst', standaardAan: true },
       { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst', standaardAan: true },
