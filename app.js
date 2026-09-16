@@ -67,8 +67,13 @@ function leegExternBlok() {
 function leegRuimte() {
   return { naam: '', toevoegingen: [] };
 }
+// `kenmerken` (Arno's verzoek 16-09-2026: "Kenmerken verdieping" bovenaan elke woonlaag in
+// Indeling) — 5 multiselect-velden, opties komen uit de gelijknamige macro's (zie standaardMacros).
+function leegWoonlaagKenmerken() {
+  return { vloersoort: [], kozijnen: [], glastypes: [], verwarmingssysteem: [], vloerafwerking: [] };
+}
 function leegIndelingWoonlaag() {
-  return { naam: '', vloerbeschrijving: '', vloerbeschrijvingen: [], ruimtes: [leegRuimte()] };
+  return { naam: '', vloerbeschrijving: '', vloerbeschrijvingen: [], ruimtes: [leegRuimte()], kenmerken: leegWoonlaagKenmerken() };
 }
 function leegData() {
   return {
@@ -381,11 +386,14 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'kelder', label: 'Kelder', type: 'tekst' },
       { key: 'kruipruimte', label: 'Kruipruimte', type: 'tekst' },
     ],
+    // macroSleutel: opties komen live uit state.macros.vloersoort (Arno's verzoek 16-09-2026: "1
+    // lijst voor Indeling én de relevante bouwkundige onderdelen") — zie renderBouwdeelKaart, dat
+    // macroSleutel vóór def.opties gebruikt zodra 'ie aanwezig is.
     vloeren: [
-      { key: 'woonlaag1', label: 'Woonlaag 1', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
-      { key: 'woonlaag2', label: 'Woonlaag 2', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
-      { key: 'woonlaag3', label: 'Woonlaag 3', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
-      { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'] },
+      { key: 'woonlaag1', label: 'Woonlaag 1', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
+      { key: 'woonlaag2', label: 'Woonlaag 2', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
+      { key: 'woonlaag3', label: 'Woonlaag 3', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
+      { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
     ],
     wanden: [
       { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst', standaardAan: true },
@@ -416,8 +424,8 @@ const BOUWKUNDIG_SCHEMA = {
     ],
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
-      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
-      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'] },
+      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem' },
+      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem' },
     ],
     warmwater: [
       { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
@@ -536,11 +544,13 @@ const ENERGETISCH_SCHEMA = {
       { key: 'vloerisolatieOverige', label: 'Vloerisolatie overige woonlagen', type: 'isolatie' },
       { key: 'kruipruimteisolatie', label: 'Kruipruimteisolatie', type: 'isolatie' },
     ],
+    // macroSleutel 'glastypes': opties komen live uit state.macros.glastypes (Arno's verzoek
+    // 16-09-2026), GLAS_OPTIES blijft alleen nog de fallback vóórdat de macro's geladen zijn.
     ramen: [
-      { key: 'glas1e', label: 'Glas 1e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
-      { key: 'glas2e', label: 'Glas 2e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
-      { key: 'glas3e', label: 'Glas 3e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES },
-      { key: 'glasOverige', label: 'Glas overige woonlagen', type: 'materiaalTijd', opties: GLAS_OPTIES },
+      { key: 'glas1e', label: 'Glas 1e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
+      { key: 'glas2e', label: 'Glas 2e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
+      { key: 'glas3e', label: 'Glas 3e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
+      { key: 'glasOverige', label: 'Glas overige woonlagen', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
     ],
     overige: [
       { key: 'leidingisolatie', label: 'Leidingisolatie', type: 'isolatie' },
@@ -550,8 +560,8 @@ const ENERGETISCH_SCHEMA = {
   installaties: {
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaalTijd', opties: ['Airconditioning', 'Biomassaketel', 'Blokverwarming', 'Bodem/water warmtepomp', 'Centrale verwarming', 'Collectieve warmtepomp', 'CV-ketel', 'Elektrische verwarming', 'Gaskachels', 'HR combi ketel', 'Hybride warmtepomp', 'Infrarood', 'Lucht/lucht warmtepomp', 'Lucht/water warmtepomp', 'Micro WKK(HRe-ketel)', 'Moederhaard', 'Open haard/houtkachel', 'Pelletkachel', 'Stadsverwarming', 'Water/water warmtepomp(WKO)', 'Overige'] },
-      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'] },
-      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'] },
+      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem' },
+      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem' },
     ],
     warmWater: [
       { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'] },
@@ -712,6 +722,15 @@ function standaardMacros() {
       'oven', 'magnetron', 'combi-oven', 'combi-magnetron', 'stoomoven', 'koelkast', 'vriezer',
       'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker',
     ],
+    // "Kenmerken verdieping" (Indeling, Arno's verzoek 16-09-2026) — dezelfde 5 keuzelijsten worden
+    // ook gebruikt als opties bij de bijbehorende bouwkundige/energetische velden (zie
+    // BOUWKUNDIG_SCHEMA vloeren/verwarmingssysteem en ENERGETISCH_SCHEMA glas/verwarmingssysteem,
+    // via `macroSleutel` op die definities) — dus 1 plek om deze lijsten te beheren.
+    vloersoort: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'],
+    kozijnen: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'],
+    glastypes: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'],
+    verwarmingssysteem: ['Radiatoren', 'Vloerverwarming', 'Airconditioning', 'Convectorput', 'Infraroodpanelen', 'Elektrische radiator', 'Wandverwarming', 'Overige'],
+    vloerafwerking: ['Laminaat', 'PVC-vloer', 'Tegelvloer', 'Parket', 'Tapijt', 'Gietvloer', 'Natuursteen', 'Overige'],
     // Tik-chips per vrije-tekst-bouwdeel in Bouwkundig (13-09-2026, Arno's verzoek: "ook op de
     // overige tekstvelden", en bewerkbaar als macro — zie BOUWDEEL_CHIP_GROEPEN/renderChipEditor
     // hieronder). Sleutel = def.key uit BOUWKUNDIG_SCHEMA. Bewust korte, algemene startlijsten —
@@ -806,6 +825,9 @@ function metNieuweMacroCategorieen(m) {
   const standaard = standaardMacros();
   if (!Array.isArray(m.sanitair)) m.sanitair = standaard.sanitair;
   if (!Array.isArray(m.keuken)) m.keuken = standaard.keuken;
+  ['vloersoort', 'kozijnen', 'glastypes', 'verwarmingssysteem', 'vloerafwerking'].forEach((sleutel) => {
+    if (!Array.isArray(m[sleutel])) m[sleutel] = standaard[sleutel];
+  });
   // bouwdeelChips (13-09-2026): per-sleutel aanvullen i.p.v. de hele groep in één keer, zodat een
   // toekomstige NIEUWE bouwdeel-sleutel z'n startlijst alsnog krijgt zonder Arno's eigen eerder
   // bewerkte lijsten (bv. al aangepaste Trappen-chips) te overschrijven.
@@ -2003,6 +2025,40 @@ const indelingIngeklapt = new Set();
 
 // Arno's verzoek 16-09-2026: verdiepingnamen groter/dikgedrukt, elke verdieping inklapbaar en in een
 // eigen visueel "blok" met alle ruimtes erin — voor herkenbaarheid bij een opname met veel woonlagen.
+// "Kenmerken verdieping" (Arno's verzoek 16-09-2026) — 5 multiselect-velden bovenaan elke woonlaag,
+// opties uit de gelijknamige (bewerkbare) macro's, zelfde uiterlijk als een bouwkundig materiaal-
+// multiselect (.bouwdeel-materiaal-grid) voor visuele consistentie met de rest van de opname.
+const KENMERKEN_VERDIEPING_VELDEN = [
+  { sleutel: 'vloersoort', label: 'Vloersoort' },
+  { sleutel: 'kozijnen', label: 'Kozijnen' },
+  { sleutel: 'glastypes', label: 'Glastypes' },
+  { sleutel: 'verwarmingssysteem', label: 'Verwarmingssysteem' },
+  { sleutel: 'vloerafwerking', label: 'Vloerafwerking' },
+];
+function renderWoonlaagKenmerken(woonlaag) {
+  if (!woonlaag.kenmerken) woonlaag.kenmerken = leegWoonlaagKenmerken();
+  const kaart = el('div', { class: 'bouwdeel-kaart kenmerken-verdieping-kaart' });
+  kaart.appendChild(el('div', { class: 'bouwdeel-titel' }, 'Kenmerken verdieping'));
+  KENMERKEN_VERDIEPING_VELDEN.forEach(({ sleutel, label }) => {
+    if (!Array.isArray(woonlaag.kenmerken[sleutel])) woonlaag.kenmerken[sleutel] = [];
+    const gekozen = woonlaag.kenmerken[sleutel];
+    kaart.appendChild(el('div', { class: 'bouwdeel-veld-label kenmerken-veld-label' }, label));
+    const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+    (state.macros[sleutel] || []).forEach((optie) => {
+      grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+        el('input', {
+          type: 'checkbox', checked: gekozen.includes(optie) ? 'checked' : null,
+          onchange: () => {
+            const i = gekozen.indexOf(optie);
+            if (i >= 0) gekozen.splice(i, 1); else gekozen.push(optie);
+            planOpslaan(); render();
+          },
+        }), optie));
+    });
+    kaart.appendChild(grid);
+  });
+  return kaart;
+}
 function renderIndelingTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
@@ -2030,6 +2086,7 @@ function renderIndelingTab() {
 
     if (!ingeklapt) {
       const inhoud = el('div', { class: 'woonlaag-inhoud' });
+      inhoud.appendChild(renderWoonlaagKenmerken(woonlaag));
       (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
         inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }));
       });
@@ -4013,6 +4070,16 @@ function bepaalTrapTypesUitIndeling() {
   })));
   return gevonden;
 }
+// Een def kan `macroSleutel` hebben (bv. 'vloersoort', 'glastypes', 'verwarmingssysteem') — dan
+// komen de keuze-opties LIVE uit state.macros (door Arno zelf bewerkbaar in de Macros-tab en het
+// nieuwe "Kenmerken verdieping"-blok in Indeling), met def.opties alleen als fallback zolang de
+// macro's nog niet geladen zijn. Zonder macroSleutel werkt een def exact als voorheen.
+function bepaalOpties(def) {
+  if (def.macroSleutel && Array.isArray(state.macros[def.macroSleutel]) && state.macros[def.macroSleutel].length) {
+    return state.macros[def.macroSleutel];
+  }
+  return def.opties;
+}
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
   if (def.type === 'risico') return renderRisicoBouwdeelKaart(bouwdeel, def);
@@ -4031,7 +4098,7 @@ function renderBouwdeelKaart(sectieObj, def) {
 
   if (def.type === 'materiaal') {
     const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
-    def.opties.forEach(optie => {
+    bepaalOpties(def).forEach(optie => {
       const aan = (bouwdeel.materialen || []).includes(optie);
       grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
         el('input', {
@@ -4223,7 +4290,7 @@ function renderMateriaalTijdKaart(veld, def) {
   kaart.appendChild(renderEnergetischKop(veld, def));
   if (!veld.aanwezig) return kaart;
   const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
-  def.opties.forEach(optie => {
+  bepaalOpties(def).forEach(optie => {
     const aan = (veld.materialen || []).includes(optie);
     grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
       el('input', {
@@ -4564,6 +4631,11 @@ const MACRO_GROEPEN = [
   { sleutel: 'toevoegingen', titel: 'Toevoegingen (algemeen)', uitleg: 'Suggesties bij het toevoegen van een element — bij élke ruimte, naast de lijst hieronder indien van toepassing.' },
   { sleutel: 'sanitair', titel: 'Sanitair', uitleg: 'Extra suggesties bij een ruimte met "badkamer", "toilet" of "douche" in de naam.' },
   { sleutel: 'keuken', titel: 'Keuken', uitleg: 'Extra suggesties bij een ruimte met "keuken" in de naam.' },
+  { sleutel: 'vloersoort', titel: 'Vloersoort', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Bouwkundig > Vloeren.' },
+  { sleutel: 'kozijnen', titel: 'Kozijnen', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en tik-suggesties bij Bouwkundig > Kozijnen.' },
+  { sleutel: 'glastypes', titel: 'Glastypes', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Energetisch > Glas.' },
+  { sleutel: 'verwarmingssysteem', titel: 'Verwarmingssysteem', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Bouwkundig/Energetisch > Verwarmingssysteem.' },
+  { sleutel: 'vloerafwerking', titel: 'Vloerafwerking', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling).' },
 ];
 
 function renderMacrosTab() {

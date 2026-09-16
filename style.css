@@ -220,6 +220,9 @@ h1, h2, h3, p { margin: 0; }
 }
 .woonlaag-naam-invoer:focus { outline: none; }
 .woonlaag-inhoud { padding: 12px; }
+.kenmerken-verdieping-kaart { background: var(--navy-100); border-color: transparent; margin-bottom: 14px; }
+.kenmerken-veld-label { margin-top: 10px; }
+.kenmerken-veld-label:first-of-type { margin-top: 4px; }
 .ruimte-kaart {
   background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
