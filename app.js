@@ -2524,14 +2524,12 @@ async function genereerRapportPdf(knop) {
     const lokaleFotos = state.fotos.filter((f) => !f.archief);
     // Ook foto's ophalen die wél succesvol geüpload zijn (staan al in Taxatieweb) maar niet meer
     // lokaal op dit toestel — bv. na een cache-leging of op een ander apparaat geopend (Arno's
-    // melding 16-09-2026 over Grote Bavenkelsweg 27). Zonder lokale kopie is er geen ruimte_label-
-    // eigen match mogelijk, dus: cloud-foto's overslaan als er al minstens 1 lokale foto MET
-    // dezelfde ruimte/categorie-naam bestaat (waarschijnlijk dezelfde foto's, dubbel tonen heeft dan
-    // geen meerwaarde) — anders (dat lokale label ontbreekt helemaal) alsnog opnemen.
+    // melding 16-09-2026 over Grote Bavenkelsweg 27). Bewust GEEN dedup op label/categorie (die
+    // eerdere versie verborg ALLE cloud-foto's van bv. "Keuken" zodra er lokaal nog 1 Keuken-foto
+    // stond) — vaak zijn er meerdere foto's per ruimte, dus liever een enkele dubbele foto in het
+    // rapport dan een echte foto ten onrechte weglaten.
     knop.textContent = "Foto's ophalen…";
-    const lokaleLabels = new Set(lokaleFotos.map((f) => fotoLabelSleutel(f.ruimte_label || f.categorie)));
-    const cloudFotos = (await haalCloudFotos(t.rapport_id))
-      .filter((cf) => !lokaleLabels.has(fotoLabelSleutel(cf.ruimteLabel || cf.categorie)));
+    const cloudFotos = await haalCloudFotos(t.rapport_id);
     knop.textContent = 'Rapport wordt gemaakt…';
 
     const alleFotos = [
@@ -2634,11 +2632,11 @@ function renderFotosTab() {
     );
     grid.appendChild(tegel);
   });
-  // Cloud-only foto's (wél geüpload, niet meer lokaal — zie haalCloudFotos) erbij tonen, maar alleen
-  // als er nog GEEN lokale foto met datzelfde label bestaat (voorkomt dubbele tegels bij een normale,
-  // volledig gesynchroniseerde opname — zie ook renderFotoKnopRij hierboven, zelfde dedup-regel).
-  const lokaleLabels = new Set(state.fotos.filter(f => !f.archief).map(f => fotoLabelSleutel(f.ruimte_label || f.categorie)));
-  state.cloudFotos.filter(cf => !lokaleLabels.has(fotoLabelSleutel(cf.ruimteLabel || cf.categorie))).forEach(cf => {
+  // Cloud-only foto's (wél geüpload, niet meer lokaal — zie haalCloudFotos) erbij tonen. Bewust GEEN
+  // dedup op label/categorie meer (die eerdere versie verborg ALLE cloud-foto's van bv. "Keuken"
+  // zodra er lokaal nog maar 1 Keuken-foto stond) — Arno maakt vaak meerdere foto's van dezelfde
+  // ruimte, dus liever een enkele dubbele tegel tonen dan een echte foto ten onrechte verbergen.
+  state.cloudFotos.forEach(cf => {
     grid.appendChild(el('button', {
       type: 'button', class: 'foto-tegel foto-tegel-cloud', title: 'Uit cloud-archief — niet meer lokaal op dit toestel',
       onclick: () => openLightbox(cf),
@@ -3438,11 +3436,11 @@ function fotosVoorLabel(label) {
 // Compacte fotoknop + eventuele al-gemaakte-foto-miniaturen, voor gebruik ín een bouwdeel-kaart.
 // `verplicht` bepaalt alleen het label/uiterlijk van de knop zolang er nog geen foto is — de foto
 // zelf is altijd optioneel om te VERWIJDEREN (via de bestaande lightbox), nooit hard afgedwongen.
-// Toont ook cloud-only foto's (wél geüpload, niet meer lokaal) — alleen als er nog GEEN lokale foto
-// met dit label is, anders zou elke "normale" opname (lokaal + cloud in sync) dubbele miniaturen tonen.
+// Toont ook cloud-only foto's (wél geüpload, niet meer lokaal) van dit label — samen met de lokale,
+// zonder dedup (Arno maakt vaak meerdere foto's van dezelfde ruimte; die willen we niet verbergen).
 function renderFotoKnopRij(label, categorie, verplicht) {
   const lokaleFotos = fotosVoorLabel(label);
-  const cloudFotos = lokaleFotos.length ? [] : state.cloudFotos.filter(cf => fotoLabelSleutel(cf.ruimteLabel || cf.categorie) === fotoLabelSleutel(label));
+  const cloudFotos = state.cloudFotos.filter(cf => fotoLabelSleutel(cf.ruimteLabel || cf.categorie) === fotoLabelSleutel(label));
   const totaalAantal = lokaleFotos.length + cloudFotos.length;
   const rij = el('div', { class: 'bouwdeel-foto-rij' });
   lokaleFotos.forEach(f => {
