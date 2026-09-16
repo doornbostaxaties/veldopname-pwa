@@ -823,6 +823,11 @@ const state = {
   route: { naam: 'lijst' }, // { naam:'lijst' } | { naam:'opname', rapportId, tab }
   taxatie: null, // huidig geladen taxatie (zelfde vorm als leegTaxatie())
   fotos: [], // foto's van de huidige taxatie (uit IndexedDB), inclusief nog-niet-verzonden
+  // Foto's van de huidige taxatie die WEL succesvol geüpload zijn (Airtable-tabel "Opname Foto's")
+  // maar niet meer lokaal aanwezig — Arno's melding 16-09-2026 (Grote Bavenkelsweg 27: foto's stonden
+  // wel in Taxatieweb, niet meer in de PWA). Op de achtergrond gevuld door laadOpname(), zie
+  // haalCloudFotos(). Blijft leeg zolang de fetch nog loopt of zonder verbinding.
+  cloudFotos: [],
   taxatielijst: [], // cache voor het homescherm
   vooronderzoekLijst: null, // null = nog niet opgehaald; daarna array records uit Airtable-tabel "Vooronderzoek"
   vooronderzoekLaadFout: false,
@@ -1241,7 +1246,18 @@ async function laadOpname(rapportId, tab) {
   lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
   state.taxatie = lokaal;
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
+  state.cloudFotos = [];
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
+
+  // Op de achtergrond: foto's ophalen die al geüpload zijn maar niet (meer) lokaal aanwezig staan
+  // (zie haalCloudFotos hierboven) — bewust NIET blokkerend voor het openen van de taxatie, en
+  // alleen 1x per keer openen (niet bij elke render), om onnodige Make-operaties te vermijden.
+  if (state.online) {
+    haalCloudFotos(rapportId).then((lijst) => {
+      state.cloudFotos = lijst;
+      if (state.route.naam === 'opname' && state.route.rapportId === rapportId) render();
+    });
+  }
 
   // Op de achtergrond: cloud-versie ophalen en overnemen als die recenter/aanwezig is (net als
   // taxatieweb-opname.user.js bij het laden doet) — alleen als er lokaal nog geen wijziging in de
@@ -2131,8 +2147,11 @@ function bepaalVerplichteFotos() {
   // (bv. een ruimte die letterlijk "Zolder" heet levert dat al op).
   if (heeftZolder() && !items.some(i => i.categorie === 'Zolder')) items.push({ naam: 'Zolder', categorie: 'Zolder' });
   // Foto's die als "eigen archief" gemarkeerd zijn tellen niet mee voor de checklist — dat zijn
-  // bewust extra opnamen voor Arno's eigen naslag, niet bedoeld voor Q/R.
-  const relevanteFotos = state.fotos.filter(f => !f.archief);
+  // bewust extra opnamen voor Arno's eigen naslag, niet bedoeld voor Q/R. Cloud-only foto's (wél
+  // geüpload, niet meer lokaal) tellen WEL mee — anders lijkt de checklist onterecht onvolledig na
+  // een cache-leging/ander toestel (Arno's melding 16-09-2026).
+  const cloudAlsFotos = (state.cloudFotos || []).map(cf => ({ categorie: cf.categorie, ruimte_label: cf.ruimteLabel, instantie: 0 }));
+  const relevanteFotos = state.fotos.filter(f => !f.archief).concat(cloudAlsFotos);
   const gemaakt = relevanteFotos.map(f => f.categorie + '::' + (f.instantie || 0));
   return items.map((item, i) => ({ ...item, klaar: gemaakt.includes((item.categorie) + '::' + (item.instantie || 0)) || relevanteFotos.some(f => f.ruimte_label === item.naam) }));
 }
@@ -2321,9 +2340,16 @@ async function urlNaarPdfAfbeelding(url, maxBreedtePx = 1000) {
   return fotoNaarPdfAfbeelding(await resp.blob(), maxBreedtePx);
 }
 
+// Normaliseert een label/categorie voor VERGELIJKING (dedup lokaal vs. cloud) — live productiedata
+// bleek al eens een trailing space te bevatten ("Woonkamer "), vandaar trim() naast lowerCase().
+function fotoLabelSleutel(x) {
+  return String(x || 'Anders').trim().toLowerCase();
+}
+
 // Foto's die WEL succesvol geüpload zijn maar niet (meer) lokaal op dit toestel staan (zie
 // FOTOS_OPHALEN_WEBHOOK hierboven) — geeft een lege lijst terug bij een netwerkfout of zonder
-// verbinding, zodat het PDF-rapport dan gewoon met alléén de lokale foto's doorgaat.
+// verbinding, zodat zowel het PDF-rapport als de galerij dan gewoon met alléén de lokale foto's
+// doorgaan. `bron:'cloud'` markeert deze objecten voor openLightbox().
 async function haalCloudFotos(rapportId) {
   try {
     const resp = await fetch(FOTOS_OPHALEN_WEBHOOK, {
@@ -2339,11 +2365,17 @@ async function haalCloudFotos(rapportId) {
     };
     return (data.records || [])
       .filter((r) => hoortBijDitRapport(r) && Array.isArray(r.fields.bestand) && r.fields.bestand.length)
-      .map((r) => ({
-        ruimteLabel: r.fields.ruimte_label || '',
-        categorie: r.fields.categorie || 'Anders',
-        url: r.fields.bestand[0].url,
-      }));
+      .map((r) => {
+        const bestand = r.fields.bestand[0];
+        return {
+          bron: 'cloud',
+          id: r.id,
+          ruimteLabel: r.fields.ruimte_label || '',
+          categorie: r.fields.categorie || 'Anders',
+          url: bestand.url,
+          thumbUrl: (bestand.thumbnails && bestand.thumbnails.large && bestand.thumbnails.large.url) || bestand.url,
+        };
+      });
   } catch (e) {
     return [];
   }
@@ -2497,9 +2529,9 @@ async function genereerRapportPdf(knop) {
     // dezelfde ruimte/categorie-naam bestaat (waarschijnlijk dezelfde foto's, dubbel tonen heeft dan
     // geen meerwaarde) — anders (dat lokale label ontbreekt helemaal) alsnog opnemen.
     knop.textContent = "Foto's ophalen…";
-    const lokaleLabels = new Set(lokaleFotos.map((f) => (f.ruimte_label || f.categorie || 'Anders').toLowerCase()));
+    const lokaleLabels = new Set(lokaleFotos.map((f) => fotoLabelSleutel(f.ruimte_label || f.categorie)));
     const cloudFotos = (await haalCloudFotos(t.rapport_id))
-      .filter((cf) => !lokaleLabels.has((cf.ruimteLabel || cf.categorie || 'Anders').toLowerCase()));
+      .filter((cf) => !lokaleLabels.has(fotoLabelSleutel(cf.ruimteLabel || cf.categorie)));
     knop.textContent = 'Rapport wordt gemaakt…';
 
     const alleFotos = [
@@ -2602,6 +2634,20 @@ function renderFotosTab() {
     );
     grid.appendChild(tegel);
   });
+  // Cloud-only foto's (wél geüpload, niet meer lokaal — zie haalCloudFotos) erbij tonen, maar alleen
+  // als er nog GEEN lokale foto met datzelfde label bestaat (voorkomt dubbele tegels bij een normale,
+  // volledig gesynchroniseerde opname — zie ook renderFotoKnopRij hierboven, zelfde dedup-regel).
+  const lokaleLabels = new Set(state.fotos.filter(f => !f.archief).map(f => fotoLabelSleutel(f.ruimte_label || f.categorie)));
+  state.cloudFotos.filter(cf => !lokaleLabels.has(fotoLabelSleutel(cf.ruimteLabel || cf.categorie))).forEach(cf => {
+    grid.appendChild(el('button', {
+      type: 'button', class: 'foto-tegel foto-tegel-cloud', title: 'Uit cloud-archief — niet meer lokaal op dit toestel',
+      onclick: () => openLightbox(cf),
+    },
+      el('img', { src: cf.thumbUrl }),
+      el('span', { class: 'badge cloud' }, '☁'),
+      el('span', { class: 'label' }, cf.ruimteLabel || cf.categorie || 'Anders'),
+    ));
+  });
   const toevoegen = el('div', { class: 'foto-add' },
     el('span', { class: 'plus' }, '+'), "Foto",
     el('input', {
@@ -2617,22 +2663,30 @@ function renderFotosTab() {
 // Sinds Arno's verzoek: foto's vergroten in een lightbox, en per foto uitschakelbaar maken voor
 // de verplichte-foto's-check ("eigen archief" — bv. een extra herinneringsfoto die niet naar Q/R
 // hoeft en niet als 'verplicht' meetelt).
+// `foto` is óf een lokale IndexedDB-foto (heeft .blob/.id/.archief), óf een genormaliseerde
+// cloud-only foto (bron:'cloud', url/thumbUrl/ruimteLabel — zie haalCloudFotos) die WEL succesvol
+// geüpload is maar niet meer lokaal op dit toestel staat. Voor die laatste is er geen lokale DB-rij
+// om te verwijderen/archiveren of om als achtergrond in Tekenen te laden (het volledige-resolutie-
+// bestand zou eerst gedownload moeten worden) — vandaar de vertakking hieronder.
 function openLightbox(foto) {
   const bestaand = document.querySelector('.lightbox');
   if (bestaand) bestaand.remove();
-  const toggle = el('input', { type: 'checkbox' });
-  toggle.checked = !!foto.archief;
-  toggle.addEventListener('change', async () => {
-    foto.archief = toggle.checked;
-    await VeldopnameDB.werkFotoBij(foto.id, { archief: foto.archief });
-  });
-  const overlay = el('div', { class: 'lightbox' },
-    el('div', { class: 'lightbox-top' },
-      el('span', { class: 'lightbox-titel' }, foto.ruimte_label || foto.categorie || 'Anders'),
-      el('button', { onclick: () => overlay.remove() }, '✕'),
-    ),
-    el('div', { class: 'lightbox-beeld' }, el('img', { src: URL.createObjectURL(foto.blob) })),
-    el('div', { class: 'lightbox-onder' },
+  const isCloud = foto.bron === 'cloud';
+  const titel = (isCloud ? foto.ruimteLabel : foto.ruimte_label) || foto.categorie || 'Anders';
+  const beeldSrc = isCloud ? (foto.url || foto.thumbUrl) : URL.createObjectURL(foto.blob);
+
+  let onderdeel;
+  if (isCloud) {
+    onderdeel = el('div', { class: 'lightbox-onder' },
+      el('span', { style: 'color:rgba(255,255,255,.75);font-size:12px;' }, '☁ Uit cloud-archief — niet meer lokaal op dit toestel, alleen hier te bekijken'));
+  } else {
+    const toggle = el('input', { type: 'checkbox' });
+    toggle.checked = !!foto.archief;
+    toggle.addEventListener('change', async () => {
+      foto.archief = toggle.checked;
+      await VeldopnameDB.werkFotoBij(foto.id, { archief: foto.archief });
+    });
+    onderdeel = el('div', { class: 'lightbox-onder' },
       el('label', { class: 'archief-toggle' }, toggle, 'Eigen archief (niet verplicht, niet naar Q/R)'),
       el('div', { style: 'display:flex;gap:8px;' },
         el('button', {
@@ -2655,7 +2709,16 @@ function openLightbox(foto) {
           },
         }, '🗑 Verwijderen'),
       ),
+    );
+  }
+
+  const overlay = el('div', { class: 'lightbox' },
+    el('div', { class: 'lightbox-top' },
+      el('span', { class: 'lightbox-titel' }, titel + (isCloud ? ' (cloud)' : '')),
+      el('button', { onclick: () => overlay.remove() }, '✕'),
     ),
+    el('div', { class: 'lightbox-beeld' }, el('img', { src: beeldSrc })),
+    onderdeel,
   );
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -3375,16 +3438,26 @@ function fotosVoorLabel(label) {
 // Compacte fotoknop + eventuele al-gemaakte-foto-miniaturen, voor gebruik ín een bouwdeel-kaart.
 // `verplicht` bepaalt alleen het label/uiterlijk van de knop zolang er nog geen foto is — de foto
 // zelf is altijd optioneel om te VERWIJDEREN (via de bestaande lightbox), nooit hard afgedwongen.
+// Toont ook cloud-only foto's (wél geüpload, niet meer lokaal) — alleen als er nog GEEN lokale foto
+// met dit label is, anders zou elke "normale" opname (lokaal + cloud in sync) dubbele miniaturen tonen.
 function renderFotoKnopRij(label, categorie, verplicht) {
-  const fotos = fotosVoorLabel(label);
+  const lokaleFotos = fotosVoorLabel(label);
+  const cloudFotos = lokaleFotos.length ? [] : state.cloudFotos.filter(cf => fotoLabelSleutel(cf.ruimteLabel || cf.categorie) === fotoLabelSleutel(label));
+  const totaalAantal = lokaleFotos.length + cloudFotos.length;
   const rij = el('div', { class: 'bouwdeel-foto-rij' });
-  fotos.forEach(f => {
+  lokaleFotos.forEach(f => {
     rij.appendChild(el('button', {
       type: 'button', class: 'bouwdeel-foto-mini', onclick: () => openLightbox(f),
     }, el('img', { src: URL.createObjectURL(f.blob) })));
   });
-  rij.appendChild(el('label', { class: 'bouwdeel-foto-knop' + (fotos.length ? '' : verplicht ? ' verplicht' : '') },
-    fotos.length ? '📷 Nog een foto' : (verplicht ? '📷 Foto verplicht' : '📷 Foto toevoegen'),
+  cloudFotos.forEach(cf => {
+    rij.appendChild(el('button', {
+      type: 'button', class: 'bouwdeel-foto-mini bouwdeel-foto-mini-cloud', title: "Uit cloud-archief — niet meer lokaal op dit toestel",
+      onclick: () => openLightbox(cf),
+    }, el('img', { src: cf.thumbUrl })));
+  });
+  rij.appendChild(el('label', { class: 'bouwdeel-foto-knop' + (totaalAantal ? '' : verplicht ? ' verplicht' : '') },
+    totaalAantal ? '📷 Nog een foto' : (verplicht ? '📷 Foto verplicht' : '📷 Foto toevoegen'),
     el('input', {
       type: 'file', accept: 'image/*', capture: 'environment',
       onchange: async (e) => { await slaFotoOp(e.target.files[0], label, categorie); render(); },
@@ -4439,6 +4512,19 @@ function renderAantekeningenTab() {
     grid.appendChild(el('button', { type: 'button', class: 'foto-tegel', onclick: () => openLightbox(f) },
       el('img', { src: URL.createObjectURL(f.blob) }),
       el('span', { class: 'badge ' + badgeKlasse }, badgeTekst),
+    ));
+  });
+  // Cloud-only schetsen (wél geüpload, niet meer lokaal) — bewust GEEN label-dedup zoals bij de
+  // "gewone" foto's/bouwdelen: elke schets deelt hier dezelfde categorie ('Tekening'), dus die regel
+  // zou bij 1 lokale schets meteen ALLE cloud-schetsen verbergen. Een enkele dubbele tegel is
+  // onschuldiger dan een gemiste schets.
+  state.cloudFotos.filter(cf => fotoLabelSleutel(cf.categorie) === fotoLabelSleutel('Tekening')).forEach(cf => {
+    grid.appendChild(el('button', {
+      type: 'button', class: 'foto-tegel foto-tegel-cloud', title: 'Uit cloud-archief — niet meer lokaal op dit toestel',
+      onclick: () => openLightbox(cf),
+    },
+      el('img', { src: cf.thumbUrl }),
+      el('span', { class: 'badge cloud' }, '☁'),
     ));
   });
   grid.appendChild(el('div', {
