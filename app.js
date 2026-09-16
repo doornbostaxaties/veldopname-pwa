@@ -360,7 +360,7 @@ const BOUWKUNDIG_SCHEMA = {
       // Multiselect i.p.v. vrije tekst (Arno's verzoek 16-09-2026) — opties komen live uit
       // state.macros.kozijnen (macroSleutel, zie bepaalOpties), zelfde lijst als bij "Kenmerken
       // verdieping" in Indeling.
-      { key: 'kozijnen', label: 'Kozijnen', type: 'materiaal', opties: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'], macroSleutel: 'kozijnen', standaardAan: true },
+      { key: 'kozijnen', label: 'Kozijnen', type: 'materiaal', opties: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'], macroSleutel: 'kozijnen', kenmerkenKoppeling: { macroSleutel: 'kozijnen', slot: 'alle' }, standaardAan: true },
       { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst', standaardAan: true },
       { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst', standaardAan: true },
       { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst', standaardAan: true },
@@ -393,10 +393,10 @@ const BOUWKUNDIG_SCHEMA = {
     // lijst voor Indeling én de relevante bouwkundige onderdelen") — zie renderBouwdeelKaart, dat
     // macroSleutel vóór def.opties gebruikt zodra 'ie aanwezig is.
     vloeren: [
-      { key: 'woonlaag1', label: 'Woonlaag 1', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
-      { key: 'woonlaag2', label: 'Woonlaag 2', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
-      { key: 'woonlaag3', label: 'Woonlaag 3', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
-      { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort' },
+      { key: 'woonlaag1', label: 'Woonlaag 1', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort', kenmerkenKoppeling: { macroSleutel: 'vloersoort', slot: '1e' } },
+      { key: 'woonlaag2', label: 'Woonlaag 2', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort', kenmerkenKoppeling: { macroSleutel: 'vloersoort', slot: '2e' } },
+      { key: 'woonlaag3', label: 'Woonlaag 3', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort', kenmerkenKoppeling: { macroSleutel: 'vloersoort', slot: '3e' } },
+      { key: 'woonlaagOverige', label: 'Woonlaag overige', type: 'materiaal', opties: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'], macroSleutel: 'vloersoort', kenmerkenKoppeling: { macroSleutel: 'vloersoort', slot: 'overige' } },
     ],
     wanden: [
       { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst', standaardAan: true },
@@ -427,8 +427,8 @@ const BOUWKUNDIG_SCHEMA = {
     ],
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
-      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem' },
-      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem' },
+      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' } },
+      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
     ],
     warmwater: [
       { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
@@ -550,10 +550,10 @@ const ENERGETISCH_SCHEMA = {
     // macroSleutel 'glastypes': opties komen live uit state.macros.glastypes (Arno's verzoek
     // 16-09-2026), GLAS_OPTIES blijft alleen nog de fallback vóórdat de macro's geladen zijn.
     ramen: [
-      { key: 'glas1e', label: 'Glas 1e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
-      { key: 'glas2e', label: 'Glas 2e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
-      { key: 'glas3e', label: 'Glas 3e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
-      { key: 'glasOverige', label: 'Glas overige woonlagen', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes' },
+      { key: 'glas1e', label: 'Glas 1e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '1e' } },
+      { key: 'glas2e', label: 'Glas 2e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '2e' } },
+      { key: 'glas3e', label: 'Glas 3e woonlaag', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '3e' } },
+      { key: 'glasOverige', label: 'Glas overige woonlagen', type: 'materiaalTijd', opties: GLAS_OPTIES, macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: 'overige' } },
     ],
     overige: [
       { key: 'leidingisolatie', label: 'Leidingisolatie', type: 'isolatie' },
@@ -563,8 +563,8 @@ const ENERGETISCH_SCHEMA = {
   installaties: {
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaalTijd', opties: ['Airconditioning', 'Biomassaketel', 'Blokverwarming', 'Bodem/water warmtepomp', 'Centrale verwarming', 'Collectieve warmtepomp', 'CV-ketel', 'Elektrische verwarming', 'Gaskachels', 'HR combi ketel', 'Hybride warmtepomp', 'Infrarood', 'Lucht/lucht warmtepomp', 'Lucht/water warmtepomp', 'Micro WKK(HRe-ketel)', 'Moederhaard', 'Open haard/houtkachel', 'Pelletkachel', 'Stadsverwarming', 'Water/water warmtepomp(WKO)', 'Overige'] },
-      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem' },
-      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem' },
+      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' } },
+      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
     ],
     warmWater: [
       { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'] },
@@ -1270,6 +1270,7 @@ async function laadOpname(rapportId, tab) {
   if (!lokaal.begintijdOpname) lokaal.begintijdOpname = new Date().toISOString(); // eerste keer laden = start inspectie
   lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
   state.taxatie = lokaal;
+  synchroniseerKenmerken(); // bestaande Vloeren/Kozijnen/Glas/Verwarmingssysteem-keuzes overnemen in Indeling (16-09-2026)
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   state.cloudFotos = [];
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -2025,6 +2026,10 @@ function alleRuimtes() {
 // zelfde soort los UI-state-object als bouwdeelChipEditorOpen elders in dit bestand. Sleutel = index
 // in woonlagen[], gereset bij een herlaadbeurt (allemaal weer uitgeklapt, dat is de veilige default).
 const indelingIngeklapt = new Set();
+// Zelfde soort los ingeklapt-statusje, maar dan voor het "Kenmerken verdieping"-blok specifiek
+// (Arno's verzoek 16-09-2026) — onafhankelijk van indelingIngeklapt, zodat je de ruimtes van een
+// verdieping kunt zien terwijl de kenmerken zelf ingeklapt blijven, of andersom.
+const kenmerkenIngeklapt = new Set();
 
 // Arno's verzoek 16-09-2026: verdiepingnamen groter/dikgedrukt, elke verdieping inklapbaar en in een
 // eigen visueel "blok" met alle ruimtes erin — voor herkenbaarheid bij een opname met veel woonlagen.
@@ -2038,10 +2043,18 @@ const KENMERKEN_VERDIEPING_VELDEN = [
   { sleutel: 'verwarmingssysteem', label: 'Verwarmingssysteem' },
   { sleutel: 'vloerafwerking', label: 'Vloerafwerking' },
 ];
-function renderWoonlaagKenmerken(woonlaag) {
+function renderWoonlaagKenmerken(woonlaag, wIdx) {
   if (!woonlaag.kenmerken) woonlaag.kenmerken = leegWoonlaagKenmerken();
+  const ingeklapt = kenmerkenIngeklapt.has(wIdx);
   const kaart = el('div', { class: 'bouwdeel-kaart kenmerken-verdieping-kaart' });
-  kaart.appendChild(el('div', { class: 'bouwdeel-titel' }, 'Kenmerken verdieping'));
+  kaart.appendChild(el('div', {
+    class: 'woonlaag-kop kenmerken-kop',
+    onclick: () => { if (ingeklapt) kenmerkenIngeklapt.delete(wIdx); else kenmerkenIngeklapt.add(wIdx); render(); },
+  },
+    el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
+    el('div', { class: 'bouwdeel-titel' }, 'Kenmerken verdieping'),
+  ));
+  if (ingeklapt) return kaart;
   KENMERKEN_VERDIEPING_VELDEN.forEach(({ sleutel, label }) => {
     if (!Array.isArray(woonlaag.kenmerken[sleutel])) woonlaag.kenmerken[sleutel] = [];
     const gekozen = woonlaag.kenmerken[sleutel];
@@ -2089,7 +2102,7 @@ function renderIndelingTab() {
 
     if (!ingeklapt) {
       const inhoud = el('div', { class: 'woonlaag-inhoud' });
-      inhoud.appendChild(renderWoonlaagKenmerken(woonlaag));
+      inhoud.appendChild(renderWoonlaagKenmerken(woonlaag, wIdx));
       (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
         inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }));
       });
@@ -4083,6 +4096,74 @@ function bepaalOpties(def) {
   }
   return def.opties;
 }
+
+// Een def kan óók `kenmerkenKoppeling: { macroSleutel, slot }` hebben (Arno's verzoek 16-09-2026:
+// "kenmerken moeten automatisch op beide plekken identiek zijn, ook de aangevinkte keuzes") — dan is
+// dit veld GEEN eigen los opgeslagen keuze meer, maar leest/schrijft rechtstreeks de "Kenmerken
+// verdieping"-selectie(s) in Indeling. Dat maakt de twee plekken identiek by DESIGN (1 opslagplek)
+// i.p.v. via een foutgevoelige synchronisatiestap. `slot` bepaalt welke woonlaag/woonlagen erbij
+// horen — bij een gecombineerd slot ('overige'/'2eEnVolgende'/'alle') geldt een vinkje als "aan"
+// zodra minstens 1 van de betrokken woonlagen 'm heeft, en een klik zet 'm op ALLE betrokken
+// woonlagen tegelijk aan/uit (1 vinkje kan geen verschil per woonlaag tonen).
+function woonlagenVoorSlot(slot) {
+  const woonlagen = (state.taxatie && state.taxatie.data && state.taxatie.data.indeling.woonlagen) || [];
+  if (slot === 'alle') return woonlagen;
+  if (slot === '1e') return woonlagen.slice(0, 1);
+  if (slot === '2e') return woonlagen.slice(1, 2);
+  if (slot === '3e') return woonlagen.slice(2, 3);
+  if (slot === 'overige') return woonlagen.slice(3);
+  if (slot === '2eEnVolgende') return woonlagen.slice(1);
+  return [];
+}
+function kenmerkGeselecteerd(koppeling, optie) {
+  return woonlagenVoorSlot(koppeling.slot).some((w) => {
+    if (!w.kenmerken) w.kenmerken = leegWoonlaagKenmerken();
+    return (w.kenmerken[koppeling.macroSleutel] || []).includes(optie);
+  });
+}
+function kenmerkWissel(koppeling, optie) {
+  const nieuweStatus = !kenmerkGeselecteerd(koppeling, optie);
+  woonlagenVoorSlot(koppeling.slot).forEach((w) => {
+    if (!w.kenmerken) w.kenmerken = leegWoonlaagKenmerken();
+    const lijst = w.kenmerken[koppeling.macroSleutel];
+    const i = lijst.indexOf(optie);
+    if (nieuweStatus && i < 0) lijst.push(optie);
+    if (!nieuweStatus && i >= 0) lijst.splice(i, 1);
+  });
+}
+// Eenmalige (idempotente) overname bij het laden van een taxatie: bestaande Vloeren/Kozijnen/Glas/
+// Verwarmingssysteem-keuzes die vóór de kenmerkenKoppeling hierboven al los per bouwdeel waren
+// aangevinkt, samenvoegen in de bijbehorende Indeling-woonlaag(en) — zodat niets ineens verdwenen
+// lijkt nu deze velden hun aangevinkte keuzes rechtstreeks uit Indeling lezen (Arno's verzoek
+// 16-09-2026: "automatisch op beide plekken identiek, ook de aangevinkte keuzes"). Draait bij elke
+// laadOpname() maar is een no-op zodra alles al is samengevoegd (bestaande materialen-velden worden
+// hierna niet meer bijgewerkt, dus dit blijft veilig herhaalbaar).
+function synchroniseerKenmerken() {
+  const t = state.taxatie;
+  (t.data.indeling.woonlagen || []).forEach((w) => { if (!w.kenmerken) w.kenmerken = leegWoonlaagKenmerken(); });
+  const voegSamen = (bouwdeel, koppeling) => {
+    const materialen = bouwdeel && bouwdeel.materialen;
+    if (!Array.isArray(materialen) || !materialen.length) return;
+    woonlagenVoorSlot(koppeling.slot).forEach((w) => {
+      materialen.forEach((optie) => {
+        if (!w.kenmerken[koppeling.macroSleutel].includes(optie)) w.kenmerken[koppeling.macroSleutel].push(optie);
+      });
+    });
+  };
+  voegSamen(t.bouwkundig.buitenzijde.gevel.kozijnen, { macroSleutel: 'kozijnen', slot: 'alle' });
+  voegSamen(t.bouwkundig.binnenzijde.vloeren.woonlaag1, { macroSleutel: 'vloersoort', slot: '1e' });
+  voegSamen(t.bouwkundig.binnenzijde.vloeren.woonlaag2, { macroSleutel: 'vloersoort', slot: '2e' });
+  voegSamen(t.bouwkundig.binnenzijde.vloeren.woonlaag3, { macroSleutel: 'vloersoort', slot: '3e' });
+  voegSamen(t.bouwkundig.binnenzijde.vloeren.woonlaagOverige, { macroSleutel: 'vloersoort', slot: 'overige' });
+  voegSamen(t.bouwkundig.installaties.verwarming.verwarmingssysteem1eWoonlaag, { macroSleutel: 'verwarmingssysteem', slot: '1e' });
+  voegSamen(t.bouwkundig.installaties.verwarming.verwarmingssysteem2eEnVolgendeWoonlaag, { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' });
+  voegSamen(t.energetisch.isolatie.ramen.glas1e, { macroSleutel: 'glastypes', slot: '1e' });
+  voegSamen(t.energetisch.isolatie.ramen.glas2e, { macroSleutel: 'glastypes', slot: '2e' });
+  voegSamen(t.energetisch.isolatie.ramen.glas3e, { macroSleutel: 'glastypes', slot: '3e' });
+  voegSamen(t.energetisch.isolatie.ramen.glasOverige, { macroSleutel: 'glastypes', slot: 'overige' });
+  voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem1e, { macroSleutel: 'verwarmingssysteem', slot: '1e' });
+  voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem2e, { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' });
+}
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
   if (def.type === 'risico') return renderRisicoBouwdeelKaart(bouwdeel, def);
@@ -4102,21 +4183,28 @@ function renderBouwdeelKaart(sectieObj, def) {
   if (def.type === 'materiaal') {
     const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
     bepaalOpties(def).forEach(optie => {
-      const aan = (bouwdeel.materialen || []).includes(optie);
+      const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie) : (bouwdeel.materialen || []).includes(optie);
       grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
         el('input', {
           type: 'checkbox', checked: aan ? 'checked' : null,
           onchange: () => {
-            bouwdeel.materialen = bouwdeel.materialen || [];
-            const i = bouwdeel.materialen.indexOf(optie);
-            if (i >= 0) bouwdeel.materialen.splice(i, 1); else bouwdeel.materialen.push(optie);
+            if (def.kenmerkenKoppeling) {
+              kenmerkWissel(def.kenmerkenKoppeling, optie);
+            } else {
+              bouwdeel.materialen = bouwdeel.materialen || [];
+              const i = bouwdeel.materialen.indexOf(optie);
+              if (i >= 0) bouwdeel.materialen.splice(i, 1); else bouwdeel.materialen.push(optie);
+            }
             planOpslaan(); render();
           },
         }), optie));
     });
     kaart.appendChild(grid);
     // "Overige" toont net als in Taxatieweb een vrij tekstveld ernaast (Arno's verzoek 12-09-2026).
-    if ((bouwdeel.materialen || []).includes('Overige')) {
+    // Dit tekstveld blijft bewust LOKAAL per veld (niet gekoppeld) — alleen de aangevinkte keuzes
+    // zelf moeten identiek zijn tussen Indeling en Bouwkundig/Energetisch (Arno's verzoek 16-09-2026).
+    const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige') : (bouwdeel.materialen || []).includes('Overige');
+    if (overigeAan) {
       const overigeVeld = el('input', {
         type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
         oninput: (e) => { bouwdeel.overigeTekst = e.target.value; planOpslaan(); },
@@ -4294,20 +4382,25 @@ function renderMateriaalTijdKaart(veld, def) {
   if (!veld.aanwezig) return kaart;
   const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
   bepaalOpties(def).forEach(optie => {
-    const aan = (veld.materialen || []).includes(optie);
+    const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie) : (veld.materialen || []).includes(optie);
     grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
       el('input', {
         type: 'checkbox', checked: aan ? 'checked' : null,
         onchange: () => {
-          veld.materialen = veld.materialen || [];
-          const i = veld.materialen.indexOf(optie);
-          if (i >= 0) veld.materialen.splice(i, 1); else veld.materialen.push(optie);
+          if (def.kenmerkenKoppeling) {
+            kenmerkWissel(def.kenmerkenKoppeling, optie);
+          } else {
+            veld.materialen = veld.materialen || [];
+            const i = veld.materialen.indexOf(optie);
+            if (i >= 0) veld.materialen.splice(i, 1); else veld.materialen.push(optie);
+          }
           planOpslaan(); render();
         },
       }), optie));
   });
   kaart.appendChild(grid);
-  if ((veld.materialen || []).includes('Overige')) {
+  const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige') : (veld.materialen || []).includes('Overige');
+  if (overigeAan) {
     const overigeVeld = el('input', {
       type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
       oninput: (e) => { veld.overigeTekst = e.target.value; planOpslaan(); },
