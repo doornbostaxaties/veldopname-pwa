@@ -2704,27 +2704,16 @@ function openLightbox(foto) {
     });
     onderdeel = el('div', { class: 'lightbox-onder' },
       el('label', { class: 'archief-toggle' }, toggle, 'Eigen archief (niet verplicht, niet naar Q/R)'),
-      el('div', { style: 'display:flex;gap:8px;' },
-        el('button', {
-          class: 'verwijder-foto-knop', style: 'background:var(--navy-100);color:var(--navy);',
-          onclick: () => {
-            overlay.remove();
-            // Tekenen op een bestaande foto verandert het origineel nooit — de aangetekende versie
-            // wordt als NIEUWE foto opgeslagen (zelfde niet-destructieve principe als "eigen archief").
-            openTekenScherm({ ruimteLabel: foto.ruimte_label, categorie: foto.categorie, achtergrondBlob: foto.blob });
-          },
-        }, '✏️ Tekenen'),
-        el('button', {
-          class: 'verwijder-foto-knop',
-          onclick: async () => {
-            if (!confirm('Deze foto verwijderen?')) return;
-            await VeldopnameDB.verwijderFoto(foto.id);
-            state.fotos = state.fotos.filter(f => f.id !== foto.id);
-            overlay.remove();
-            if (state.route.tab === 'fotos') render();
-          },
-        }, '🗑 Verwijderen'),
-      ),
+      el('button', {
+        class: 'verwijder-foto-knop',
+        onclick: async () => {
+          if (!confirm('Deze foto verwijderen?')) return;
+          await VeldopnameDB.verwijderFoto(foto.id);
+          state.fotos = state.fotos.filter(f => f.id !== foto.id);
+          overlay.remove();
+          if (state.route.tab === 'fotos') render();
+        },
+      }, '🗑 Verwijderen'),
     );
   }
 
@@ -3478,10 +3467,6 @@ function renderFotoKnopRij(label, categorie, verplicht) {
       type: 'file', accept: 'image/*', capture: 'environment',
       onchange: async (e) => { await slaFotoOp(e.target.files[0], label, categorie); render(); },
     })));
-  rij.appendChild(el('button', {
-    type: 'button', class: 'bouwdeel-teken-knop',
-    onclick: () => openTekenScherm({ ruimteLabel: label, categorie }),
-  }, '✏️ Tekenen'));
   return rij;
 }
 

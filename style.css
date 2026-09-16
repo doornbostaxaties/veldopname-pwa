@@ -499,11 +499,6 @@ h1, h2, h3, p { margin: 0; }
 }
 .bouwdeel-foto-knop.verplicht { border-color: var(--pending); color: var(--pending); background: var(--pending-bg); }
 .bouwdeel-foto-knop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-.bouwdeel-teken-knop {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
-  padding: 8px 12px; border-radius: 999px; border: 1px solid var(--divider); background: var(--bg);
-  color: var(--text-dim); cursor: pointer;
-}
 
 /* --- Aantekeningen --- */
 .aantekeningen-veld {
