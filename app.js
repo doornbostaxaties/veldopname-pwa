@@ -2250,10 +2250,6 @@ function renderFotosTab() {
     }),
   );
   grid.appendChild(toevoegen);
-  const tekenTegel = el('div', {
-    class: 'foto-add', onclick: () => openTekenScherm({ ruimteLabel: null, categorie: 'Anders' }),
-  }, el('span', { class: 'plus' }, '✏️'), 'Tekenen');
-  grid.appendChild(tekenTegel);
   wrap.appendChild(grid);
   return wrap;
 }
@@ -4060,14 +4056,37 @@ function renderOmgevingTab() {
   return wrap;
 }
 
+// Losse schetsen/markeringen horen hier bij de vrije aantekeningen thuis, niet bij de (verplichte)
+// foto-checklist — vandaar de "Tekenen"-tegel hier i.p.v. in de Foto's-tab (Arno's verzoek
+// 16-09-2026). Bewaard onder categorie 'Tekening' zodat ze hier apart getoond kunnen worden, maar
+// ze blijven gewoon gewone foto's (zelfde opslag/sync/lightbox) en staan dus ook mee in "Alle foto's".
 function renderAantekeningenTab() {
   const t = state.taxatie;
+  const wrap = el('div', {});
+
   const veld = el('textarea', {
     class: 'aantekeningen-veld', placeholder: 'Aantekeningen tijdens de opname…',
     oninput: (e) => { t.aantekeningen = e.target.value; planOpslaan(); },
   });
   veld.value = t.aantekeningen || '';
-  return el('div', {}, veld);
+  wrap.appendChild(veld);
+
+  wrap.appendChild(el('div', { class: 'section-label', style: 'margin-top:16px;' }, 'Schetsen en markeringen'));
+  const grid = el('div', { class: 'foto-grid' });
+  state.fotos.filter(f => f.categorie === 'Tekening' && !f.archief).forEach(f => {
+    const badgeKlasse = f.status === 'verzonden' ? 'ok' : 'wachtend';
+    const badgeTekst = f.status === 'verzonden' ? '✓' : '⏳';
+    grid.appendChild(el('button', { type: 'button', class: 'foto-tegel', onclick: () => openLightbox(f) },
+      el('img', { src: URL.createObjectURL(f.blob) }),
+      el('span', { class: 'badge ' + badgeKlasse }, badgeTekst),
+    ));
+  });
+  grid.appendChild(el('div', {
+    class: 'foto-add', onclick: () => openTekenScherm({ ruimteLabel: null, categorie: 'Tekening' }),
+  }, el('span', { class: 'plus' }, '✏️'), 'Tekenen'));
+  wrap.appendChild(grid);
+
+  return wrap;
 }
 
 // --- Macro's ---
