@@ -2539,6 +2539,15 @@ async function genereerRapportPdf(knop) {
     if (alleFotos.length) {
       doc.addPage(); y = marge;
       schrijfKop("Foto's en schetsen (" + alleFotos.length + ')');
+      // 2 foto's per rij (Arno's verzoek 16-09-2026) — reserveert bij het begin van elke rij altijd
+      // de maximale hoogte (i.p.v. de werkelijke hoogte van de eerste foto), zodat een pagina-
+      // afbreking klopt ongeacht of de LINKER of de RECHTER foto van de rij het hoogst uitvalt.
+      const kolomGap = 6;
+      const kolomBreedte = (breedte - marge * 2 - kolomGap) / 2;
+      const rijMaxH = 75;
+      let kolom = 0;
+      let rijStartY = y;
+      let rijHoogte = 0;
       for (const item of alleFotos) {
         let plaatje;
         try {
@@ -2547,18 +2556,27 @@ async function genereerRapportPdf(knop) {
           continue; // 1 onbereikbare foto (bv. verlopen cloud-link) mag de rest van het rapport niet blokkeren
         }
         const { dataUrl, breedtePx, hoogtePx } = plaatje;
-        const maxW = breedte - marge * 2;
-        const maxH = 95;
-        let w = maxW, h = w * (hoogtePx / breedtePx);
-        if (h > maxH) { h = maxH; w = h * (breedtePx / hoogtePx); }
-        nieuwePaginaIndienNodig(h + 10);
-        const x = marge + (maxW - w) / 2;
-        doc.addImage(dataUrl, 'JPEG', x, y, w, h);
-        y += h + 4;
+        let w = kolomBreedte, h = w * (hoogtePx / breedtePx);
+        if (h > rijMaxH) { h = rijMaxH; w = h * (breedtePx / hoogtePx); }
+        if (kolom === 0) {
+          nieuwePaginaIndienNodig(rijMaxH + 12);
+          rijStartY = y;
+          rijHoogte = 0;
+        }
+        const kolomX = marge + kolom * (kolomBreedte + kolomGap);
+        const x = kolomX + (kolomBreedte - w) / 2; // horizontaal centreren binnen de kolom
+        doc.addImage(dataUrl, 'JPEG', x, rijStartY, w, h);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(120, 128, 133);
-        doc.text(item.label, marge, y);
-        y += 8;
+        doc.text(item.label, kolomX, rijStartY + h + 4, { maxWidth: kolomBreedte });
+        rijHoogte = Math.max(rijHoogte, h + 8);
+        if (kolom === 0) {
+          kolom = 1;
+        } else {
+          kolom = 0;
+          y = rijStartY + rijHoogte;
+        }
       }
+      if (kolom === 1) y = rijStartY + rijHoogte; // de laatste rij had maar 1 foto — y alsnog bijwerken
     }
 
     // Paginanummers, achteraf toegevoegd (nu pas is het totaal aantal pagina's bekend).
