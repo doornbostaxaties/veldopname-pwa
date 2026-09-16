@@ -21,6 +21,14 @@ const FOTO_WEBHOOK = 'https://hook.eu1.make.com/w9oljmdhr4l9s7atf8kf38net3e7dhod
 // zelf niets naar deze tabel, dat gebeurt aan de Taxatieweb-kant). Zelfde "geef alles terug, filter
 // hier client-side op rapport_id"-patroon als LIJST_WEBHOOK.
 const BIJLAGEN_WEBHOOK = 'https://hook.eu1.make.com/190eh6nt7efgk9d20frzac88ql9m87nq'; // Veldopname PWA - Bijlagen ophalen
+// Al bestaand Make-scenario "Veldopname PWA - Foto's voor Q/R" (oorspronkelijk voor Taxatieweb's
+// eigen Q/R-afvinklijst) — hergebruikt voor het PDF-rapport (genereerRapportPdf) om ook foto's terug
+// te halen die WEL succesvol geüpload zijn maar niet meer lokaal op dit toestel staan (Arno's melding
+// 16-09-2026: "mis foto's van Grote Bavenkelsweg 27, wel in Taxatieweb maar niet meer in de PWA" —
+// state.fotos is altijd lokaal/IndexedDB-only, dit haalt de Airtable-kopie terug). `actie: 'ophalen'`
+// geeft ALLE foto-records van ALLE taxaties terug (zelfde "geef alles terug, filter hier client-side
+// op rapport_id"-patroon als BIJLAGEN_WEBHOOK hierboven) — geen apart nieuw Make-scenario nodig.
+const FOTOS_OPHALEN_WEBHOOK = 'https://hook.eu1.make.com/72l4pur68x3u7kd1o4w0k53li8ej0j7i';
 
 // Zelfde 19 categorieën als QR_CATEGORIEEN in taxatieweb-opname.user.js (v0.54.0) — dezelfde lijst
 // als Taxatieweb's eigen Q/R-categorieselectie, plus "Anders" als vangnet.
@@ -2306,6 +2314,40 @@ async function fotoNaarPdfAfbeelding(blob, maxBreedtePx = 1000) {
   canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   return { dataUrl: canvas.toDataURL('image/jpeg', 0.82), breedtePx: canvas.width, hoogtePx: canvas.height };
 }
+// Zelfde als hierboven, maar vanaf een (Airtable-)URL i.p.v. een lokale blob.
+async function urlNaarPdfAfbeelding(url, maxBreedtePx = 1000) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('kon foto niet ophalen (' + resp.status + ')');
+  return fotoNaarPdfAfbeelding(await resp.blob(), maxBreedtePx);
+}
+
+// Foto's die WEL succesvol geüpload zijn maar niet (meer) lokaal op dit toestel staan (zie
+// FOTOS_OPHALEN_WEBHOOK hierboven) — geeft een lege lijst terug bij een netwerkfout of zonder
+// verbinding, zodat het PDF-rapport dan gewoon met alléén de lokale foto's doorgaat.
+async function haalCloudFotos(rapportId) {
+  try {
+    const resp = await fetch(FOTOS_OPHALEN_WEBHOOK, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'ophalen' }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    // taxatie_rapport_id is een Airtable-linked-record-veld, dus altijd een array (live gecontroleerd
+    // 16-09-2026 — géén platte string zoals de andere *_WEBHOOK's).
+    const hoortBijDitRapport = (r) => {
+      const veld = r.fields && r.fields.taxatie_rapport_id;
+      return Array.isArray(veld) ? veld.includes(rapportId) : veld === rapportId;
+    };
+    return (data.records || [])
+      .filter((r) => hoortBijDitRapport(r) && Array.isArray(r.fields.bestand) && r.fields.bestand.length)
+      .map((r) => ({
+        ruimteLabel: r.fields.ruimte_label || '',
+        categorie: r.fields.categorie || 'Anders',
+        url: r.fields.bestand[0].url,
+      }));
+  } catch (e) {
+    return [];
+  }
+}
 
 async function genereerRapportPdf(knop) {
   if (!window.jspdf) {
@@ -2447,12 +2489,34 @@ async function genereerRapportPdf(knop) {
     schrijfKop('Aantekeningen');
     schrijfParagraaf(t.aantekeningen && t.aantekeningen.trim() ? t.aantekeningen : 'Geen aantekeningen.');
 
-    const fotos = state.fotos.filter((f) => !f.archief);
-    if (fotos.length) {
+    const lokaleFotos = state.fotos.filter((f) => !f.archief);
+    // Ook foto's ophalen die wél succesvol geüpload zijn (staan al in Taxatieweb) maar niet meer
+    // lokaal op dit toestel — bv. na een cache-leging of op een ander apparaat geopend (Arno's
+    // melding 16-09-2026 over Grote Bavenkelsweg 27). Zonder lokale kopie is er geen ruimte_label-
+    // eigen match mogelijk, dus: cloud-foto's overslaan als er al minstens 1 lokale foto MET
+    // dezelfde ruimte/categorie-naam bestaat (waarschijnlijk dezelfde foto's, dubbel tonen heeft dan
+    // geen meerwaarde) — anders (dat lokale label ontbreekt helemaal) alsnog opnemen.
+    knop.textContent = "Foto's ophalen…";
+    const lokaleLabels = new Set(lokaleFotos.map((f) => (f.ruimte_label || f.categorie || 'Anders').toLowerCase()));
+    const cloudFotos = (await haalCloudFotos(t.rapport_id))
+      .filter((cf) => !lokaleLabels.has((cf.ruimteLabel || cf.categorie || 'Anders').toLowerCase()));
+    knop.textContent = 'Rapport wordt gemaakt…';
+
+    const alleFotos = [
+      ...lokaleFotos.map((f) => ({ label: f.ruimte_label || f.categorie || 'Anders', laadAfbeelding: () => fotoNaarPdfAfbeelding(f.blob) })),
+      ...cloudFotos.map((cf) => ({ label: (cf.ruimteLabel || cf.categorie || 'Anders') + ' (uit cloud-archief)', laadAfbeelding: () => urlNaarPdfAfbeelding(cf.url) })),
+    ];
+    if (alleFotos.length) {
       doc.addPage(); y = marge;
-      schrijfKop("Foto's en schetsen (" + fotos.length + ')');
-      for (const foto of fotos) {
-        const { dataUrl, breedtePx, hoogtePx } = await fotoNaarPdfAfbeelding(foto.blob);
+      schrijfKop("Foto's en schetsen (" + alleFotos.length + ')');
+      for (const item of alleFotos) {
+        let plaatje;
+        try {
+          plaatje = await item.laadAfbeelding();
+        } catch (e) {
+          continue; // 1 onbereikbare foto (bv. verlopen cloud-link) mag de rest van het rapport niet blokkeren
+        }
+        const { dataUrl, breedtePx, hoogtePx } = plaatje;
         const maxW = breedte - marge * 2;
         const maxH = 95;
         let w = maxW, h = w * (hoogtePx / breedtePx);
@@ -2462,7 +2526,7 @@ async function genereerRapportPdf(knop) {
         doc.addImage(dataUrl, 'JPEG', x, y, w, h);
         y += h + 4;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(120, 128, 133);
-        doc.text(foto.ruimte_label || foto.categorie || 'Anders', marge, y);
+        doc.text(item.label, marge, y);
         y += 8;
       }
     }
