@@ -233,6 +233,12 @@ h1, h2, h3, p { margin: 0; }
 }
 .ruimte-rij-boven { display: flex; align-items: center; gap: 8px; }
 .ruimte-rij-boven input { flex: 1; border: none; background: none; font: inherit; font-weight: 600; font-size: 13.5px; }
+/* Ruimtes inklapbaar + versleepbaar (17-09-2026, Arno's verzoek) — zelfde sleep-idee als
+   .chip-sleepbaar/.chip-handvat, alleen dan voor een hele ruimte-kaart i.p.v. een los chipje. */
+.ruimte-kaart-sleepbaar { cursor: grab; }
+.ruimte-sleepgreep { opacity: .55; cursor: grab; flex-shrink: 0; }
+.ruimte-kaart-ingeklapt { padding: 8px 14px; }
+.ruimte-naam-ingeklapt { flex: 1; font-weight: 600; font-size: 13.5px; color: var(--text-dim); }
 .camera-knop {
   border: none; background: var(--goud-100); color: var(--goud-700); width: 32px; height: 32px;
   border-radius: 9px; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer;

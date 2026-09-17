@@ -83,6 +83,16 @@ function leegIndelingWoonlaag() {
 function leegInstallatieKenmerken() {
   return { ventilatie: [], koeling: [], warmwatertoestel: [] };
 }
+// Bijgebouwen (17-09-2026, Arno's verzoek: "een oplossing voor bijgebouwen ... zoals Provadie's
+// Bij-/aanbouwen en buitenvoorzieningen: kiezen uit een lijst, toevoegen, dan extra's toevoegen")
+// — 1-op-1 dezelfde velden als Provadie's editor (live nagekeken bij Spade 21): Type (vrije tekst +
+// keuzelijst), Soort (Vrijstaand/Aangebouwd), Materiaal (multiselect), Isolatie (Geen/Deels/
+// Volledig), Extra's (multiselect), Conditie. Woont in `data` (net als installatieKenmerken) zodat
+// het meesynchroniseert via het bestaande `data`-veld, zonder een nieuwe Airtable-kolom nodig te
+// hebben. Vervangt het oude, vrijwel ongebruikte "Extern"-blokje (losse naam+toevoegingen-kaart).
+function leegBijgebouw() {
+  return { type: '', soort: null, materialen: [], isolatie: '', extras: [], conditie: 5 };
+}
 function leegData() {
   return {
     afmetingen: { woonlagen: [leegWoonlaag()] },
@@ -94,6 +104,7 @@ function leegData() {
     // bouwdelen/velden die de taxateur zelf als belangrijk heeft gemarkeerd. Controle-tab gebruikt
     // deze lijst om te waarschuwen als zo'n gemarkeerd veld nog leeg is — "niets vergeten".
     attentieVelden: [],
+    bijgebouwen: [],
   };
 }
 // Arno (13-09-2026): "Kun je ook de woonlagen en meting woonlagen gelijk houden?" — Meting
@@ -745,8 +756,10 @@ function standaardMacros() {
     // ook gebruikt als opties bij de bijbehorende bouwkundige/energetische velden (zie
     // BOUWKUNDIG_SCHEMA vloeren/verwarmingssysteem en ENERGETISCH_SCHEMA glas/verwarmingssysteem,
     // via `macroSleutel` op die definities) — dus 1 plek om deze lijsten te beheren.
+    // kozijnen: "Beton" toegevoegd (17-09-2026, macro-audit tegen Provadie/Spade 21 — Provadie had
+    // dit als 6e materiaaloptie, wij misten 'm).
     vloersoort: ['Beton', 'Hout', 'Kwaaitaal', 'Manta', 'Overige'],
-    kozijnen: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'],
+    kozijnen: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Beton', 'Overige'],
     glastypes: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'],
     verwarmingssysteem: ['Radiatoren', 'Vloerverwarming', 'Airconditioning', 'Convectorput', 'Infraroodpanelen', 'Elektrische radiator', 'Wandverwarming', 'Overige'],
     // installatieKenmerken (17-09-2026, Arno "A. prima") — zelfde idee, nu voor Ventilatie/Koeling/
@@ -754,7 +767,30 @@ function standaardMacros() {
     ventilatie: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'],
     koeling: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'],
     warmwatertoestel: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'],
-    vloerafwerking: ['Laminaat', 'PVC-vloer', 'Tegelvloer', 'Parket', 'Tapijt', 'Gietvloer', 'Natuursteen', 'Overige'],
+    // Bijgebouwen (17-09-2026, Arno's verzoek: "oplossing voor bijgebouwen zoals Provadie") —
+    // bijgebouwTypes 1-op-1 overgenomen uit Provadie's "Bij-/aanbouwen en buitenvoorzieningen"-lijst
+    // bij Spade 21 (live nagekeken); Materiaal/Extra's zijn eigen, algemene startlijsten (Provadie's
+    // materiaallijst was daar een leeg native <select>, niet uit te lezen zonder data te riskeren).
+    bijgebouwTypes: [
+      'Atelier', 'Bakhuis', 'Berging', 'Bijkeuken', 'Carport', 'Dierenverblijf', 'Dubbele carport',
+      'Fietsenstalling', 'Garage', 'Gastenverblijf', 'Hobbykas', 'Hooiberg', 'Kantoor', 'Kapschuur',
+      'Kippenhok', 'Loods', 'Luifel', 'Mantelzorgwoning', 'Multifunctionele buitenruimte',
+      'Overkapping', 'Paardenbak', 'Paardenstal', 'Praktijkruimte', 'Schuur', 'Serre', 'Stal',
+      'Tuinhuis', 'Werkplaats', 'Zomerhuis', 'Zwembad', 'Overige',
+    ],
+    bijgebouwMateriaal: ['Hout', 'Metselwerk/steen', 'Kunststof', 'Metaal/staal', 'Beton', 'Overige'],
+    bijgebouwExtras: ['Elektra aanwezig', 'Verwarmd', 'Wateraansluiting', 'Verlichting', 'Overige'],
+    // vloerafwerking: 17-09-2026 flink uitgebreid — 1-op-1 overgenomen uit Provadie's eigen
+    // vloerafwerking-keuzelijst bij Spade 21 (live nagekeken, incl. Arno's eigen eerder toegevoegde
+    // extra's als Belgisch hardsteen/Betonciré/Leisteenvloer), was met 8 opties veel te beperkt.
+    vloerafwerking: [
+      'Laminaat', 'Parket', 'Tapijt', 'Tegelvloer', 'PVC-vloer', 'Vinyl vloer', 'Linoleum vloer',
+      'Marmoleum vloer', 'Novilon vloer', 'Zeil', 'Vloerbedekking', 'Gietvloer', 'Betonvloer',
+      'Betonciré', 'Houten vloer', 'Eikenhouten vloer', 'Lamelparket', 'Keramisch parket', 'Kurkvloer',
+      'Betegelde vloer', 'Plavuizen vloer', 'Terrazzo vloer', 'Granitovloer', 'Natuursteen',
+      'Natuursteenvloer', 'Marmeren vloer', 'Hardstenen vloer', 'Belgisch hardsteen', 'Leisteenvloer',
+      'Noorse leisteenvloer', 'Grindvloer', 'Siergrindvloer', 'Overige',
+    ],
     // Tik-chips per vrije-tekst-bouwdeel in Bouwkundig (13-09-2026, Arno's verzoek: "ook op de
     // overige tekstvelden", en bewerkbaar als macro — zie BOUWDEEL_CHIP_GROEPEN/renderChipEditor
     // hieronder). Sleutel = def.key uit BOUWKUNDIG_SCHEMA. Bewust korte, algemene startlijsten —
@@ -783,8 +819,24 @@ function standaardMacros() {
       overigeWaarnemingenBijgebouwenEnPerceel: ['Geen bijzonderheden', 'Scheurvorming zichtbaar', 'Vochtplekken zichtbaar'],
       kelder: ['Droog', 'Vochtig', 'In gebruik als bergruimte'],
       kruipruimte: ['Droog', 'Vochtig', 'Slecht bereikbaar'],
-      wandenEnBinnenmuren: ['Stucwerk', 'Behang', 'Tegelwerk'],
-      plafonds: ['Stucwerk', 'Spanplafond', 'Verlaagd plafond'],
+      // wandenEnBinnenmuren/plafonds: 17-09-2026 flink uitgebreid — 1-op-1 overgenomen uit Provadie's
+      // eigen Muren-/Plafond-keuzelijsten bij Spade 21 (live nagekeken), waren met 3 chips te mager.
+      wandenEnBinnenmuren: [
+        'Gestucte wanden', 'Behangen wanden', 'Betegelde wanden', 'Geschilderde wanden',
+        'Gesausde wanden', 'Gestucte en behangen wanden', 'Deels betegelde wanden',
+        'Deels betegelde wanden en deels gestuct', 'Gipsplaten wanden', 'Betonnen wanden',
+        'Schoon metselwerk', 'Sierpleister wanden', 'Spachtelputz wanden', 'Spackwerk wanden',
+        'Spuitwerk wanden', 'Structuurverf wanden', 'Houten wanden', 'Lambrisering', 'Steenstrips',
+        'Kunststof schroten wanden', 'Granol wanden', 'Glasvliesbehangen wanden',
+        'Renovliesbehangen wanden', 'Onafgewerkte wanden',
+      ],
+      plafonds: [
+        'Gestuct plafond', 'Spanplafond', 'Verlaagd plafond', 'Systeemplafond', 'Houten plafond',
+        'Balkenplafond', 'Gipsplaten plafond', 'Betonnen plafond', 'Spuitwerk plafond',
+        'Structuurverf plafond', 'Gespoten plafond', 'Gestuct plafond met ornamenten',
+        'Aluminium plafond', 'Kunststof plafond', 'Kunststof schroten plafond', 'MDF plafond',
+        'Schroten plafond', 'Zachtboard plafond', 'Onafgewerkt plafond',
+      ],
       trappen: ['Vaste trap', 'Vaste trappen', 'Vlizotrap', 'Losse trap'],
       binnenschilderwerk: ['Recent geschilderd', 'Onderhoud nodig'],
       toilet1: ['Hangend toilet', 'Staand toilet', 'Fonteintje aanwezig'],
@@ -876,7 +928,7 @@ function metNieuweMacroCategorieen(m) {
   const standaard = standaardMacros();
   if (!Array.isArray(m.sanitair)) m.sanitair = standaard.sanitair;
   if (!Array.isArray(m.keuken)) m.keuken = standaard.keuken;
-  ['vloersoort', 'kozijnen', 'glastypes', 'verwarmingssysteem', 'vloerafwerking', 'ventilatie', 'koeling', 'warmwatertoestel'].forEach((sleutel) => {
+  ['vloersoort', 'kozijnen', 'glastypes', 'verwarmingssysteem', 'vloerafwerking', 'ventilatie', 'koeling', 'warmwatertoestel', 'bijgebouwTypes', 'bijgebouwMateriaal', 'bijgebouwExtras'].forEach((sleutel) => {
     if (!Array.isArray(m[sleutel])) m[sleutel] = standaard[sleutel];
   });
   // bouwdeelChips (13-09-2026): per-sleutel aanvullen i.p.v. de hele groep in één keer, zodat een
@@ -1120,7 +1172,10 @@ function nederlandseLijst(items) {
   if (items.length === 1) return items[0];
   return items.slice(0, -1).join(', ') + ' en ' + items[items.length - 1];
 }
-function componeerIndelingTekst(indeling) {
+// bijgebouwen (17-09-2026): optioneel, standaard [] — komt uit data.bijgebouwen, apart van
+// `indeling` omdat het een sibling-veld is, geen onderdeel van indeling zelf. Arno's verzoek: "deze
+// teksten komen samengevat terug in de indeling" — vandaar een eigen blok onderaan de tekst.
+function componeerIndelingTekst(indeling, bijgebouwen) {
   const componeerRuimteZin = (ruimte) => {
     const items = (ruimte.toevoegingen || []).map(t => t.trim()).filter(Boolean);
     const zin = items.length ? ` met ${nederlandseLijst(items)}` : '';
@@ -1134,6 +1189,10 @@ function componeerIndelingTekst(indeling) {
     const ruimtes = (w.ruimtes || []).filter(r => r.naam).map(componeerRuimteZin).join('\n');
     return `${kop}\n${ruimtes}`;
   });
+  if ((bijgebouwen || []).length) {
+    const regels = bijgebouwen.filter(b => b.type).map(b => `- ${samenvatBijgebouw(b)}.`).join('\n');
+    if (regels) blokken.push(`Bij-/aanbouwen en buitenvoorzieningen:\n${regels}`);
+  }
   return blokken.join('\n\n');
 }
 
@@ -1145,7 +1204,7 @@ async function cloudOpslaan(taxatie) {
     wonen_totaal_m2: totalen.wonen, overig_inpandig_totaal_m2: totalen.overig,
     buitenruimte_totaal_m2: totalen.buiten, externe_bergruimte_totaal_m2: totalen.extern,
     aantal_woonlagen: totalen.aantalWoonlagen,
-    indeling_tekst: componeerIndelingTekst(taxatie.data.indeling),
+    indeling_tekst: componeerIndelingTekst(taxatie.data.indeling, taxatie.data.bijgebouwen),
     data: JSON.stringify(taxatie.data),
     vergelijker_data: '{}',
     aantekeningen: taxatie.aantekeningen || '',
@@ -1319,6 +1378,7 @@ async function laadOpname(rapportId, tab) {
   lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
   if (!lokaal.data.installatieKenmerken) lokaal.data.installatieKenmerken = leegInstallatieKenmerken(); // taxaties van vóór 17-09-2026
   if (!Array.isArray(lokaal.data.attentieVelden)) lokaal.data.attentieVelden = [];
+  if (!Array.isArray(lokaal.data.bijgebouwen)) lokaal.data.bijgebouwen = [];
   state.taxatie = lokaal;
   synchroniseerKenmerken(); // bestaande Vloeren/Kozijnen/Glas/Verwarmingssysteem-keuzes overnemen in Indeling (16-09-2026)
   synchroniseerInstallatieKenmerken(); // bestaande Ventilatie/Koeling/Warmwatertoestel-keuzes samenvoegen (17-09-2026)
@@ -1352,6 +1412,7 @@ async function laadOpname(rapportId, tab) {
         state.taxatie.data = synchroniseerWoonlagen(data);
         if (!state.taxatie.data.installatieKenmerken) state.taxatie.data.installatieKenmerken = leegInstallatieKenmerken();
         if (!Array.isArray(state.taxatie.data.attentieVelden)) state.taxatie.data.attentieVelden = [];
+        if (!Array.isArray(state.taxatie.data.bijgebouwen)) state.taxatie.data.bijgebouwen = [];
         gewijzigd = true;
       }
       if (bewoning_data && typeof bewoning_data === 'object') {
@@ -2088,6 +2149,12 @@ const indelingIngeklapt = new Set();
 // (Arno's verzoek 16-09-2026) — onafhankelijk van indelingIngeklapt, zodat je de ruimtes van een
 // verdieping kunt zien terwijl de kenmerken zelf ingeklapt blijven, of andersom.
 const kenmerkenIngeklapt = new Set();
+// Zelfde ephemere status, maar per RUIMTE (17-09-2026, Arno's verzoek: "ruimtes per verdieping ook
+// inklapbaar maken en kunnen verslepen") — sleutel "wIdx:rIdx", dus gekoppeld aan de huidige positie
+// in de array (net als hierboven bij woonlagen); na een sleep-herordening kan dit dus een ander item
+// betreffen dan waar de gebruiker 'm oorspronkelijk voor opende, een bewust geaccepteerd klein
+// bijeffect van een puur visuele, niet-opgeslagen status.
+const ruimteIngeklapt = new Set();
 
 // Arno's verzoek 16-09-2026: verdiepingnamen groter/dikgedrukt, elke verdieping inklapbaar en in een
 // eigen visueel "blok" met alle ruimtes erin — voor herkenbaarheid bij een opname met veel woonlagen.
@@ -2162,7 +2229,9 @@ function renderIndelingTab() {
       const inhoud = el('div', { class: 'woonlaag-inhoud' });
       inhoud.appendChild(renderWoonlaagKenmerken(woonlaag, wIdx));
       (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
-        inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }));
+        inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }, {
+          collapseKey: wIdx + ':' + rIdx, ruimtesArray: woonlaag.ruimtes, index: rIdx,
+        }));
       });
       inhoud.appendChild(el('button', {
         class: 'knop spook klein',
@@ -2181,28 +2250,58 @@ function renderIndelingTab() {
     },
   }, '+ Woonlaag toevoegen'));
 
-  wrap.appendChild(el('div', { class: 'section-label' }, 'Extern'));
-  (t.data.indeling.extern || []).forEach((ruimte, i) => {
-    wrap.appendChild(renderRuimteKaart(ruimte, () => { t.data.indeling.extern.splice(i, 1); planOpslaan(); render(); }));
-  });
-  wrap.appendChild(el('button', {
-    class: 'knop spook',
-    onclick: () => { t.data.indeling.extern.push(leegRuimte()); planOpslaan(); render(); },
-  }, '+ Extern onderdeel toevoegen'));
+  wrap.appendChild(renderBijgebouwenSectie());
   return wrap;
 }
 
-function renderRuimteKaart(ruimte, verwijder) {
-  const kaart = el('div', { class: 'ruimte-kaart' });
+// sleepInfo: { collapseKey, ruimtesArray, index } — undefined zolang renderRuimteKaart nog voor
+// een niet-versleepbare/niet-inklapbare lijst gebruikt zou worden (momenteel niet meer het geval,
+// maar zo blijft de functie ook bruikbaar zonder sleepInfo).
+function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
+  const ingeklapt = sleepInfo && ruimteIngeklapt.has(sleepInfo.collapseKey);
+  const kaart = el('div', { class: 'ruimte-kaart' + (ingeklapt ? ' ruimte-kaart-ingeklapt' : '') });
+  // Sleepbaar herordenen binnen dezelfde woonlaag (17-09-2026, Arno's verzoek "kunnen verslepen"),
+  // zelfde HTML5-drag-patroon als renderChipEditor() elders in dit bestand.
+  if (sleepInfo) {
+    kaart.draggable = true;
+    kaart.classList.add('ruimte-kaart-sleepbaar');
+    kaart.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(sleepInfo.index)); });
+    kaart.addEventListener('dragover', (e) => e.preventDefault());
+    kaart.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const van = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(van) || van === sleepInfo.index) return;
+      const [verplaatst] = sleepInfo.ruimtesArray.splice(van, 1);
+      sleepInfo.ruimtesArray.splice(sleepInfo.index, 0, verplaatst);
+      planOpslaan(); render();
+    });
+  }
+  const rijBoven = el('div', { class: 'ruimte-rij-boven' });
+  if (sleepInfo) rijBoven.appendChild(el('span', { class: 'ruimte-sleepgreep' }, '⠿'));
+  if (sleepInfo) {
+    rijBoven.appendChild(el('button', {
+      type: 'button', class: 'woonlaag-toggle',
+      onclick: () => { if (ingeklapt) ruimteIngeklapt.delete(sleepInfo.collapseKey); else ruimteIngeklapt.add(sleepInfo.collapseKey); render(); },
+    }, ingeklapt ? '▸' : '▾'));
+  }
+  if (ingeklapt) {
+    // Ingeklapt: alleen naam + aantal toevoegingen tonen, geen bewerkbaar invoerveld (voorkomt per
+    // ongeluk typen in een niet-zichtbare rest van de kaart).
+    const aantal = (ruimte.toevoegingen || []).length;
+    rijBoven.appendChild(el('span', { class: 'ruimte-naam-ingeklapt' },
+      ruimte.naam || 'Ruimte', aantal ? ` — ${aantal} toevoeging${aantal === 1 ? '' : 'en'}` : ''));
+    rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
+    kaart.appendChild(rijBoven);
+    return kaart;
+  }
   const ruimteNaamInput = el('input', {
     value: ruimte.naam || '', placeholder: 'Ruimte (bv. "Woonkamer")',
     oninput: (e) => { ruimte.naam = e.target.value; planOpslaan(); },
   });
   koppelDatalist(ruimteNaamInput, 'ruimtes');
-  kaart.appendChild(el('div', { class: 'ruimte-rij-boven' },
-    ruimteNaamInput,
-    el('button', { class: 'verwijder', onclick: verwijder }, '✕'),
-  ));
+  rijBoven.appendChild(ruimteNaamInput);
+  rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
+  kaart.appendChild(rijBoven);
   // Arno (13-09-2026): "Graag in de app de foto waar ie gemaakt is gelijk als miniatuur daar
   // weergeven. En optie voor nog een foto toevoegen." — zelfde bouwsteen als bij Bouwkundig/
   // Energetisch (renderFotoKnopRij): toont meteen miniaturen van al gemaakte foto's bij DEZE ruimte
@@ -2251,6 +2350,112 @@ function renderRuimteKaart(ruimte, verwijder) {
   }
   kaart.appendChild(el('div', { class: 'chip-toevoegen' }, invoerWrap));
   return kaart;
+}
+
+// --- Bij-/aanbouwen en buitenvoorzieningen (17-09-2026, Arno's verzoek: "een oplossing voor
+// bijgebouwen ... zoals Provadie's Bij-/aanbouwen en buitenvoorzieningen") ---
+// Generieke N-weg keuzeknoppenrij, zelfde opbouw als renderJaNeeToggle hierboven maar met vrij te
+// kiezen labels/waarden — hergebruikt voor Soort (2-weg) en Isolatie (3-weg) hieronder.
+function renderKeuzeknoppenRij(labelText, huidigeWaarde, opties, onChange) {
+  const wissel = el('div', { class: 'weergave-wissel' });
+  opties.forEach(([waarde, tekst]) => {
+    wissel.appendChild(el('button', {
+      type: 'button', class: 'klein' + (huidigeWaarde === waarde ? ' actief' : ''),
+      onclick: () => { onChange(waarde); planOpslaan(); render(); },
+    }, tekst));
+  });
+  return el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'bouwdeel-veld-label' }, labelText), wissel);
+}
+// Multiselect-chipgrid, zelfde bouwsteen als de materiaal-grid bij Bouwkundig/Energetisch — hier
+// losstaand omdat een bijgebouw geen def/kenmerkenKoppeling heeft, alleen een array + macro-lijst.
+function renderMultiselectGrid(lijst, opties) {
+  const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  opties.forEach((optie) => {
+    const aan = lijst.includes(optie);
+    grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => {
+          const i = lijst.indexOf(optie);
+          if (i >= 0) lijst.splice(i, 1); else lijst.push(optie);
+          planOpslaan(); render();
+        },
+      }), optie));
+  });
+  return grid;
+}
+// Eén-regel-samenvatting van een bijgebouw — gebruikt in de Indeling-tekst (componeerIndelingTekst,
+// dus ook in H.1.C-sync/PDF) én als bron voor de "↺ Overnemen uit Indeling"-knop bij Bouwkundig's
+// Schuur/berging, Garage en Overige bijgebouwen (Arno: "deze teksten komen samengevat terug in de
+// indeling en Bouwkundige opnamestaat").
+function samenvatBijgebouw(item) {
+  const delen = [item.type || 'Bijgebouw'];
+  const soortTekst = item.soort === true ? 'aangebouwd' : item.soort === false ? 'vrijstaand' : null;
+  const details = [soortTekst, ...(item.materialen || []).map(m => m.toLowerCase())].filter(Boolean);
+  if (details.length) delen.push(`(${details.join(', ')})`);
+  if (item.isolatie) delen.push(`— isolatie: ${item.isolatie.toLowerCase()}`);
+  if ((item.extras || []).length) delen.push(`— ${item.extras.join(', ').toLowerCase()}`);
+  delen.push(`— conditie ${(CONDITIE_LABELS[item.conditie] || '').toLowerCase()}`);
+  return delen.join(' ');
+}
+// Bepaalt welk Bouwkundig-veld (Schuur/berging, Garage of Overige bijgebouwen) bij een bijgebouw-type
+// hoort, voor de "↺ Overnemen"-knop — zelfde substring-matchidee als categorieVoorRuimte() hierboven.
+function bouwkundigVeldVoorBijgebouwType(type) {
+  const naam = (type || '').toLowerCase();
+  if (naam.includes('garage') || naam.includes('carport')) return 'garage';
+  if (naam.includes('schuur') || naam.includes('berging') || naam.includes('loods') || naam.includes('kapschuur')) return 'schuurBerging';
+  return 'overigeBijgebouwen';
+}
+function renderBijgebouwKaart(item, idx, verwijder) {
+  const ingeklapt = bijgebouwIngeklapt.has(idx);
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  const kop = el('div', {
+    class: 'bouwdeel-kop',
+    onclick: () => { if (ingeklapt) bijgebouwIngeklapt.delete(idx); else bijgebouwIngeklapt.add(idx); render(); },
+  },
+    el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
+    el('span', { class: 'bouwdeel-titel' }, item.type || 'Nieuw bijgebouw'));
+  kaart.appendChild(kop);
+  if (ingeklapt) return kaart;
+
+  const typeInput = el('input', {
+    value: item.type || '', placeholder: 'Type (bv. "Garage", "Overkapping")',
+    onclick: (e) => e.stopPropagation(),
+    oninput: (e) => { item.type = e.target.value; planOpslaan(); },
+  });
+  koppelDatalist(typeInput, 'bijgebouwTypes');
+  kaart.appendChild(el('div', { class: 'ruimte-rij-boven' }, typeInput,
+    el('button', { class: 'verwijder', onclick: verwijder }, '✕')));
+
+  kaart.appendChild(renderKeuzeknoppenRij('Soort', item.soort, [[false, 'Vrijstaand'], [true, 'Aangebouwd']], (w) => { item.soort = w; }));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Materiaal'));
+  if (!Array.isArray(item.materialen)) item.materialen = [];
+  kaart.appendChild(renderMultiselectGrid(item.materialen, state.macros.bijgebouwMateriaal || []));
+  kaart.appendChild(renderKeuzeknoppenRij('Isolatie', item.isolatie, [['Geen', 'Geen'], ['Deels', 'Deels'], ['Volledig', 'Volledig']], (w) => { item.isolatie = w; }));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, "Extra's"));
+  if (!Array.isArray(item.extras)) item.extras = [];
+  kaart.appendChild(renderMultiselectGrid(item.extras, state.macros.bijgebouwExtras || []));
+  kaart.appendChild(conditieRij(item));
+  return kaart;
+}
+// bijgebouwIngeklapt: ephemere UI-status (net als indelingIngeklapt/ruimteIngeklapt), sleutel = index
+// in data.bijgebouwen[].
+const bijgebouwIngeklapt = new Set();
+function renderBijgebouwenSectie() {
+  const t = state.taxatie;
+  if (!Array.isArray(t.data.bijgebouwen)) t.data.bijgebouwen = [];
+  const wrap = el('div', { class: 'macro-groep' });
+  // Grotere titel dan het vorige kleine "Extern"-kopje (Arno's verzoek 17-09-2026: "geeft de knop
+  // een grotere titel"), opmaak zoals de rest van Indeling (h3, net als "Kenmerken verdieping").
+  wrap.appendChild(el('h3', {}, 'Bij-/aanbouwen en buitenvoorzieningen'));
+  t.data.bijgebouwen.forEach((item, idx) => {
+    wrap.appendChild(renderBijgebouwKaart(item, idx, () => { t.data.bijgebouwen.splice(idx, 1); planOpslaan(); render(); }));
+  });
+  wrap.appendChild(el('button', {
+    type: 'button', class: 'knop spook',
+    onclick: () => { t.data.bijgebouwen.push(leegBijgebouw()); planOpslaan(); render(); },
+  }, '+ Bijgebouw toevoegen'));
+  return wrap;
 }
 
 // --- Foto's ---
@@ -2609,7 +2814,7 @@ async function genereerRapportPdf(knop) {
     schrijfRegels(omgevingRegels.length ? omgevingRegels : ['Niets ingevuld.']);
 
     schrijfKop('Indeling');
-    schrijfParagraaf(componeerIndelingTekst((t.data && t.data.indeling) || {}) || 'Geen indeling ingevoerd.');
+    schrijfParagraaf(componeerIndelingTekst((t.data && t.data.indeling) || {}, t.data && t.data.bijgebouwen) || 'Geen indeling ingevoerd.');
 
     schrijfKop('Bouwkundige opname');
     let bouwkundigHeeftInhoud = false;
@@ -4418,6 +4623,23 @@ function renderBouwdeelKaart(sectieObj, def) {
         }, `↺ Overnemen uit Indeling (${nederlandseLijst(trapTypes)})`));
       }
     }
+    // Schuur/berging, Garage en Overige bijgebouwen: zelfde "↺ Overnemen"-idee, nu vanuit de nieuwe
+    // Bij-/aanbouwen-editor in Indeling (17-09-2026, Arno: "deze teksten komen samengevat terug in
+    // de indeling en Bouwkundige opnamestaat") — gematcht op bijgebouw-type via
+    // bouwkundigVeldVoorBijgebouwType(), zodat een garage bij Garage terechtkomt en een schuur bij
+    // Schuur/berging, i.p.v. alles in 1 veld te proppen.
+    if (['schuurBerging', 'garage', 'overigeBijgebouwen'].includes(def.key)) {
+      const passendeBijgebouwen = (state.taxatie.data.bijgebouwen || []).filter(b => b.type && bouwkundigVeldVoorBijgebouwType(b.type) === def.key);
+      if (passendeBijgebouwen.length) {
+        kaart.appendChild(el('button', {
+          type: 'button', class: 'knop spook klein', style: 'margin-bottom:8px;',
+          onclick: () => {
+            bouwdeel.omschrijving = passendeBijgebouwen.map(b => '- ' + samenvatBijgebouw(b) + '.').join('\n');
+            planOpslaan(); render();
+          },
+        }, `↺ Overnemen uit Indeling (${passendeBijgebouwen.length})`));
+      }
+    }
     const omschrijvingVeld = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving ' + def.label.toLowerCase() + '…',
       oninput: (e) => { bouwdeel.omschrijving = e.target.value; planOpslaan(); },
@@ -4946,6 +5168,9 @@ const MACRO_GROEPEN = [
   { sleutel: 'ventilatie', titel: 'Ventilatie', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Ventilatie (1 gedeelde selectie).' },
   { sleutel: 'koeling', titel: 'Koeling', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Koeling (1 gedeelde selectie).' },
   { sleutel: 'warmwatertoestel', titel: 'Warmwatertoestel', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Warmwatertoestel (1 gedeelde selectie).' },
+  { sleutel: 'bijgebouwTypes', titel: 'Bijgebouwen — type', uitleg: 'Keuzelijst bij "Bij-/aanbouwen en buitenvoorzieningen" (Indeling).' },
+  { sleutel: 'bijgebouwMateriaal', titel: 'Bijgebouwen — materiaal', uitleg: 'Keuzeopties bij "Bij-/aanbouwen en buitenvoorzieningen" (Indeling).' },
+  { sleutel: 'bijgebouwExtras', titel: "Bijgebouwen — extra's", uitleg: 'Keuzeopties bij "Bij-/aanbouwen en buitenvoorzieningen" (Indeling).' },
 ];
 
 function renderMacrosTab() {
