@@ -483,6 +483,14 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 8px; background: var(--navy-100); color: var(--navy); flex-shrink: 0;
 }
 .woonlaag-icoon svg { width: 16px; height: 16px; }
+/* Woonlaagnummer (18-09-2026, Arno's verzoek: "identiek aan bouwlagen") — zelfde volgorde-badge in
+   Indeling én Meting, want beide lijsten worden al gelijk gehouden (zorgVoorIndelingWoonlaag/
+   zorgVoorAfmetingenWoonlaag). */
+.woonlaag-nummer {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--navy); color: #fff; font-size: 11.5px; font-weight: 700;
+  flex-shrink: 0;
+}
 /* Attentiewaarde (17-09-2026, Arno's verzoek): !-knop rechts in de kop, altijd zichtbaar (ook
    ingeklapt) zodat een gemarkeerd bouwdeel nooit uit het oog verdwijnt. Kaart krijgt een rode
    linkerrand + lichte achtergrondtint zodra 'ie gemarkeerd is — herkenbaar zonder te hoeven lezen. */

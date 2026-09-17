@@ -1891,6 +1891,13 @@ const TABS = [
   { id: 'indeling', icon: '🏠', label: 'Indeling' },
   { id: 'bouwkundig', icon: '🧱', label: 'Bouwkundig' },
   { id: 'energetisch', icon: '♻️', label: 'Energetisch' },
+  // Nieuwe, EXTRA tab (18-09-2026, Arno's verzoek) — bewust NAAST Bouwkundig/Energetisch i.p.v.
+  // die twee te vervangen ("zodat we niet de boel overhoop trekken"), een eerste proefopzet om te
+  // zien of samengevoegde bouwdeel-kaarten (conditie+materiaal+foto uit Bouwkundig, isolatie+
+  // installatiejaar uit Energetisch, in 1 kaart) sneller/overzichtelijker werken op locatie. Puur
+  // een ANDERE weergave van dezelfde twee objecten — er wordt niets nieuws opgeslagen, dus de data
+  // blijft vanzelf gesplitst en compleet richting Taxatieweb.
+  { id: 'bouwkundigEnergetisch', icon: '🧩', label: 'Bouwkundig & Energetisch' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
@@ -1937,6 +1944,7 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'objectkenmerken') inhoud.appendChild(renderObjectkenmerkenTab());
   else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
   else if (state.route.tab === 'energetisch') inhoud.appendChild(renderEnergetischTab());
+  else if (state.route.tab === 'bouwkundigEnergetisch') inhoud.appendChild(renderBouwkundigEnergetischTab());
   else if (state.route.tab === 'omgeving') inhoud.appendChild(renderOmgevingTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
@@ -2020,6 +2028,7 @@ function renderMetingTab() {
     });
     koppelDatalist(naamInput, 'verdiepingen');
     kaart.appendChild(el('div', { class: 'woonlaag-titel' },
+      el('span', { class: 'woonlaag-nummer' }, String(wIdx + 1)),
       pictogramVoorWoonlaag(woonlaag.naam),
       naamInput,
       el('span', { class: 'totaal' }, formatM2(woonlaagTotaal(woonlaag)) + ' m²'),
@@ -2301,6 +2310,7 @@ function renderIndelingTab() {
         type: 'button', class: 'woonlaag-toggle',
         onclick: () => { if (ingeklapt) indelingIngeklapt.delete(wIdx); else indelingIngeklapt.add(wIdx); render(); },
       }, ingeklapt ? '▸' : '▾'),
+      el('span', { class: 'woonlaag-nummer' }, String(wIdx + 1)),
       pictogramVoorWoonlaag(woonlaag.naam),
       naamInput,
     ));
@@ -5162,6 +5172,137 @@ function renderEnergetischTab() {
   const lijst = el('div', { class: 'bouwdeel-lijst' });
   defs.forEach(def => lijst.appendChild(renderEnergetischKaart(sectieObj, def)));
   wrap.appendChild(lijst);
+  return wrap;
+}
+
+// --- Bouwkundig & Energetisch samengevoegd (18-09-2026, Arno's verzoek: "je kunt de bouwkundige en
+// energetische opnamestaat prima samensmelten... maak eerst een extra knop zodat we niet de boel
+// overhoop trekken") ---
+// Puur een ANDERE weergave op dezelfde twee objecten (bouwkundig-bouwdeel + energetisch-veld) — er
+// wordt hier NIETS nieuws opgeslagen. Een aangevinkt vakje, ingevulde conditie of gekozen materiaal
+// is dus automatisch ook meteen zichtbaar op de originele Bouwkundig/Energetisch-tabbladen, en komt
+// vanzelf op de juiste, gesplitste plek in Taxatieweb terecht (dezelfde bouwkundig_data/
+// energetisch_data-velden als altijd).
+// Vindt een def op key binnen een BOUWKUNDIG_SCHEMA/ENERGETISCH_SCHEMA-groep-array.
+function vindDef(defs, key) {
+  return defs.find((d) => d.key === key);
+}
+// "Aanwezig" stuurt in de samengevoegde kaart BEIDE kanten tegelijk aan (Arno's hele punt: 1x
+// aanvinken i.p.v. 2x) — bouwkundig is daarbij leidend voor de weergave van het vinkje zelf.
+function renderGecombineerdeKop(titel, bkVeld, enVeld) {
+  return el('div', {
+    class: 'bouwdeel-kop',
+    onclick: () => { const nieuw = !bkVeld.aanwezig; bkVeld.aanwezig = nieuw; enVeld.aanwezig = nieuw; planOpslaan(); render(); },
+  },
+    el('input', { type: 'checkbox', checked: bkVeld.aanwezig ? 'checked' : null }),
+    el('span', { class: 'bouwdeel-titel' }, titel));
+}
+// Voorbeeld 1 van Arno: "Glas 1e woonlaag: conditie (evt. foto en aandachtspunt), glassoorten en
+// bouw-/installatiejaar" — glassoorten is al gedeeld tussen Bouwkundig/Energetisch/Indeling
+// (kenmerkenKoppeling), dus die multiselect hoeft hier maar 1x getekend te worden.
+function renderGecombineerdGlasKaart(labelSuffix, bkDef, bkVeld, enDef, enVeld) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderGecombineerdeKop('Glas ' + labelSuffix, bkVeld, enVeld));
+  if (!bkVeld.aanwezig) return kaart;
+  kaart.appendChild(conditieRij(bkVeld));
+  const slechteConditie = bkVeld.conditie === 2 || bkVeld.conditie === 3;
+  kaart.appendChild(renderFotoKnopRij(bkDef.label, bkDef.fotoCategorie || bkDef.label, bkVeld.aandachtspuntenAanwezig === true));
+  if (slechteConditie) kaart.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true));
+  kaart.appendChild(jaNeeMetToelichtingRij(
+    'Aandachtspunten', bkVeld.aandachtspuntenAanwezig, (w) => { bkVeld.aandachtspuntenAanwezig = w; planOpslaan(); },
+    bkVeld.aandachtspuntenToelichting, (v) => { bkVeld.aandachtspuntenToelichting = v; planOpslaan(); },
+    'Toelichting aandachtspunt…',
+  ));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Glassoorten'));
+  kaart.appendChild(renderMultiselectGridGekoppeld(bkDef));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
+  return kaart;
+}
+// Multiselect-grid voor een def met kenmerkenKoppeling — zelfde renderlogica als in
+// renderBouwdeelKaart/renderMateriaalTijdKaart, hier losgetrokken zodat de samengevoegde kaart 'm
+// maar 1x hoeft te tekenen i.p.v. voor zowel de bouwkundige als de energetische kant apart.
+function renderMultiselectGridGekoppeld(def) {
+  const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  bepaalOpties(def).forEach((optie) => {
+    const aan = kenmerkGeselecteerd(def.kenmerkenKoppeling, optie);
+    grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => { kenmerkWissel(def.kenmerkenKoppeling, optie); planOpslaan(); render(); },
+      }), optie));
+  });
+  return grid;
+}
+// Voorbeeld 2 van Arno: "Gevel(werk): conditie (evt. foto en aandachtspunt), materialen gevel,
+// isolatie gevel en bouw-/installatiejaar" — materialen gevel (Bouwkundig) en isolatie (Energetisch)
+// zijn HIER geen gedeelde waarde (andere vraag), dus die tonen we allebei, elk vanuit hun eigen veld.
+function renderGecombineerdGevelKaart(bkDef, bkVeld, enDef, enVeld) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderGecombineerdeKop('Gevel(werk)', bkVeld, enVeld));
+  if (!bkVeld.aanwezig) return kaart;
+  kaart.appendChild(conditieRij(bkVeld));
+  const slechteConditie = bkVeld.conditie === 2 || bkVeld.conditie === 3;
+  kaart.appendChild(renderFotoKnopRij(bkDef.label, bkDef.fotoCategorie || bkDef.label, bkVeld.aandachtspuntenAanwezig === true));
+  if (slechteConditie) kaart.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true));
+  kaart.appendChild(jaNeeMetToelichtingRij(
+    'Aandachtspunten', bkVeld.aandachtspuntenAanwezig, (w) => { bkVeld.aandachtspuntenAanwezig = w; planOpslaan(); },
+    bkVeld.aandachtspuntenToelichting, (v) => { bkVeld.aandachtspuntenToelichting = v; planOpslaan(); },
+    'Toelichting aandachtspunt…',
+  ));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Materialen gevel'));
+  const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
+  bepaalOpties(bkDef).forEach((optie) => {
+    const aan = (bkVeld.materialen || []).includes(optie);
+    grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
+      el('input', {
+        type: 'checkbox', checked: aan ? 'checked' : null,
+        onchange: () => {
+          bkVeld.materialen = bkVeld.materialen || [];
+          const i = bkVeld.materialen.indexOf(optie);
+          if (i >= 0) bkVeld.materialen.splice(i, 1); else bkVeld.materialen.push(optie);
+          planOpslaan(); render();
+        },
+      }), optie));
+  });
+  kaart.appendChild(grid);
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie gevel'));
+  kaart.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
+  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
+  return kaart;
+}
+function renderBouwkundigEnergetischTab() {
+  const t = state.taxatie;
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { class: 'bouwdeel-hint', style: 'margin-bottom:10px;' },
+    '💡 Eerste proefopzet: dit tabblad toont dezelfde gegevens als Bouwkundig en Energetisch, alleen per bouwdeel samengevoegd. Wijzigen hier wijzigt ook die twee tabbladen (en andersom) — er wordt niets dubbel opgeslagen.'));
+
+  const gevelDefs = BOUWKUNDIG_SCHEMA.buitenzijde.gevel;
+  const ramenDefs = ENERGETISCH_SCHEMA.isolatie.ramen;
+  const gevelIsolatieDefs = ENERGETISCH_SCHEMA.isolatie.gevel;
+
+  wrap.appendChild(el('div', { class: 'section-label' }, 'Glas'));
+  const lijst = el('div', { class: 'bouwdeel-lijst' });
+  [
+    ['1e woonlaag', 'glas1eWoonlaag', 'glas1e'],
+    ['2e woonlaag', 'glas2eWoonlaag', 'glas2e'],
+    ['3e woonlaag', 'glas3eWoonlaag', 'glas3e'],
+    ['overige woonlagen', 'glasOverigeWoonlagen', 'glasOverige'],
+  ].forEach(([label, bkKey, enKey]) => {
+    const bkDef = vindDef(gevelDefs, bkKey);
+    const enDef = vindDef(ramenDefs, enKey);
+    lijst.appendChild(renderGecombineerdGlasKaart(label, bkDef, t.bouwkundig.buitenzijde.gevel[bkKey], enDef, t.energetisch.isolatie.ramen[enKey]));
+  });
+  wrap.appendChild(lijst);
+
+  wrap.appendChild(el('div', { class: 'section-label' }, 'Gevel'));
+  const gevelLijst = el('div', { class: 'bouwdeel-lijst' });
+  const bkGevelDef = vindDef(gevelDefs, 'gevelwerk');
+  const enGevelDef = vindDef(gevelIsolatieDefs, 'gevelisolatie');
+  gevelLijst.appendChild(renderGecombineerdGevelKaart(bkGevelDef, t.bouwkundig.buitenzijde.gevel.gevelwerk, enGevelDef, t.energetisch.isolatie.gevel.gevelisolatie));
+  wrap.appendChild(gevelLijst);
+
   return wrap;
 }
 
