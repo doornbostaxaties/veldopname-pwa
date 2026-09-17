@@ -239,6 +239,17 @@ h1, h2, h3, p { margin: 0; }
 .ruimte-sleepgreep { opacity: .55; cursor: grab; flex-shrink: 0; }
 .ruimte-kaart-ingeklapt { padding: 8px 14px; }
 .ruimte-naam-ingeklapt { flex: 1; font-weight: 600; font-size: 13.5px; color: var(--text-dim); }
+/* Foto-/apparatuur-status-badges op een ingeklapte ruimte of bijgebouw (17-09-2026, Arno's verzoek)
+   — grijs = nog niet aanwezig, groen = aanwezig, zonder tekst te hoeven lezen. */
+.ruimte-status-ingeklapt { display: flex; gap: 4px; flex-shrink: 0; }
+.ruimte-status-badge {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 6px; background: var(--pending-bg); font-size: 12px; opacity: .6; flex-shrink: 0;
+}
+.ruimte-status-badge.ok { background: var(--ok-bg); opacity: 1; }
+.bijgebouw-info-ingeklapt { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.bijgebouw-info-ingeklapt .ruimte-naam-ingeklapt { font-size: 12.5px; }
+.bouwdeel-veld-label-rij { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .camera-knop {
   border: none; background: var(--goud-100); color: var(--goud-700); width: 32px; height: 32px;
   border-radius: 9px; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer;

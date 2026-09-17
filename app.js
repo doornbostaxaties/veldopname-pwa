@@ -920,6 +920,19 @@ function categorieVoorRuimte(ruimteNaam) {
   if (naam.includes('keuken')) return 'keuken';
   return null;
 }
+// Voor de ingeklapte ruimte-status (17-09-2026) — zelfde lokaal+cloud-check als renderFotoKnopRij,
+// los getrokken zodat de ingeklapte kop 'm ook kan gebruiken zonder de hele fotoknop-rij te tonen.
+function heeftFotoVoorRuimte(ruimte) {
+  if (fotosVoorLabel(ruimte.naam).length > 0) return true;
+  return (state.cloudFotos || []).some((cf) => fotoLabelSleutel(cf.ruimteLabel || cf.categorie) === fotoLabelSleutel(ruimte.naam));
+}
+// Heeft deze ruimte al minstens 1 toevoeging die uit de keuken-/sanitair-macrolijst komt? — gebruikt
+// om in de ingeklapte kop te tonen of "de apparatuur/het sanitair al ingevuld is" (Arno's verzoek
+// 17-09-2026), zonder een aparte administratie bij te houden van welke chip uit welke lijst kwam.
+function heeftCategorieToevoeging(ruimte, macroSleutel) {
+  const lijst = (state.macros[macroSleutel] || []).map((x) => x.toLowerCase());
+  return (ruimte.toevoegingen || []).some((t) => lijst.includes(String(t).toLowerCase()));
+}
 
 // Vult bewaarde macro's aan met sanitair/keuken als die nog ontbreken — data die vóór v1.1 al eens
 // bewaard is (bewaarMacros() sloeg toen nog maar 4 lijsten op) zou anders zonder deze twee komen te
@@ -2248,8 +2261,28 @@ function renderIndelingTab() {
     if (!ingeklapt) {
       const inhoud = el('div', { class: 'woonlaag-inhoud' });
       inhoud.appendChild(renderWoonlaagKenmerken(woonlaag, wIdx));
+      // "Alles in-/uitklappen" (17-09-2026, Arno's verzoek) — 1 knop bovenaan de ruimtelijst i.p.v.
+      // elke ruimte los te moeten in-/uitklappen bij een verdieping met veel ruimtes. Label/actie
+      // hangt af van de HUIDIGE staat: zodra minstens 1 ruimte nog openstaat, klapt de knop ALLES
+      // dicht; pas als alles al dicht staat, klapt 'ie alles weer open.
+      const ruimtes = woonlaag.ruimtes || [];
+      if (ruimtes.length > 1) {
+        const alleKeys = ruimtes.map((_, rIdx) => wIdx + ':' + rIdx);
+        const allemaalIngeklapt = alleKeys.every((k) => ruimteIngeklapt.has(k));
+        inhoud.appendChild(el('button', {
+          type: 'button', class: 'knop spook klein', style: 'margin-bottom:8px;',
+          onclick: () => {
+            if (allemaalIngeklapt) alleKeys.forEach((k) => ruimteIngeklapt.delete(k));
+            else alleKeys.forEach((k) => ruimteIngeklapt.add(k));
+            render();
+          },
+        }, allemaalIngeklapt ? '▾ Alle ruimtes uitklappen' : '▸ Alle ruimtes inklappen'));
+      }
       (woonlaag.ruimtes || []).forEach((ruimte, rIdx) => {
-        inhoud.appendChild(renderRuimteKaart(ruimte, () => { woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render(); }, {
+        inhoud.appendChild(renderRuimteKaart(ruimte, () => {
+          if (!confirm(`"${ruimte.naam || 'deze ruimte'}" verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+          woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render();
+        }, {
           collapseKey: wIdx + ':' + rIdx, ruimtesArray: woonlaag.ruimtes, index: rIdx,
         }));
       });
@@ -2305,11 +2338,29 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
     }, ingeklapt ? '▸' : '▾'));
   }
   if (ingeklapt) {
-    // Ingeklapt: alleen naam + aantal toevoegingen tonen, geen bewerkbaar invoerveld (voorkomt per
-    // ongeluk typen in een niet-zichtbare rest van de kaart).
+    // Ingeklapt: alleen naam + status tonen, geen bewerkbaar invoerveld (voorkomt per ongeluk typen
+    // in een niet-zichtbare rest van de kaart). Status (17-09-2026, Arno's verzoek): foto-status
+    // altijd, plus bij keuken/toilet/badkamer een aparte apparatuur-/sanitair-status — zodat je ook
+    // ingeklapt in 1 oogopslag ziet of er nog iets ontbreekt, zonder elke ruimte te moeten openen.
     const aantal = (ruimte.toevoegingen || []).length;
-    rijBoven.appendChild(el('span', { class: 'ruimte-naam-ingeklapt' },
-      ruimte.naam || 'Ruimte', aantal ? ` — ${aantal} toevoeging${aantal === 1 ? '' : 'en'}` : ''));
+    const naamSpan = el('span', { class: 'ruimte-naam-ingeklapt' },
+      ruimte.naam || 'Ruimte', aantal ? ` — ${aantal} toevoeging${aantal === 1 ? '' : 'en'}` : '');
+    rijBoven.appendChild(naamSpan);
+    const statusRij = el('span', { class: 'ruimte-status-ingeklapt' });
+    statusRij.appendChild(el('span', { class: 'ruimte-status-badge' + (heeftFotoVoorRuimte(ruimte) ? ' ok' : '') }, '📷'));
+    const categorie = categorieVoorRuimte(ruimte.naam);
+    if (categorie === 'keuken') {
+      statusRij.appendChild(el('span', {
+        class: 'ruimte-status-badge' + (heeftCategorieToevoeging(ruimte, 'keuken') ? ' ok' : ''),
+        title: 'Keukenapparatuur ingevuld',
+      }, '🍳'));
+    } else if (categorie === 'sanitair') {
+      statusRij.appendChild(el('span', {
+        class: 'ruimte-status-badge' + (heeftCategorieToevoeging(ruimte, 'sanitair') ? ' ok' : ''),
+        title: 'Sanitair ingevuld',
+      }, '🚿'));
+    }
+    rijBoven.appendChild(statusRij);
     rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
     kaart.appendChild(rijBoven);
     return kaart;
@@ -2426,6 +2477,17 @@ function bouwkundigVeldVoorBijgebouwType(type) {
   if (naam.includes('schuur') || naam.includes('berging') || naam.includes('loods') || naam.includes('kapschuur')) return 'schuurBerging';
   return 'overigeBijgebouwen';
 }
+// Klein ✎-knopje dat de bewerk-editor voor 1 macro-lijst open/dicht klapt — zelfde bouwsteen als
+// renderBouwdeelChips gebruikt (bouwdeelChipEditorOpen/renderChipEditor), hier losstaand aanroepbaar
+// omdat Bijgebouwen geen def/bouwdeel-object heeft om dat via het bestaande pad te hergebruiken
+// (17-09-2026, Arno's verzoek: Type/Extra's/Materiaal "als macrolijst weergeven, uitbreidbaar en
+// aanpasbaar" — rechtstreeks vanuit Indeling i.p.v. via het aparte Macros-tabblad).
+function renderMacroBewerkKnop(macroSleutel) {
+  return el('button', {
+    type: 'button', class: 'chip-bewerk-knop', title: 'Lijst bewerken',
+    onclick: (e) => { e.stopPropagation(); bouwdeelChipEditorOpen[macroSleutel] = !bouwdeelChipEditorOpen[macroSleutel]; render(); },
+  }, '✎');
+}
 function renderBijgebouwKaart(item, idx, verwijder) {
   const ingeklapt = bijgebouwIngeklapt.has(idx);
   const kaart = el('div', { class: 'bouwdeel-kaart' });
@@ -2436,46 +2498,84 @@ function renderBijgebouwKaart(item, idx, verwijder) {
     el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
     el('span', { class: 'bouwdeel-titel' }, item.type || 'Nieuw bijgebouw'));
   kaart.appendChild(kop);
-  if (ingeklapt) return kaart;
+  if (ingeklapt) {
+    // Ingeklapt: samenvatting + foto-status, zelfde idee als de ingeklapte ruimte-kaart hierboven
+    // (Arno's verzoek 17-09-2026: "inklapbaar maken met kenmerken foto info ed., zelfde als
+    // verdiepingen").
+    const infoRij = el('div', { class: 'bijgebouw-info-ingeklapt' },
+      el('span', { class: 'ruimte-naam-ingeklapt' }, item.type ? samenvatBijgebouw(item) : 'Nog geen type gekozen'),
+      el('span', { class: 'ruimte-status-badge' + (heeftFotoVoorRuimte({ naam: item.type }) ? ' ok' : '') }, '📷'),
+      el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
+    kaart.appendChild(infoRij);
+    return kaart;
+  }
 
+  const typeRij = el('div', { class: 'ruimte-rij-boven' });
   const typeInput = el('input', {
     value: item.type || '', placeholder: 'Type (bv. "Garage", "Overkapping")',
     onclick: (e) => e.stopPropagation(),
     oninput: (e) => { item.type = e.target.value; planOpslaan(); },
   });
   koppelDatalist(typeInput, 'bijgebouwTypes');
-  kaart.appendChild(el('div', { class: 'ruimte-rij-boven' }, typeInput,
-    el('button', { class: 'verwijder', onclick: verwijder }, '✕')));
+  typeRij.appendChild(typeInput);
+  typeRij.appendChild(renderMacroBewerkKnop('bijgebouwTypes'));
+  typeRij.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
+  kaart.appendChild(typeRij);
+  if (bouwdeelChipEditorOpen.bijgebouwTypes) kaart.appendChild(renderChipEditor(state.macros.bijgebouwTypes, bewaarMacros));
 
   kaart.appendChild(renderKeuzeknoppenRij('Soort', item.soort, [[false, 'Vrijstaand'], [true, 'Aangebouwd']], (w) => { item.soort = w; }));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Materiaal'));
+
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label-rij' },
+    el('span', { class: 'bouwdeel-veld-label' }, 'Materiaal'), renderMacroBewerkKnop('bijgebouwMateriaal')));
   if (!Array.isArray(item.materialen)) item.materialen = [];
   kaart.appendChild(renderMultiselectGrid(item.materialen, state.macros.bijgebouwMateriaal || []));
+  if (bouwdeelChipEditorOpen.bijgebouwMateriaal) kaart.appendChild(renderChipEditor(state.macros.bijgebouwMateriaal, bewaarMacros));
+
   kaart.appendChild(renderKeuzeknoppenRij('Isolatie', item.isolatie, [['Geen', 'Geen'], ['Deels', 'Deels'], ['Volledig', 'Volledig']], (w) => { item.isolatie = w; }));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, "Extra's"));
+
+  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label-rij' },
+    el('span', { class: 'bouwdeel-veld-label' }, "Extra's"), renderMacroBewerkKnop('bijgebouwExtras')));
   if (!Array.isArray(item.extras)) item.extras = [];
   kaart.appendChild(renderMultiselectGrid(item.extras, state.macros.bijgebouwExtras || []));
+  if (bouwdeelChipEditorOpen.bijgebouwExtras) kaart.appendChild(renderChipEditor(state.macros.bijgebouwExtras, bewaarMacros));
+
   kaart.appendChild(conditieRij(item));
+  // Foto per bijgebouw (17-09-2026, zelfde idee als bij een ruimte/bouwdeel) — categorie op het
+  // type gebaseerd, zodat elk bijgebouw z'n eigen foto('s) krijgt i.p.v. alles onder "Anders".
+  kaart.appendChild(renderFotoKnopRij(item.type || 'Bijgebouw', item.type || 'Bijgebouw', false));
   return kaart;
 }
 // bijgebouwIngeklapt: ephemere UI-status (net als indelingIngeklapt/ruimteIngeklapt), sleutel = index
-// in data.bijgebouwen[].
+// in data.bijgebouwen[]. bijgebouwenSectieIngeklapt: ephemere status voor de HELE sectie-kop.
 const bijgebouwIngeklapt = new Set();
+let bijgebouwenSectieIngeklapt = false;
 function renderBijgebouwenSectie() {
   const t = state.taxatie;
   if (!Array.isArray(t.data.bijgebouwen)) t.data.bijgebouwen = [];
-  const wrap = el('div', { class: 'macro-groep' });
-  // Grotere titel dan het vorige kleine "Extern"-kopje (Arno's verzoek 17-09-2026: "geeft de knop
-  // een grotere titel"), opmaak zoals de rest van Indeling (h3, net als "Kenmerken verdieping").
-  wrap.appendChild(el('h3', {}, 'Bij-/aanbouwen en buitenvoorzieningen'));
-  t.data.bijgebouwen.forEach((item, idx) => {
-    wrap.appendChild(renderBijgebouwKaart(item, idx, () => { t.data.bijgebouwen.splice(idx, 1); planOpslaan(); render(); }));
-  });
-  wrap.appendChild(el('button', {
-    type: 'button', class: 'knop spook',
-    onclick: () => { t.data.bijgebouwen.push(leegBijgebouw()); planOpslaan(); render(); },
-  }, '+ Bijgebouw toevoegen'));
-  return wrap;
+  // Zelfde look + inklapbaarheid als een woonlaag-blok hierboven (Arno's verzoek 17-09-2026: "zelfde
+  // look ... ook inklapbaar"), met een grotere titel dan het vorige kleine "Extern"-kopje.
+  const blok = el('div', { class: 'woonlaag-blok' });
+  blok.appendChild(el('div', {
+    class: 'woonlaag-kop',
+    onclick: () => { bijgebouwenSectieIngeklapt = !bijgebouwenSectieIngeklapt; render(); },
+  },
+    el('button', { type: 'button', class: 'woonlaag-toggle' }, bijgebouwenSectieIngeklapt ? '▸' : '▾'),
+    el('span', { class: 'woonlaag-naam-invoer' }, 'Bij-/aanbouwen en buitenvoorzieningen')));
+  if (!bijgebouwenSectieIngeklapt) {
+    const inhoud = el('div', { class: 'woonlaag-inhoud' });
+    t.data.bijgebouwen.forEach((item, idx) => {
+      inhoud.appendChild(renderBijgebouwKaart(item, idx, () => {
+        if (!confirm(`"${item.type || 'dit bijgebouw'}" verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+        t.data.bijgebouwen.splice(idx, 1); planOpslaan(); render();
+      }));
+    });
+    inhoud.appendChild(el('button', {
+      type: 'button', class: 'knop spook klein',
+      onclick: () => { t.data.bijgebouwen.push(leegBijgebouw()); planOpslaan(); render(); },
+    }, '+ Bijgebouw toevoegen'));
+    blok.appendChild(inhoud);
+  }
+  return blok;
 }
 
 // --- Foto's ---
@@ -4217,6 +4317,10 @@ function renderRisicoBouwdeelKaart(bouwdeel, def) {
     bouwdeel.omschrijving, (v) => { bouwdeel.omschrijving = v; planOpslaan(); },
     'Omschrijving ' + def.label.toLowerCase() + '…',
   ));
+  // Foto per onderdeel, verplicht zodra Risico op Ja staat (17-09-2026, zelfde idee als de andere
+  // bouwdeel-kaarten hierboven — bij een risico-bouwdeel is "Risico: Ja" het equivalent van
+  // "Aandachtspunten: Ja").
+  kaart.appendChild(renderFotoKnopRij(def.label, def.fotoCategorie || def.label, bouwdeel.risico === true));
   // Bij Risico "Nee" toont Taxatieweb de omschrijving nog steeds (het is geen aandachtspunt-detail
   // maar de hoofdomschrijving van dit bouwdeel) — dus hier altijd tonen, niet alleen bij Ja.
   if (bouwdeel.risico !== true) {
@@ -4674,14 +4778,16 @@ function renderBouwdeelKaart(sectieObj, def) {
     kaart.appendChild(grid);
   }
 
-  // Meterkast/Verwarmingstoestel zijn altijd een verplichte foto (Arno's verzoek 12-09-2026,
-  // zelfde categorienaam als de bestaande Foto's-tab-checklist, zie VASTE_VERPLICHTE_FOTOS). Bij
-  // een slechte of matige conditie is DAARNAAST altijd een foto verplicht, apart bewaard onder
-  // "Aandachtspunt <bouwdeel>" — ook als dit bouwdeel zelf al een verplichte foto heeft.
-  if (def.verplichteFoto) kaart.appendChild(renderFotoKnopRij(def.label, def.fotoCategorie, true));
-  const slechteConditie = bouwdeel.conditie === 2 || bouwdeel.conditie === 3; // slecht/matig
-  if (def.type !== 'simpel' && slechteConditie) {
-    kaart.appendChild(renderFotoKnopRij('Aandachtspunt ' + def.label, 'Aandachtspunt ' + def.label, true));
+  // Foto per onderdeel (17-09-2026, Arno's verzoek: "moeten ook foto's kunnen worden toegevoegd per
+  // onderdeel", naar Taxatieweb's opzet waar élk bouwdeel een eigen upload-vak heeft) — nu bij ELK
+  // bouwdeel zichtbaar i.p.v. alleen Meterkast/Verwarmingstoestel (def.verplichteFoto). Verplicht
+  // (rode "Foto verplicht"-styling) zodra Aandachtspunten op Ja staat, een slechte/matige conditie
+  // is gekozen, of het bouwdeel z'n eigen vaste verplichteFoto-vlag heeft — 1 foto-slot per bouwdeel
+  // i.p.v. de eerdere aparte "Aandachtspunt <bouwdeel>"-categorie.
+  if (def.type !== 'simpel') {
+    const slechteConditie = bouwdeel.conditie === 2 || bouwdeel.conditie === 3; // slecht/matig
+    const verplichtNodig = !!def.verplichteFoto || slechteConditie || bouwdeel.aandachtspuntenAanwezig === true;
+    kaart.appendChild(renderFotoKnopRij(def.label, def.fotoCategorie || def.label, verplichtNodig));
   }
 
   if (def.type !== 'simpel') {
