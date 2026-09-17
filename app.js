@@ -374,7 +374,10 @@ const BOUWKUNDIG_SCHEMA = {
     daken: [
       { key: 'dakconstructie', label: 'Dakconstructie', type: 'tekst', standaardAan: true },
       { key: 'materiaalDak', label: 'Materiaal dak', type: 'materiaal', opties: ['Pannen', 'Leien', 'Riet', 'Bitumineus', 'EPDM', 'Sedum', 'Overige'], standaardAan: true },
-      { key: 'dakkapellen', label: 'Dakkapel(len)', type: 'tekst' },
+      // "Aantal" als los getalveld i.p.v. een vaste keuzelijst (18-09-2026, Arno's verzoek n.a.v. de
+      // taXapi-vergelijking: "vrij veld zou het aantal kunnen noemen, gewoon optellen") — komt
+      // automatisch mee in de samenvatting/PDF via samenvatBouwdeel(), net als bij Meterkast.
+      { key: 'dakkapellen', label: 'Dakkapel(len)', type: 'tekst', details: [{ key: 'aantal', label: 'Aantal dakkapellen', type: 'getal' }] },
       { key: 'schoorstenen', label: 'Schoorste(e)n(en)', type: 'tekst' },
       { key: 'goten', label: 'Goten (incl. hemelwaterafvoeren)', type: 'tekst' },
       { key: 'loodwerk', label: 'Loodwerk', type: 'tekst' },
@@ -452,8 +455,11 @@ const BOUWKUNDIG_SCHEMA = {
     ],
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaal', opties: ['Airconditioning', 'Blokverwarming', 'Centrale verwarming', 'CV-ketel', 'Gaskachels', 'Hybride warmtepomp', 'Lucht/lucht warmtepomp', 'Micro WKK(HRe-ketel)', 'Open haard/houtkachel', 'Stadsverwarming', 'Biomassaketel', 'Bodem/water warmtepomp', 'Collectieve warmtepomp', 'Elektrische verwarming', 'HR combi ketel', 'Infrarood', 'Lucht/water warmtepomp', 'Moederhaard', 'Pelletkachel', 'Water/water warmtepomp(WKO)', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'C.V.-ketel' },
-      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' } },
-      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
+      // hint (18-09-2026, Arno n.a.v. de taXapi-vergelijking): dit veld gaat over de AFGIFTE op
+      // deze woonlaag — staat de bron (CV-ketel/warmtepomp) fysiek elders, dan hoort die bij
+      // "Verwarmingstoestel" (huisbreed) en niet hier nogmaals ingevuld te worden.
+      { key: 'verwarmingssysteem1eWoonlaag', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' }, hint: 'Gaat over de afgifte op déze woonlaag (radiatoren, vloerverwarming). Staat de CV-ketel/warmtepomp zelf fysiek op een andere verdieping? Die vul je in bij "Verwarmingstoestel" (huisbreed), niet hier.' },
+      { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' }, hint: 'Gaat over de afgifte op déze verdieping(en). Staat de CV-ketel/warmtepomp zelf fysiek op een andere verdieping? Die vul je in bij "Verwarmingstoestel" (huisbreed), niet hier.' },
     ],
     warmwater: [
       // installatieKoppeling (17-09-2026, Arno "A. prima"): zelfde gedeelde selectie als Energetisch >
@@ -590,8 +596,8 @@ const ENERGETISCH_SCHEMA = {
   installaties: {
     verwarming: [
       { key: 'verwarmingstoestel', label: 'Verwarmingstoestel', type: 'materiaalTijd', opties: ['Airconditioning', 'Biomassaketel', 'Blokverwarming', 'Bodem/water warmtepomp', 'Centrale verwarming', 'Collectieve warmtepomp', 'CV-ketel', 'Elektrische verwarming', 'Gaskachels', 'HR combi ketel', 'Hybride warmtepomp', 'Infrarood', 'Lucht/lucht warmtepomp', 'Lucht/water warmtepomp', 'Micro WKK(HRe-ketel)', 'Moederhaard', 'Open haard/houtkachel', 'Pelletkachel', 'Stadsverwarming', 'Water/water warmtepomp(WKO)', 'Overige'] },
-      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' } },
-      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
+      { key: 'verwarmingssysteem1e', label: 'Verwarmingssysteem 1e woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '1e' }, hint: 'Gaat over de afgifte op déze woonlaag. Staat het verwarmingstoestel zelf fysiek op een andere verdieping? Die vul je in bij "Verwarmingstoestel" (huisbreed), niet hier.' },
+      { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' }, hint: 'Gaat over de afgifte op déze verdieping(en). Staat het verwarmingstoestel zelf fysiek op een andere verdieping? Die vul je in bij "Verwarmingstoestel" (huisbreed), niet hier.' },
     ],
     warmWater: [
       { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'], macroSleutel: 'warmwatertoestel', installatieKoppeling: { sleutel: 'warmwatertoestel' } },
@@ -1993,6 +1999,7 @@ function renderMetingTab() {
     });
     koppelDatalist(naamInput, 'verdiepingen');
     kaart.appendChild(el('div', { class: 'woonlaag-titel' },
+      pictogramVoorWoonlaag(woonlaag.naam),
       naamInput,
       el('span', { class: 'totaal' }, formatM2(woonlaagTotaal(woonlaag)) + ' m²'),
     ));
@@ -2233,6 +2240,24 @@ function renderWoonlaagKenmerken(woonlaag, wIdx) {
   });
   return kaart;
 }
+// Kleine pictogrammen per bouwlaagtype (18-09-2026, Arno's verzoek n.a.v. de taXapi-vergelijking:
+// "leuk idee, kun je dat ontwerpen in eenzelfde look") — puur decoratief, voor snellere oriëntatie
+// bij een opname met veel verdiepingen. Losse SVG-strings i.p.v. el(), want el() bouwt via
+// document.createElement() (geen SVG-namespace) — hier bewust een vaste, eigen tekststring (geen
+// gebruikersinvoer) dus veilig via innerHTML.
+const WOONLAAG_ICOON_SVG = {
+  zolder: '<path d="M4 13 12 5 20 13"/><path d="M12 9v3"/><circle cx="12" cy="15.5" r="1.8"/>',
+  beganeGrond: '<path d="M4 20V10l8-6 8 6v10"/><path d="M10 20v-6h4v6"/>',
+  verdieping: '<rect x="5" y="5" width="14" height="14" rx="1.5"/><path d="M12 5v14M5 12h14"/>',
+  kelder: '<path d="M3 9h18"/><path d="M5 9v10h14V9"/><path d="M8 13l2 2M8 17l2 2M13 13l2 2M13 17l2 2"/>',
+};
+function pictogramVoorWoonlaag(naam) {
+  const n = (naam || '').toLowerCase();
+  const sleutel = n.includes('kelder') ? 'kelder' : n.includes('zolder') ? 'zolder' : n.includes('begane grond') ? 'beganeGrond' : 'verdieping';
+  const wrap = el('span', { class: 'woonlaag-icoon' });
+  wrap.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${WOONLAAG_ICOON_SVG[sleutel]}</svg>`;
+  return wrap;
+}
 function renderIndelingTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
@@ -2255,6 +2280,7 @@ function renderIndelingTab() {
         type: 'button', class: 'woonlaag-toggle',
         onclick: () => { if (ingeklapt) indelingIngeklapt.delete(wIdx); else indelingIngeklapt.add(wIdx); render(); },
       }, ingeklapt ? '▸' : '▾'),
+      pictogramVoorWoonlaag(woonlaag.naam),
       naamInput,
     ));
 
@@ -4270,6 +4296,12 @@ function renderObjectkenmerkenTab() {
   return wrap;
 }
 
+// Kleine hint-tekst (18-09-2026, Arno n.a.v. de taXapi-vergelijking: waarschuwing dat een
+// verwarmingsbron op een andere verdieping daar zelf ingevuld moet worden) — generiek via def.hint,
+// zodat hetzelfde patroon later ook bij andere velden hergebruikt kan worden.
+function renderBouwdeelHint(tekst) {
+  return el('div', { class: 'bouwdeel-hint' }, '💡 ', tekst);
+}
 // --- Bouwkundig (Fase 2 "volledige opname", J.4 Bouwkundige opnamestaat) ---
 // Compact: label + chips op ÉÉN regel (i.p.v. label erboven, chips op een eigen regel eronder) —
 // Arno: "conditie keuzes bijvoorbeeld naast veld conditie (scheelt een regel)".
@@ -4703,6 +4735,7 @@ function renderBouwdeelKaart(sectieObj, def) {
     renderAttentieKnop(attentieIdVeld));
   kaart.appendChild(kop);
   if (ingeklapt) return kaart;
+  if (def.hint) kaart.appendChild(renderBouwdeelHint(def.hint));
 
   if (def.type !== 'simpel') kaart.appendChild(conditieRij(bouwdeel));
 
@@ -4938,6 +4971,7 @@ function renderMateriaalTijdKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
+  if (def.hint) kaart.appendChild(renderBouwdeelHint(def.hint));
   const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
   bepaalOpties(def).forEach(optie => {
     const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie)
