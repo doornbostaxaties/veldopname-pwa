@@ -2542,7 +2542,13 @@ function renderBijgebouwKaart(item, idx, verwijder) {
   kaart.appendChild(conditieRij(item));
   // Foto per bijgebouw (17-09-2026, zelfde idee als bij een ruimte/bouwdeel) — categorie op het
   // type gebaseerd, zodat elk bijgebouw z'n eigen foto('s) krijgt i.p.v. alles onder "Anders".
-  kaart.appendChild(renderFotoKnopRij(item.type || 'Bijgebouw', item.type || 'Bijgebouw', false));
+  const naam = item.type || 'Bijgebouw';
+  kaart.appendChild(renderFotoKnopRij(naam, naam, false));
+  // Achterstallig onderhoud (18-09-2026, zelfde regel als bij Bouwkundig) — eigen verplicht
+  // foto-slot zodra de conditie slecht of matig is.
+  if (item.conditie === 2 || item.conditie === 3) {
+    kaart.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + naam, 'Achterstallig onderhoud ' + naam, true));
+  }
   return kaart;
 }
 // bijgebouwIngeklapt: ephemere UI-status (net als indelingIngeklapt/ruimteIngeklapt), sleutel = index
@@ -3112,8 +3118,11 @@ function renderFotosTab() {
   const checklist = el('div', { class: 'checklist-kaart' });
   checklist.appendChild(el('div', { class: 'section-label' }, 'Verplichte foto\'s'));
   bepaalVerplichteFotos().forEach(item => {
-    checklist.appendChild(el('div', { class: 'checklist-item' + (item.klaar ? ' klaar' : '') },
-      el('span', { class: 'vinkje' }, item.klaar ? '✓' : ''),
+    // Rood markeren zolang niet gemaakt (18-09-2026, Arno's verzoek: "Foto's van verplichte
+    // ruimtes markeren als deze nog niet genomen is") — ✕ i.p.v. een lege vinkje, zodat het ook
+    // zonder kleur (bv. print/screenshot) duidelijk "nog niet gedaan" is.
+    checklist.appendChild(el('div', { class: 'checklist-item foto-verplicht-item' + (item.klaar ? ' klaar' : '') },
+      el('span', { class: 'vinkje' }, item.klaar ? '✓' : '✕'),
       el('span', { class: 'naam' }, item.naam),
     ));
   });
@@ -4781,13 +4790,17 @@ function renderBouwdeelKaart(sectieObj, def) {
   // Foto per onderdeel (17-09-2026, Arno's verzoek: "moeten ook foto's kunnen worden toegevoegd per
   // onderdeel", naar Taxatieweb's opzet waar élk bouwdeel een eigen upload-vak heeft) — nu bij ELK
   // bouwdeel zichtbaar i.p.v. alleen Meterkast/Verwarmingstoestel (def.verplichteFoto). Verplicht
-  // (rode "Foto verplicht"-styling) zodra Aandachtspunten op Ja staat, een slechte/matige conditie
-  // is gekozen, of het bouwdeel z'n eigen vaste verplichteFoto-vlag heeft — 1 foto-slot per bouwdeel
-  // i.p.v. de eerdere aparte "Aandachtspunt <bouwdeel>"-categorie.
+  // zodra Aandachtspunten op Ja staat of het bouwdeel z'n eigen vaste verplichteFoto-vlag heeft.
+  // Bij een slechte/matige conditie komt er DAARNAAST (18-09-2026, Arno's verzoek) een eigen,
+  // apart verplicht foto-slot "Achterstallig onderhoud <bouwdeel>" bij — 1-op-1 herkenbaar in de
+  // Foto's-tab/het archief, los van een eventuele Aandachtspunten-foto van hetzelfde bouwdeel.
   if (def.type !== 'simpel') {
-    const slechteConditie = bouwdeel.conditie === 2 || bouwdeel.conditie === 3; // slecht/matig
-    const verplichtNodig = !!def.verplichteFoto || slechteConditie || bouwdeel.aandachtspuntenAanwezig === true;
+    const verplichtNodig = !!def.verplichteFoto || bouwdeel.aandachtspuntenAanwezig === true;
     kaart.appendChild(renderFotoKnopRij(def.label, def.fotoCategorie || def.label, verplichtNodig));
+    const slechteConditie = bouwdeel.conditie === 2 || bouwdeel.conditie === 3; // slecht/matig
+    if (slechteConditie) {
+      kaart.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + def.label, 'Achterstallig onderhoud ' + def.label, true));
+    }
   }
 
   if (def.type !== 'simpel') {

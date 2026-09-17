@@ -310,6 +310,11 @@ h1, h2, h3, p { margin: 0; }
    duidelijke "let op"-kleur i.p.v. de neutrale lege rand. */
 .checklist-item-knop { width: 100%; background: none; border: none; font: inherit; text-align: left; cursor: pointer; }
 .checklist-item-knop:not(.klaar) .vinkje { background: var(--pending-bg); border-color: var(--pending); color: var(--pending); }
+/* Foto's-tab "Verplichte foto's" (18-09-2026, Arno's verzoek: rood markeren zolang niet gemaakt) —
+   eigen, iets dwingendere kleur dan de amber Controle-stijl hierboven, want dit is per definitie
+   altijd een ontbrekende FOTO, niet zomaar een openstaand veld. */
+.foto-verplicht-item:not(.klaar) .vinkje { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.foto-verplicht-item:not(.klaar) span.naam { color: var(--danger); font-weight: 600; }
 .controle-samenvatting {
   font-size: 13.5px; font-weight: 600; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
   background: var(--pending-bg); color: var(--pending);
@@ -547,7 +552,10 @@ h1, h2, h3, p { margin: 0; }
   padding: 8px 12px; border-radius: 999px; border: 1px solid var(--divider); background: var(--bg);
   color: var(--text-dim); cursor: pointer;
 }
-.bouwdeel-foto-knop.verplicht { border-color: var(--pending); color: var(--pending); background: var(--pending-bg); }
+/* Rood i.p.v. amber (18-09-2026, Arno's verzoek: "knop rood en pictogrammetje fototoestel rood")
+   — een ontbrekende VERPLICHTE foto moet opvallender/dwingender ogen dan een gewone openstaande
+   invoer, ook al kan een los 📷-emoji zelf niet herkleurd worden via CSS. */
+.bouwdeel-foto-knop.verplicht { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); font-weight: 700; }
 .bouwdeel-foto-knop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 
 /* --- Aantekeningen --- */
