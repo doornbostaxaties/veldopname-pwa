@@ -346,6 +346,22 @@ function leegBouwkundig() {
 // Vult ontbrekende hoofdstukken/groepen/bouwdelen aan bij bestaande data (nieuwe bouwdelen later
 // toegevoegd, of data van vóór deze fase) — zelfde migratie-patroon als
 // metExterneBergruimte()/metNieuweMacroCategorieen().
+// Eenmalige (idempotente) migratie: Glas 1e/2e/3e/overige woonlaag stonden tot 18-09-2026 als vrije
+// tekst (type 'tekst'), nu omgezet naar dezelfde gedeelde glastypes-multiselect als Energetisch en
+// "Kenmerken verdieping". Bestaande, al ingetypte tekst gaat NIET verloren — verschijnt na deze
+// migratie onder "Overige" met de oude tekst in het vrije "Namelijk…"-veld, zodat niets onzichtbaar
+// wordt. Draait bij elke laadOpname() maar is een no-op zodra materialen al eens gezet is.
+function migreerGlasWoonlaagVelden(bk) {
+  if (!bk.buitenzijde || !bk.buitenzijde.gevel) return;
+  ['glas1eWoonlaag', 'glas2eWoonlaag', 'glas3eWoonlaag', 'glasOverigeWoonlagen'].forEach((sleutel) => {
+    const veld = bk.buitenzijde.gevel[sleutel];
+    if (!veld) return;
+    if (veld.omschrijving && (!Array.isArray(veld.materialen) || !veld.materialen.length) && !veld.overigeTekst) {
+      veld.materialen = ['Overige'];
+      veld.overigeTekst = veld.omschrijving;
+    }
+  });
+}
 function metVolledigBouwkundig(bk) {
   const leeg = leegBouwkundig();
   if (!bk || typeof bk !== 'object') return leeg;
@@ -366,6 +382,7 @@ function metVolledigBouwkundig(bk) {
   BOUWKUNDIG_SCHEMA.overigeBijzonderheden.forEach(def => {
     if (!bk.overigeBijzonderheden[def.key]) bk.overigeBijzonderheden[def.key] = leeg.overigeBijzonderheden[def.key];
   });
+  migreerGlasWoonlaagVelden(bk);
   return bk;
 }
 const CONDITIE_LABELS = ['niet waarneembaar', 'nader onderzoek nodig', 'slecht', 'matig', 'redelijk', 'goed'];
@@ -392,10 +409,14 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'buitendeuren', label: 'Buitendeuren', type: 'tekst', standaardAan: true },
       { key: 'hangEnSluitwerk', label: 'Hang- en sluitwerk', type: 'tekst', standaardAan: true },
       { key: 'buitenschilderwerk', label: 'Buitenschilderwerk', type: 'tekst', standaardAan: true },
-      { key: 'glas1eWoonlaag', label: 'Glas 1e woonlaag', type: 'tekst', standaardAan: true },
-      { key: 'glas2eWoonlaag', label: 'Glas 2e woonlaag', type: 'tekst' },
-      { key: 'glas3eWoonlaag', label: 'Glas 3e woonlaag', type: 'tekst' },
-      { key: 'glasOverigeWoonlagen', label: 'Glas overige woonlagen', type: 'tekst' },
+      // Was tekst-type (vrije omschrijving) — 18-09-2026 omgezet naar dezelfde gedeelde
+      // glastypes-koppeling als Energetisch en "Kenmerken verdieping" (Arno's verzoek: nog een
+      // gemiste dubbeling wegwerken, "als het maar geen zooitje wordt"). Bestaande vrije tekst wordt
+      // bij het laden eenmalig overgezet naar Overige/overigeTekst, zie migreerGlasWoonlaagVelden().
+      { key: 'glas1eWoonlaag', label: 'Glas 1e woonlaag', type: 'materiaal', opties: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'], macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '1e' }, standaardAan: true },
+      { key: 'glas2eWoonlaag', label: 'Glas 2e woonlaag', type: 'materiaal', opties: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'], macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '2e' } },
+      { key: 'glas3eWoonlaag', label: 'Glas 3e woonlaag', type: 'materiaal', opties: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'], macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: '3e' } },
+      { key: 'glasOverigeWoonlagen', label: 'Glas overige woonlagen', type: 'materiaal', opties: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'], macroSleutel: 'glastypes', kenmerkenKoppeling: { macroSleutel: 'glastypes', slot: 'overige' } },
     ],
     bijgebouwen: [
       { key: 'schuurBerging', label: 'Schuur / berging', type: 'tekst' },
@@ -4596,6 +4617,12 @@ function synchroniseerKenmerken() {
   voegSamen(t.energetisch.isolatie.ramen.glas2e, { macroSleutel: 'glastypes', slot: '2e' });
   voegSamen(t.energetisch.isolatie.ramen.glas3e, { macroSleutel: 'glastypes', slot: '3e' });
   voegSamen(t.energetisch.isolatie.ramen.glasOverige, { macroSleutel: 'glastypes', slot: 'overige' });
+  // Bouwkundig's eigen Glas 1e/2e/3e/overige woonlaag (18-09-2026 omgezet van tekst naar dezelfde
+  // gedeelde koppeling — zie migreerGlasWoonlaagVelden hierboven voor de tekst-naar-Overige-migratie).
+  voegSamen(t.bouwkundig.buitenzijde.gevel.glas1eWoonlaag, { macroSleutel: 'glastypes', slot: '1e' });
+  voegSamen(t.bouwkundig.buitenzijde.gevel.glas2eWoonlaag, { macroSleutel: 'glastypes', slot: '2e' });
+  voegSamen(t.bouwkundig.buitenzijde.gevel.glas3eWoonlaag, { macroSleutel: 'glastypes', slot: '3e' });
+  voegSamen(t.bouwkundig.buitenzijde.gevel.glasOverigeWoonlagen, { macroSleutel: 'glastypes', slot: 'overige' });
   voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem1e, { macroSleutel: 'verwarmingssysteem', slot: '1e' });
   voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem2e, { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' });
 }
