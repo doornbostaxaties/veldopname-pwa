@@ -1897,7 +1897,8 @@ const TABS = [
   // installatiejaar uit Energetisch, in 1 kaart) sneller/overzichtelijker werken op locatie. Puur
   // een ANDERE weergave van dezelfde twee objecten — er wordt niets nieuws opgeslagen, dus de data
   // blijft vanzelf gesplitst en compleet richting Taxatieweb.
-  { id: 'bouwkundigEnergetisch', icon: '🧩', label: 'Bouwkundig & Energetisch' },
+  // let op: id MOET kleine letters zijn — de hashchange-route-regex is /^#\/opname\/...\/([a-z]+)$/
+  { id: 'bouwkundigenergetisch', icon: '🧩', label: 'Bouwkundig & Energetisch' },
   { id: 'fotos', icon: '📷', label: "Foto's" },
   { id: 'aantekeningen', icon: '📝', label: 'Notities' },
   { id: 'onderzoek', icon: '🔍', label: 'Onderzoek' },
@@ -1944,7 +1945,7 @@ function renderOpnameScherm() {
   else if (state.route.tab === 'objectkenmerken') inhoud.appendChild(renderObjectkenmerkenTab());
   else if (state.route.tab === 'bouwkundig') inhoud.appendChild(renderBouwkundigTab());
   else if (state.route.tab === 'energetisch') inhoud.appendChild(renderEnergetischTab());
-  else if (state.route.tab === 'bouwkundigEnergetisch') inhoud.appendChild(renderBouwkundigEnergetischTab());
+  else if (state.route.tab === 'bouwkundigenergetisch') inhoud.appendChild(renderBouwkundigEnergetischTab());
   else if (state.route.tab === 'omgeving') inhoud.appendChild(renderOmgevingTab());
   else if (state.route.tab === 'fotos') inhoud.appendChild(renderFotosTab());
   else if (state.route.tab === 'aantekeningen') inhoud.appendChild(renderAantekeningenTab());
