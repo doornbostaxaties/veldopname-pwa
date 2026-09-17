@@ -938,6 +938,26 @@ function metNieuweMacroCategorieen(m) {
   Object.keys(standaard.bouwdeelChips).forEach((sleutel) => {
     if (!Array.isArray(m.bouwdeelChips[sleutel])) m.bouwdeelChips[sleutel] = standaard.bouwdeelChips[sleutel];
   });
+  // Macro-audit tegen Provadie (17-09-2026, Arno's verzoek "C") — deze 4 lijsten waren AL langer
+  // geleden aangemaakt (dus de "ontbreekt nog helemaal"-aanvulling hierboven raakt ze niet meer) en
+  // bleken bij live vergelijking met Provadie/Spade 21 te mager. Eenmalig, idempotent en additief:
+  // voegt alleen ONTBREKENDE items toe (case-insensitive), verwijdert nooit iets van Arno's eigen
+  // lijst, en "Overige" blijft — als 'ie er al stond — achteraan staan. Draait bij elke laadMacros(),
+  // maar is vanaf de 2e keer een no-op zodra alles is samengevoegd.
+  const voegNieuweOptiesSamen = (huidig, nieuw) => {
+    const heeftOverige = huidig.some((x) => x.toLowerCase() === 'overige');
+    const zonderOverige = huidig.filter((x) => x.toLowerCase() !== 'overige');
+    nieuw.forEach((optie) => {
+      if (optie.toLowerCase() === 'overige') return;
+      if (!zonderOverige.some((x) => x.toLowerCase() === optie.toLowerCase())) zonderOverige.push(optie);
+    });
+    if (heeftOverige) zonderOverige.push('Overige');
+    return zonderOverige;
+  };
+  m.kozijnen = voegNieuweOptiesSamen(m.kozijnen, standaard.kozijnen);
+  m.vloerafwerking = voegNieuweOptiesSamen(m.vloerafwerking, standaard.vloerafwerking);
+  m.bouwdeelChips.wandenEnBinnenmuren = voegNieuweOptiesSamen(m.bouwdeelChips.wandenEnBinnenmuren, standaard.bouwdeelChips.wandenEnBinnenmuren);
+  m.bouwdeelChips.plafonds = voegNieuweOptiesSamen(m.bouwdeelChips.plafonds, standaard.bouwdeelChips.plafonds);
   return m;
 }
 
