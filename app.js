@@ -75,11 +75,25 @@ function leegWoonlaagKenmerken() {
 function leegIndelingWoonlaag() {
   return { naam: '', vloerbeschrijving: '', vloerbeschrijvingen: [], ruimtes: [leegRuimte()], kenmerken: leegWoonlaagKenmerken() };
 }
+// installatieKenmerken (17-09-2026, Arno's advies-antwoord "A. prima") — zelfde soort probleem als
+// Kenmerken verdieping, maar dan tussen Bouwkundig en Energetisch rechtstreeks: Ventilatie, Koeling
+// en Warmwatertoestel stonden daar allebei met (bijna) dezelfde keuzelijst, dus dubbel in te vullen.
+// Deze 3 velden zijn huisbreed (geen per-woonlaag-slot nodig zoals bij Indeling), dus 1 gedeelde
+// opslagplek in `data` i.p.v. een koppeling naar Indeling — zie installatieGeselecteerd/-Wissel.
+function leegInstallatieKenmerken() {
+  return { ventilatie: [], koeling: [], warmwatertoestel: [] };
+}
 function leegData() {
   return {
     afmetingen: { woonlagen: [leegWoonlaag()] },
     externeBergruimte: { blokken: [] },
     indeling: { woonlagen: [], extern: [] },
+    installatieKenmerken: leegInstallatieKenmerken(),
+    // attentieVelden (17-09-2026, Arno's verzoek: "bepaalde onderdelen extra attentiewaarde geven,
+    // met een !-knopje") — lijst van id's ("bouwkundig:dakconstructie" e.d., zie attentieId()) van
+    // bouwdelen/velden die de taxateur zelf als belangrijk heeft gemarkeerd. Controle-tab gebruikt
+    // deze lijst om te waarschuwen als zo'n gemarkeerd veld nog leeg is — "niets vergeten".
+    attentieVelden: [],
   };
 }
 // Arno (13-09-2026): "Kun je ook de woonlagen en meting woonlagen gelijk houden?" — Meting
@@ -431,11 +445,13 @@ const BOUWKUNDIG_SCHEMA = {
       { key: 'verwarmingssysteem2eEnVolgendeWoonlaag', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaal', opties: ['Radiatoren', 'Convectoren', 'Elektrische vloerverwarming', 'Infraroodpanelen', 'Vloerverwarming', 'Wandverwarming', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
     ],
     warmwater: [
-      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
+      // installatieKoppeling (17-09-2026, Arno "A. prima"): zelfde gedeelde selectie als Energetisch >
+      // Warmwatertoestel — zie installatieGeselecteerd/-Wissel en state.installatieKenmerken.
+      { key: 'warmwatertoestel', label: 'Warmwatertoestel', type: 'materiaal', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'], macroSleutel: 'warmwatertoestel', installatieKoppeling: { sleutel: 'warmwatertoestel' }, details: [{ key: 'bouwjaar', label: 'Bouwjaar', type: 'jaar' }, { key: 'eigendom', label: 'Eigendom', type: 'select', opties: ['Anders', 'Eigendom', 'Huur', 'Lease'] }], standaardAan: true },
     ],
     ventilatieKoeling: [
-      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'], standaardAan: true },
-      { key: 'koeling', label: 'Koeling', type: 'materiaal', opties: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'] },
+      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaal', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'], macroSleutel: 'ventilatie', installatieKoppeling: { sleutel: 'ventilatie' }, standaardAan: true },
+      { key: 'koeling', label: 'Koeling', type: 'materiaal', opties: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'], macroSleutel: 'koeling', installatieKoppeling: { sleutel: 'koeling' } },
     ],
     elektrotechnisch: [
       { key: 'meterkast', label: 'Meterkast', type: 'tekst', details: [{ key: 'aantalGroepen', label: 'Aantal groepen', type: 'getal' }, { key: 'aantalAardlekschakelaars', label: 'Aantal aardlekschakelaars', type: 'getal' }, { key: 'krachtstroomAanwezig', label: 'Krachtstroom aanwezig', type: 'ja_nee' }, { key: 'oplaadpuntAanwezig', label: 'Oplaadpunt aanwezig', type: 'ja_nee' }], standaardAan: true, verplichteFoto: true, fotoCategorie: 'Meterkast' },
@@ -567,13 +583,13 @@ const ENERGETISCH_SCHEMA = {
       { key: 'verwarmingssysteem2e', label: 'Verwarmingssysteem 2e en volgende woonlaag', type: 'materiaalTijd', opties: ['Radiatoren', 'Convectoren', 'Vloerverwarming', 'Elektrische vloerverwarming', 'Wandverwarming', 'Infraroodpanelen', 'Overige'], macroSleutel: 'verwarmingssysteem', kenmerkenKoppeling: { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' } },
     ],
     warmWater: [
-      { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'] },
+      { key: 'warmwatertoestel', label: 'Warmwater toestel', type: 'materiaalTijd', opties: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Zonneboiler', 'Kokend waterkraan', 'Overige'], macroSleutel: 'warmwatertoestel', installatieKoppeling: { sleutel: 'warmwatertoestel' } },
       { key: 'doucheWtw', label: 'Douche-warmteterugwinningssysteem', type: 'simpel' },
       { key: 'zonneboilerInstallatie', label: 'Zonneboiler', type: 'simpel' },
     ],
     ventilatieKoeling: [
-      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaalTijd', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'] },
-      { key: 'koeling', label: 'Koeling', type: 'materiaalTijd', opties: ['Airconditioning', 'Vloerverwarming', 'Radiatoren', 'Ventilatie', 'Overige'] },
+      { key: 'ventilatie', label: 'Ventilatie', type: 'materiaalTijd', opties: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'], macroSleutel: 'ventilatie', installatieKoppeling: { sleutel: 'ventilatie' } },
+      { key: 'koeling', label: 'Koeling', type: 'materiaalTijd', opties: ['Airconditioning', 'Vloerverwarming', 'Radiatoren', 'Ventilatie', 'Overige'], macroSleutel: 'koeling', installatieKoppeling: { sleutel: 'koeling' } },
     ],
   },
   energieopwekking: [
@@ -733,6 +749,11 @@ function standaardMacros() {
     kozijnen: ['Kunststof', 'Hardhout', 'Hout', 'Aluminium', 'Staal', 'Overige'],
     glastypes: ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Glas-in-lood', 'Voorzetramen', 'Overige'],
     verwarmingssysteem: ['Radiatoren', 'Vloerverwarming', 'Airconditioning', 'Convectorput', 'Infraroodpanelen', 'Elektrische radiator', 'Wandverwarming', 'Overige'],
+    // installatieKenmerken (17-09-2026, Arno "A. prima") — zelfde idee, nu voor Ventilatie/Koeling/
+    // Warmwatertoestel tussen Bouwkundig en Energetisch (samengevoegde optielijst van beide schema's).
+    ventilatie: ['Natuurlijk', 'Mechanisch', 'Gebalanceerd', 'Decentraal mechanisch', 'Vraaggestuurd', 'Overige'],
+    koeling: ['Airconditioning', 'Radiatoren', 'Vloerverwarming', 'Ventilatie', 'Overige'],
+    warmwatertoestel: ['Geiser', 'Boiler', 'Geïntegreerd in cv', 'Doorstroom (stadsverwarming)', 'Kokendwaterkraan', 'Zonneboiler', 'Overige'],
     vloerafwerking: ['Laminaat', 'PVC-vloer', 'Tegelvloer', 'Parket', 'Tapijt', 'Gietvloer', 'Natuursteen', 'Overige'],
     // Tik-chips per vrije-tekst-bouwdeel in Bouwkundig (13-09-2026, Arno's verzoek: "ook op de
     // overige tekstvelden", en bewerkbaar als macro — zie BOUWDEEL_CHIP_GROEPEN/renderChipEditor
@@ -805,6 +826,33 @@ function standaardMacros() {
       koeling: ['Split-unit', 'Centraal systeem'],
       wind: ['Geen windenergie aanwezig'],
       overigeEnergieopwekking: ['Geen bijzonderheden'],
+      // Omgeving (H.2) — sinds Arno's verzoek 17-09-2026: "Macro's overnemen van Provadie lijsten" /
+      // "kijk naar de macro's van Provadie en Taxatieweb en neem die over". Inhoud 1-op-1 overgenomen
+      // uit Taxatieweb's eigen "Toon macro's"-knop bij Spade 21 (live nagekeken 17-09-2026) — dit was
+      // de enige plek in de app waar zulke chips nog ontbraken.
+      omgevingLocatie: [
+        'Gelegen in een rustige straat in een kindvriendelijke woonwijk en nabij vele voorzieningen.',
+        'Gelegen in een rustige woonwijk op goede stand.',
+        'Gelegen in een rustige woonwijk op goede stand in een straat met alleen bestemmingsverkeer.',
+        'Gelegen in een rustige woonwijk aan de rand van de bebouwing.',
+        'Gelegen in een rustige woonwijk nabij het centrum.',
+        'Gelegen aan een doorgaande straat.',
+        'Gelegen in het agrarisch buitengebied nabij de bebouwde kom, op goede stand gelegen.',
+      ],
+      omgevingGebouwenRondom: [
+        'appartementen', 'rijen woningen', '2-onder-1-kapwoningen', 'vrijstaande woningen', 'winkels',
+        'woonzorgcomplex', 'Agrarische bedrijven, vrijstaande woningen en woonboerderijen.',
+        'geschakelde woningen', 'recreatiewoningen',
+      ],
+      omgevingBereikbaarheid: [
+        'De woning is bereikbaar via bus, trein, N-weg, snelweg en uitvalswegen.',
+        '- Goed bereikbare toegangswegen. - .. autominuten van de snelweg gelegen. - Op .. kilometer/meter (fiets)afstand van het centrum gelegen. - Voldoende parkeergelegenheid. - Nabijgelegen bushalte. - Nabijgelegen treinstation.',
+        'Goed bereikbare toegangswegen, voldoende parkeergelegenheid, .. autominuten van de snelweg gelegen en op .. kilometer/meter fietsafstand van het centrum gelegen.',
+      ],
+      omgevingVoorzieningen: [
+        'Dicht gelegen bij alle voorzieningen, zoals het centrum, winkelcentrum, gezondheidscentrum, scholen, winkels en uitvalswegen.',
+        'In de nabijheid van het getaxeerde zijn veel voorzieningen te vinden, zoals supermarkten, winkels, scholen, diverse zorgfaciliteiten (o.a. huisarts) en (sport)verenigingen.',
+      ],
     },
   };
 }
@@ -828,7 +876,7 @@ function metNieuweMacroCategorieen(m) {
   const standaard = standaardMacros();
   if (!Array.isArray(m.sanitair)) m.sanitair = standaard.sanitair;
   if (!Array.isArray(m.keuken)) m.keuken = standaard.keuken;
-  ['vloersoort', 'kozijnen', 'glastypes', 'verwarmingssysteem', 'vloerafwerking'].forEach((sleutel) => {
+  ['vloersoort', 'kozijnen', 'glastypes', 'verwarmingssysteem', 'vloerafwerking', 'ventilatie', 'koeling', 'warmwatertoestel'].forEach((sleutel) => {
     if (!Array.isArray(m[sleutel])) m[sleutel] = standaard[sleutel];
   });
   // bouwdeelChips (13-09-2026): per-sleutel aanvullen i.p.v. de hele groep in één keer, zodat een
@@ -1269,8 +1317,11 @@ async function laadOpname(rapportId, tab) {
   lokaal.omgeving = metVolledigOmgeving(lokaal.omgeving); // taxaties van vóór de Omgeving-tab (13-09-2026)
   if (!lokaal.begintijdOpname) lokaal.begintijdOpname = new Date().toISOString(); // eerste keer laden = start inspectie
   lokaal.data = synchroniseerWoonlagen(lokaal.data); // Meting/Indeling-woonlagen gelijktrekken (13-09-2026)
+  if (!lokaal.data.installatieKenmerken) lokaal.data.installatieKenmerken = leegInstallatieKenmerken(); // taxaties van vóór 17-09-2026
+  if (!Array.isArray(lokaal.data.attentieVelden)) lokaal.data.attentieVelden = [];
   state.taxatie = lokaal;
   synchroniseerKenmerken(); // bestaande Vloeren/Kozijnen/Glas/Verwarmingssysteem-keuzes overnemen in Indeling (16-09-2026)
+  synchroniseerInstallatieKenmerken(); // bestaande Ventilatie/Koeling/Warmwatertoestel-keuzes samenvoegen (17-09-2026)
   state.fotos = await VeldopnameDB.fotosVoorTaxatie(rapportId);
   state.cloudFotos = [];
   navigeer({ naam: 'opname', rapportId, tab: tab || 'meting' });
@@ -1297,7 +1348,12 @@ async function laadOpname(rapportId, tab) {
       // Object] is not valid JSON". Vergelijk taxatieweb-opname.user.js, waar cloudData ook
       // rechtstreeks als object gebruikt wordt.
       let gewijzigd = false;
-      if (data && typeof data === 'object') { state.taxatie.data = synchroniseerWoonlagen(data); gewijzigd = true; }
+      if (data && typeof data === 'object') {
+        state.taxatie.data = synchroniseerWoonlagen(data);
+        if (!state.taxatie.data.installatieKenmerken) state.taxatie.data.installatieKenmerken = leegInstallatieKenmerken();
+        if (!Array.isArray(state.taxatie.data.attentieVelden)) state.taxatie.data.attentieVelden = [];
+        gewijzigd = true;
+      }
       if (bewoning_data && typeof bewoning_data === 'object') {
         if (bewoning_data.woningtype === undefined) bewoning_data.woningtype = '';
         if (bewoning_data.bouwjaar === undefined) bewoning_data.bouwjaar = '';
@@ -1312,6 +1368,8 @@ async function laadOpname(rapportId, tab) {
       // de eerder ontbrekende sync) nog leeg is een lokaal wél al ingetypte notitie overschrijven.
       if (aantekeningen && !state.taxatie.aantekeningen) { state.taxatie.aantekeningen = aantekeningen; gewijzigd = true; }
       if (gewijzigd) {
+        synchroniseerKenmerken();
+        synchroniseerInstallatieKenmerken();
         await VeldopnameDB.bewaarTaxatie(state.taxatie);
         if (state.route.naam === 'opname' && state.route.rapportId === rapportId) render();
       }
@@ -2306,6 +2364,11 @@ function berekenControleResultaten() {
 
   // Verplichte foto's — bestaande checklist hergebruikt.
   groepen.push({ titel: "Verplichte foto's", items: bepaalVerplichteFotos().map(f => ({ tekst: f.naam, ok: f.klaar, tab: 'fotos' })) });
+
+  // Met ! gemarkeerde velden (17-09-2026, Arno's verzoek) — apart bovenaan-achtig groepje zodat
+  // expliciet als belangrijk gemarkeerde onderdelen nooit stilzwijgend leeg kunnen blijven.
+  const attentieItems = berekenAttentieResultaten();
+  if (attentieItems.length) groepen.unshift({ titel: '! Gemarkeerd als belangrijk', items: attentieItems });
 
   return groepen;
 }
@@ -3912,13 +3975,15 @@ function jaNeeMetToelichtingRij(waardeLabel, huidigeWaarde, onWaarde, huidigeToe
 // omschrijving, exact zoals Taxatieweb's eigen Overige bijzonderheden-velden (Houtaantasters e.d.).
 // Zelfde compacte Ja/Nee-naast-tekstveld-opzet als de gewone aandachtspunten-rij.
 function renderRisicoBouwdeelKaart(bouwdeel, def) {
-  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  const attentieIdVeld = attentieId('bouwkundig', def.key);
+  const kaart = el('div', { class: 'bouwdeel-kaart' + (attentieActief(attentieIdVeld) ? ' bouwdeel-kaart-attentie' : '') });
   const kop = el('div', {
     class: 'bouwdeel-kop',
     onclick: () => { bouwdeel.aanwezig = !bouwdeel.aanwezig; planOpslaan(); render(); },
   },
     el('input', { type: 'checkbox', checked: bouwdeel.aanwezig ? 'checked' : null }),
-    el('span', { class: 'bouwdeel-titel' }, def.label));
+    el('span', { class: 'bouwdeel-titel' }, def.label),
+    renderAttentieKnop(attentieIdVeld));
   kaart.appendChild(kop);
   if (!bouwdeel.aanwezig) return kaart;
 
@@ -4164,17 +4229,140 @@ function synchroniseerKenmerken() {
   voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem1e, { macroSleutel: 'verwarmingssysteem', slot: '1e' });
   voegSamen(t.energetisch.installaties.verwarming.verwarmingssysteem2e, { macroSleutel: 'verwarmingssysteem', slot: '2eEnVolgende' });
 }
+
+// installatieKoppeling (17-09-2026, Arno "A. prima") — zelfde 1-opslagplek-principe als
+// kenmerkenKoppeling hierboven, maar dan huisbreed (geen woonlaag-slot): Ventilatie, Koeling en
+// Warmwatertoestel stonden dubbel in Bouwkundig én Energetisch. `sleutel` wijst naar
+// data.installatieKenmerken (en de gelijknamige macro-lijst uit state.macros).
+function installatieGeselecteerd(sleutel, optie) {
+  if (!state.taxatie.data.installatieKenmerken) state.taxatie.data.installatieKenmerken = leegInstallatieKenmerken();
+  return (state.taxatie.data.installatieKenmerken[sleutel] || []).includes(optie);
+}
+function installatieWissel(sleutel, optie) {
+  if (!state.taxatie.data.installatieKenmerken) state.taxatie.data.installatieKenmerken = leegInstallatieKenmerken();
+  const lijst = state.taxatie.data.installatieKenmerken[sleutel];
+  const i = lijst.indexOf(optie);
+  if (i >= 0) lijst.splice(i, 1); else lijst.push(optie);
+}
+// Eenmalige (idempotente) overname, analoog aan synchroniseerKenmerken() hierboven: bestaande
+// Ventilatie/Koeling/Warmwatertoestel-keuzes die vóór installatieKoppeling al los per bouwdeel waren
+// aangevinkt (in Bouwkundig ÉN Energetisch), samenvoegen in de gedeelde installatieKenmerken-store.
+function synchroniseerInstallatieKenmerken() {
+  const t = state.taxatie;
+  if (!t.data.installatieKenmerken) t.data.installatieKenmerken = leegInstallatieKenmerken();
+  const voegSamen = (bouwdeel, sleutel) => {
+    const materialen = bouwdeel && bouwdeel.materialen;
+    if (!Array.isArray(materialen) || !materialen.length) return;
+    materialen.forEach((optie) => {
+      if (!t.data.installatieKenmerken[sleutel].includes(optie)) t.data.installatieKenmerken[sleutel].push(optie);
+    });
+  };
+  voegSamen(t.bouwkundig.installaties.ventilatieKoeling.ventilatie, 'ventilatie');
+  voegSamen(t.bouwkundig.installaties.ventilatieKoeling.koeling, 'koeling');
+  voegSamen(t.bouwkundig.installaties.warmwater.warmwatertoestel, 'warmwatertoestel');
+  voegSamen(t.energetisch.installaties.ventilatieKoeling.ventilatie, 'ventilatie');
+  voegSamen(t.energetisch.installaties.ventilatieKoeling.koeling, 'koeling');
+  voegSamen(t.energetisch.installaties.warmWater.warmwatertoestel, 'warmwatertoestel');
+}
+
+// --- Attentiewaarde (17-09-2026, Arno's verzoek: "bepaalde onderdelen extra attentiewaarde geven
+// ... door een !-knopje toe te voegen ... dan kun je dit meteen meenemen onder Controle zodat geen
+// opname zaken/velden gemist worden") ---
+// `sectie` is 'bouwkundig' of 'energetisch' (de enige twee plekken met een !-knop, zie
+// renderBouwdeelKaart/renderRisicoBouwdeelKaart/renderEnergetischKop) — nodig omdat def.key niet
+// overal uniek is TUSSEN de twee schema's (bv. 'ventilatie' bestaat in allebei).
+function attentieId(sectie, defKey) {
+  return sectie + ':' + defKey;
+}
+function attentieActief(id) {
+  return (state.taxatie.data.attentieVelden || []).includes(id);
+}
+function wisselAttentie(id) {
+  if (!Array.isArray(state.taxatie.data.attentieVelden)) state.taxatie.data.attentieVelden = [];
+  const lijst = state.taxatie.data.attentieVelden;
+  const i = lijst.indexOf(id);
+  if (i >= 0) lijst.splice(i, 1); else lijst.push(id);
+  planOpslaan(); render();
+}
+// Klein "!"-knopje naast een bouwdeel-titel — klik toggelt de markering, stopPropagation voorkomt
+// dat de klik ook de kaart zelf open/dicht klapt (die kop heeft al een eigen onclick).
+function renderAttentieKnop(id) {
+  const actief = attentieActief(id);
+  return el('button', {
+    type: 'button', class: 'bouwdeel-attentie-knop' + (actief ? ' actief' : ''),
+    title: actief ? 'Attentiewaarde verwijderen' : 'Markeren met hoge attentiewaarde',
+    onclick: (e) => { e.stopPropagation(); wisselAttentie(id); },
+  }, '!');
+}
+// Generieke "is dit AANWEZIGE bouwdeel/veld ook echt ingevuld"-check, hergebruikt door de
+// Controle-tab om gemarkeerde (!) velden te waarschuwen als ze nog leeg zijn. Staat een bouwdeel op
+// "niet aanwezig", dan is dat een complete keuze (geen waarschuwing) — alleen een AANWEZIG bouwdeel
+// zonder materiaal-/tekstinhoud telt als "nog niet ingevuld".
+function bouwdeelVeldOk(def, bouwdeel) {
+  if (!bouwdeel || !bouwdeel.aanwezig) return true;
+  if (def.type === 'materiaal' || def.type === 'materiaalTijd') {
+    if (def.kenmerkenKoppeling) return bepaalOpties(def).some((o) => kenmerkGeselecteerd(def.kenmerkenKoppeling, o));
+    if (def.installatieKoppeling) return bepaalOpties(def).some((o) => installatieGeselecteerd(def.installatieKoppeling.sleutel, o));
+    return !!(bouwdeel.materialen && bouwdeel.materialen.length);
+  }
+  if (def.type === 'risico') return !!(bouwdeel.omschrijving && bouwdeel.omschrijving.trim());
+  if (bouwdeel.omschrijving !== undefined) return !!(bouwdeel.omschrijving && bouwdeel.omschrijving.trim());
+  if (bouwdeel.opmerkingen !== undefined) return !!(bouwdeel.opmerkingen && bouwdeel.opmerkingen.trim());
+  return true; // isolatie/dak-type velden hebben geen vrij tekstveld — "aanwezig" is dan al compleet
+}
+// Loopt alle BOUWKUNDIG_SCHEMA- en ENERGETISCH_SCHEMA-velden af op zoek naar de met ! gemarkeerde
+// velden (attentieId in data.attentieVelden), voor de Controle-tab.
+function berekenAttentieResultaten() {
+  const t = state.taxatie;
+  const items = [];
+  ['buitenzijde', 'binnenzijde', 'installaties', 'overigeBijzonderheden'].forEach((hoofdId) => {
+    const groep = BOUWKUNDIG_SCHEMA[hoofdId];
+    if (Array.isArray(groep)) {
+      groep.forEach((def) => {
+        const id = attentieId('bouwkundig', def.key);
+        if (attentieActief(id)) items.push({ tekst: def.label, ok: bouwdeelVeldOk(def, t.bouwkundig.overigeBijzonderheden && t.bouwkundig.overigeBijzonderheden[def.key]), tab: 'bouwkundig' });
+      });
+      return;
+    }
+    Object.entries(groep || {}).forEach(([sectieId, defs]) => {
+      defs.forEach((def) => {
+        const id = attentieId('bouwkundig', def.key);
+        if (!attentieActief(id)) return;
+        const bouwdeel = t.bouwkundig[hoofdId] && t.bouwkundig[hoofdId][sectieId] && t.bouwkundig[hoofdId][sectieId][def.key];
+        items.push({ tekst: def.label, ok: bouwdeelVeldOk(def, bouwdeel), tab: 'bouwkundig' });
+      });
+    });
+  });
+  ['isolatie', 'installaties'].forEach((hoofdId) => {
+    Object.entries(ENERGETISCH_SCHEMA[hoofdId] || {}).forEach(([sectieId, defs]) => {
+      defs.forEach((def) => {
+        const id = attentieId('energetisch', def.key);
+        if (!attentieActief(id)) return;
+        const veld = t.energetisch[hoofdId] && t.energetisch[hoofdId][sectieId] && t.energetisch[hoofdId][sectieId][def.key];
+        items.push({ tekst: def.label, ok: bouwdeelVeldOk(def, veld), tab: 'energetisch' });
+      });
+    });
+  });
+  (ENERGETISCH_SCHEMA.energieopwekking || []).forEach((def) => {
+    const id = attentieId('energetisch', def.key);
+    if (!attentieActief(id)) return;
+    items.push({ tekst: def.label, ok: bouwdeelVeldOk(def, t.energetisch.energieopwekking && t.energetisch.energieopwekking[def.key]), tab: 'energetisch' });
+  });
+  return items;
+}
 function renderBouwdeelKaart(sectieObj, def) {
   const bouwdeel = sectieObj[def.key];
   if (def.type === 'risico') return renderRisicoBouwdeelKaart(bouwdeel, def);
   const ingeklapt = !bouwdeel.aanwezig; // niet-aanwezige bouwdelen tonen alleen de kop, zelfde als Taxatieweb
-  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  const attentieIdVeld = attentieId('bouwkundig', def.key);
+  const kaart = el('div', { class: 'bouwdeel-kaart' + (attentieActief(attentieIdVeld) ? ' bouwdeel-kaart-attentie' : '') });
   const kop = el('div', {
     class: 'bouwdeel-kop',
     onclick: () => { bouwdeel.aanwezig = !bouwdeel.aanwezig; planOpslaan(); render(); },
   },
     el('input', { type: 'checkbox', checked: bouwdeel.aanwezig ? 'checked' : null }),
-    el('span', { class: 'bouwdeel-titel' }, def.label));
+    el('span', { class: 'bouwdeel-titel' }, def.label),
+    renderAttentieKnop(attentieIdVeld));
   kaart.appendChild(kop);
   if (ingeklapt) return kaart;
 
@@ -4183,13 +4371,17 @@ function renderBouwdeelKaart(sectieObj, def) {
   if (def.type === 'materiaal') {
     const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
     bepaalOpties(def).forEach(optie => {
-      const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie) : (bouwdeel.materialen || []).includes(optie);
+      const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie)
+        : def.installatieKoppeling ? installatieGeselecteerd(def.installatieKoppeling.sleutel, optie)
+        : (bouwdeel.materialen || []).includes(optie);
       grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
         el('input', {
           type: 'checkbox', checked: aan ? 'checked' : null,
           onchange: () => {
             if (def.kenmerkenKoppeling) {
               kenmerkWissel(def.kenmerkenKoppeling, optie);
+            } else if (def.installatieKoppeling) {
+              installatieWissel(def.installatieKoppeling.sleutel, optie);
             } else {
               bouwdeel.materialen = bouwdeel.materialen || [];
               const i = bouwdeel.materialen.indexOf(optie);
@@ -4203,7 +4395,9 @@ function renderBouwdeelKaart(sectieObj, def) {
     // "Overige" toont net als in Taxatieweb een vrij tekstveld ernaast (Arno's verzoek 12-09-2026).
     // Dit tekstveld blijft bewust LOKAAL per veld (niet gekoppeld) — alleen de aangevinkte keuzes
     // zelf moeten identiek zijn tussen Indeling en Bouwkundig/Energetisch (Arno's verzoek 16-09-2026).
-    const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige') : (bouwdeel.materialen || []).includes('Overige');
+    const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige')
+      : def.installatieKoppeling ? installatieGeselecteerd(def.installatieKoppeling.sleutel, 'Overige')
+      : (bouwdeel.materialen || []).includes('Overige');
     if (overigeAan) {
       const overigeVeld = el('input', {
         type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
@@ -4351,17 +4545,20 @@ function renderInstallatiemomentEnOpmerkingen(veld, def) {
   wrap.appendChild(opmerkingen);
   return wrap;
 }
-function renderEnergetischKop(veld, def) {
+function renderEnergetischKop(veld, def, kaart) {
+  const attentieIdVeld = attentieId('energetisch', def.key);
+  if (kaart && attentieActief(attentieIdVeld)) kaart.classList.add('bouwdeel-kaart-attentie');
   return el('div', {
     class: 'bouwdeel-kop',
     onclick: () => { veld.aanwezig = !veld.aanwezig; planOpslaan(); render(); },
   },
     el('input', { type: 'checkbox', checked: veld.aanwezig ? 'checked' : null }),
-    el('span', { class: 'bouwdeel-titel' }, def.label));
+    el('span', { class: 'bouwdeel-titel' }, def.label),
+    renderAttentieKnop(attentieIdVeld));
 }
 function renderIsolatieKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
-  kaart.appendChild(renderEnergetischKop(veld, def));
+  kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
   kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
   kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
@@ -4369,7 +4566,7 @@ function renderIsolatieKaart(veld, def) {
 }
 function renderDakKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
-  kaart.appendChild(renderEnergetischKop(veld, def));
+  kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
   kaart.appendChild(renderJaNeeToggle('Geïsoleerd', veld.geisoleerd, (w) => { veld.geisoleerd = w; }));
   kaart.appendChild(renderJaNeeToggle('Gedeeltelijk', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; }));
@@ -4378,17 +4575,21 @@ function renderDakKaart(veld, def) {
 }
 function renderMateriaalTijdKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
-  kaart.appendChild(renderEnergetischKop(veld, def));
+  kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
   const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
   bepaalOpties(def).forEach(optie => {
-    const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie) : (veld.materialen || []).includes(optie);
+    const aan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie)
+      : def.installatieKoppeling ? installatieGeselecteerd(def.installatieKoppeling.sleutel, optie)
+      : (veld.materialen || []).includes(optie);
     grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
       el('input', {
         type: 'checkbox', checked: aan ? 'checked' : null,
         onchange: () => {
           if (def.kenmerkenKoppeling) {
             kenmerkWissel(def.kenmerkenKoppeling, optie);
+          } else if (def.installatieKoppeling) {
+            installatieWissel(def.installatieKoppeling.sleutel, optie);
           } else {
             veld.materialen = veld.materialen || [];
             const i = veld.materialen.indexOf(optie);
@@ -4399,7 +4600,9 @@ function renderMateriaalTijdKaart(veld, def) {
       }), optie));
   });
   kaart.appendChild(grid);
-  const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige') : (veld.materialen || []).includes('Overige');
+  const overigeAan = def.kenmerkenKoppeling ? kenmerkGeselecteerd(def.kenmerkenKoppeling, 'Overige')
+    : def.installatieKoppeling ? installatieGeselecteerd(def.installatieKoppeling.sleutel, 'Overige')
+    : (veld.materialen || []).includes('Overige');
   if (overigeAan) {
     const overigeVeld = el('input', {
       type: 'text', class: 'bouwdeel-overige-tekst', placeholder: 'Namelijk…',
@@ -4413,7 +4616,7 @@ function renderMateriaalTijdKaart(veld, def) {
 }
 function renderEnergetischSimpelKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
-  kaart.appendChild(renderEnergetischKop(veld, def));
+  kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
   kaart.appendChild(renderBouwdeelChips(veld, def, 'opmerkingen'));
   const opmerkingen = el('textarea', {
@@ -4426,7 +4629,7 @@ function renderEnergetischSimpelKaart(veld, def) {
 }
 function renderZonnepanelenKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
-  kaart.appendChild(renderEnergetischKop(veld, def));
+  kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
   // "Omschrijving zonnepanelen": Taxatieweb laat je kiezen of je Wattpiek of aantal panelen invult
   // (Arno's verzoek 13-09-2026), i.p.v. altijd een kaal getalveld "Aantal".
@@ -4541,13 +4744,21 @@ function renderEnergetischTab() {
 }
 
 // --- Omgeving (H.2 Omgeving, H.3 Fundering, K. Verontreiniging/Asbest zichtbaar-deel) ---
-function renderOmgevingVrijeTekst(labelText, waarde, onChange) {
+// chipSleutel: key in state.macros.bouwdeelChips (17-09-2026, Arno "B./C.") — de 4 Omgeving-velden
+// hadden als enige plek nog GEEN macro-chips terwijl elk ander tekstveld in Bouwkundig/Energetisch
+// dat al had; content is 1-op-1 overgenomen uit Taxatieweb's eigen "Toon macro's" bij Spade 21.
+// Zelfde bouwsteen (renderBouwdeelChips) als de rest van de app, met een fake def {key: chipSleutel}
+// zodat renderBouwdeelChips ongewijzigd hergebruikt kan worden.
+function renderOmgevingVrijeTekst(o, sleutel, labelText, chipSleutel) {
+  const wrap = el('div', { class: 'omgeving-veld' }, el('div', { class: 'bouwdeel-veld-label' }, labelText));
+  if (chipSleutel) wrap.appendChild(renderBouwdeelChips(o, { key: chipSleutel }, sleutel));
   const veld = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: labelText + '…',
-    oninput: (e) => { onChange(e.target.value); planOpslaan(); },
+    oninput: (e) => { o[sleutel] = e.target.value; planOpslaan(); },
   });
-  veld.value = waarde || '';
-  return el('div', { class: 'omgeving-veld' }, el('div', { class: 'bouwdeel-veld-label' }, labelText), veld);
+  veld.value = o[sleutel] || '';
+  wrap.appendChild(veld);
+  return wrap;
 }
 // HH:MM, zelfde notatie als een <input type="time">-veld verwacht.
 function formatTijdHHMM(datum) {
@@ -4622,10 +4833,10 @@ function renderOmgevingTab() {
   // tekstvelden onder elkaar was onnodig veel scrollwerk op een iPad (Arno: "compacter, bijv.
   // kolommen", 13-09-2026).
   const omgevingTekstGrid = el('div', { class: 'omgeving-tekst-grid' });
-  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('A. Locatie', o.locatie, (v) => { o.locatie = v; }));
-  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('B. Gebouwen rondom', o.gebouwenRondom, (v) => { o.gebouwenRondom = v; }));
-  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('C. Bereikbaarheid', o.bereikbaarheid, (v) => { o.bereikbaarheid = v; }));
-  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst('D. Voorzieningen', o.voorzieningen, (v) => { o.voorzieningen = v; }));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst(o, 'locatie', 'A. Locatie', 'omgevingLocatie'));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst(o, 'gebouwenRondom', 'B. Gebouwen rondom', 'omgevingGebouwenRondom'));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst(o, 'bereikbaarheid', 'C. Bereikbaarheid', 'omgevingBereikbaarheid'));
+  omgevingTekstGrid.appendChild(renderOmgevingVrijeTekst(o, 'voorzieningen', 'D. Voorzieningen', 'omgevingVoorzieningen'));
   groepOmgeving.appendChild(omgevingTekstGrid);
   groepOmgeving.appendChild(jaNeeMetToelichtingRij(
     'E. Bijzonderheden in de omgeving die veel invloed kunnen hebben op de waarde?',
@@ -4732,6 +4943,9 @@ const MACRO_GROEPEN = [
   { sleutel: 'glastypes', titel: 'Glastypes', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Energetisch > Glas.' },
   { sleutel: 'verwarmingssysteem', titel: 'Verwarmingssysteem', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Bouwkundig/Energetisch > Verwarmingssysteem.' },
   { sleutel: 'vloerafwerking', titel: 'Vloerafwerking', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling).' },
+  { sleutel: 'ventilatie', titel: 'Ventilatie', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Ventilatie (1 gedeelde selectie).' },
+  { sleutel: 'koeling', titel: 'Koeling', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Koeling (1 gedeelde selectie).' },
+  { sleutel: 'warmwatertoestel', titel: 'Warmwatertoestel', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Warmwatertoestel (1 gedeelde selectie).' },
 ];
 
 function renderMacrosTab() {

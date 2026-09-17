@@ -451,7 +451,17 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-kaart { background: var(--surface); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; }
 .bouwdeel-kop { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .bouwdeel-kop input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
-.bouwdeel-titel { font-size: 14px; font-weight: 700; color: var(--navy); }
+.bouwdeel-titel { font-size: 14px; font-weight: 700; color: var(--navy); flex: 1; }
+/* Attentiewaarde (17-09-2026, Arno's verzoek): !-knop rechts in de kop, altijd zichtbaar (ook
+   ingeklapt) zodat een gemarkeerd bouwdeel nooit uit het oog verdwijnt. Kaart krijgt een rode
+   linkerrand + lichte achtergrondtint zodra 'ie gemarkeerd is — herkenbaar zonder te hoeven lezen. */
+.bouwdeel-attentie-knop {
+  width: 26px; height: 26px; border-radius: 8px; border: 1.5px solid var(--divider); background: var(--surface-2);
+  color: var(--text-faint); font-weight: 800; font-size: 14px; line-height: 1; cursor: pointer; flex-shrink: 0;
+  font-family: inherit;
+}
+.bouwdeel-attentie-knop.actief { background: var(--danger); border-color: var(--danger); color: #fff; }
+.bouwdeel-kaart-attentie { border-color: var(--danger); border-left-width: 4px; background: var(--danger-bg); }
 .bouwdeel-veld-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
 /* Conditie: label + chips op één regel (i.p.v. label erboven, chips op een eigen regel) — scheelt
    een regel per bouwdeel, Arno's expliciete verzoek (11-09-2026). */
