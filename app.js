@@ -449,6 +449,9 @@ const BOUWKUNDIG_SCHEMA = {
     ],
     wanden: [
       { key: 'wandenEnBinnenmuren', label: 'Wanden en binnenmuren', type: 'tekst', standaardAan: true },
+      // 19-09-2026: gevonden bij het vergelijken met Taxatieweb — stond daar al als los bouwdeel
+      // onder J.4 > Binnenzijde > Wanden, maar ontbrak hier nog volledig.
+      { key: 'binnendeurenKozijnenBinnenwanden', label: 'Binnendeuren en overige kozijnen (in de binnenwanden)', type: 'tekst' },
     ],
     plafonds: [
       { key: 'plafonds', label: 'Plafonds', type: 'tekst', standaardAan: true },
@@ -555,6 +558,9 @@ const ENERGETISCH_ORIENTATIE_OPTIES = ['Noord', 'Noordwest', 'West', 'Zuidwest',
 const ENERGETISCH_EIGENDOM_OPTIES = ['Eigendom', 'Lease', 'Huur', 'Anders'];
 const ENERGETISCH_BRON_OPTIES = ['Visuele waarneming taxateur', 'Verkopende makelaar', 'Huurder/gebruiker', 'Eigenaar', 'Aankopende makelaar', 'Anderen'];
 const ENERGETISCH_BOUWTYPE_OPTIES = ['Houtbouw', 'Staalbouw', 'Metselwerk', 'Systeembouw', 'Overige bouwtype', 'Houtskeletbouw', 'Betonnen wanden en vloeren', 'Traditioneel gebouwd', 'Prefab bouw'];
+// J.4 Algemeen (Bouwkundig) — live nagekeken bij Taxatieweb (19-09-2026): "Maak minimaal één keuze",
+// dus een multiselect en geen keuzelijst (een dag kan bv. droog beginnen en gaan regenen).
+const WEEROMSTANDIGHEDEN_OPTIES = ['Droog', 'Regen', 'Sneeuw'];
 const GLAS_OPTIES = ['Enkel glas', 'Dubbel glas', 'HR++ glas', 'Drievoudig glas', 'Vacuümglas', 'Overige'];
 const ENERGETISCH_METEN_TYPE_OPTIES = ['Aantal Wattpiek', 'Aantal panelen'];
 // Live geverifieerd bij Taxatieweb's eigen C. Object → Woningtype (13-09-2026).
@@ -732,7 +738,12 @@ function maakEnergetischGroep(velden) {
 }
 function leegEnergetisch() {
   return {
-    algemeen: { bron: [], bouwtype: [] },
+    // aantalBouwlagen/weeromstandigheden/woningMetVve (19-09-2026, gevonden bij het vergelijken met
+    // Taxatieweb): stonden daar al langer in J.4 > Algemeen (Bouwkundig) — Bouwtype/Hoofddraag-
+    // constructie stond zelfs op TWEE plekken (I.4 én J.4, allebei "Algemeen"). Bewust hier bij
+    // energetisch.algemeen gehouden i.p.v. een nieuwe aparte plek, want dat blok bestond al en wordt
+    // nu het ene gedeelde "Algemeen" voor de samengevoegde Bouwkundig & Energetisch-tab.
+    algemeen: { bron: [], bouwtype: [], aantalBouwlagen: '', weeromstandigheden: [], woningMetVve: null },
     isolatie: {
       gevel: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.gevel),
       daken: maakEnergetischGroep(ENERGETISCH_SCHEMA.isolatie.daken),
@@ -756,6 +767,9 @@ function metVolledigEnergetisch(e) {
   if (!e.algemeen) e.algemeen = leeg.algemeen;
   if (!Array.isArray(e.algemeen.bron)) e.algemeen.bron = [];
   if (!Array.isArray(e.algemeen.bouwtype)) e.algemeen.bouwtype = [];
+  if (e.algemeen.aantalBouwlagen === undefined) e.algemeen.aantalBouwlagen = '';
+  if (!Array.isArray(e.algemeen.weeromstandigheden)) e.algemeen.weeromstandigheden = [];
+  if (e.algemeen.woningMetVve === undefined) e.algemeen.woningMetVve = null;
   ['isolatie', 'installaties'].forEach(hoofd => {
     if (!e[hoofd]) e[hoofd] = {};
     Object.keys(ENERGETISCH_SCHEMA[hoofd]).forEach(sectie => {
@@ -1091,7 +1105,8 @@ const state = {
   // bkEnHoofdtab (19-09-2026, Arno's verzoek: "wat tabs aanbrengen, zodat de lijst niet zo lang
   // wordt") — zelfde 3-deling als Bouwkundig's eigen hoofdtabs (Buitenzijde/Binnenzijde/
   // Installaties), zie BKEN_HOOFDTABS hieronder voor welke bouwdeel-secties bij welk hoofdtab horen.
-  bkEnHoofdtab: 'buitenzijde', // 'buitenzijde' | 'binnenzijde' | 'installaties'
+  bkEnHoofdtab: 'buitenzijde', // 'algemeen' | 'buitenzijde' | 'binnenzijde' | 'installaties'
+  bkEnSubtab: 'daken', // zie BKEN_SUBTABS[hoofdtab]
 };
 
 async function laadMacros() {
@@ -5236,10 +5251,34 @@ function renderMultiselectGroep(titel, opties, geselecteerd, onToggle) {
   groep.appendChild(grid);
   return groep;
 }
+// "Aantal bouwlagen" (19-09-2026, gevonden bij het vergelijken met Taxatieweb) — staat daar in
+// zowel I.4 als J.4 Algemeen als HETZELFDE getal met een "overnemen uit Afmetingen"-knop; hier maar
+// 1x opgeslagen (energetisch.algemeen.aantalBouwlagen) en gedeeld door beide kanten.
+function renderAantalBouwlagenVeld() {
+  const t = state.taxatie;
+  const alg = t.energetisch.algemeen;
+  const wrap = el('div', { class: 'macro-groep' });
+  wrap.appendChild(el('h3', {}, 'Aantal bouwlagen'));
+  const input = el('input', {
+    type: 'number', placeholder: '0', class: 'bouwdeel-overige-tekst', style: 'max-width:160px;',
+    oninput: (e) => { alg.aantalBouwlagen = e.target.value; planOpslaan(); },
+  });
+  input.value = alg.aantalBouwlagen || '';
+  wrap.appendChild(input);
+  const aantalWoonlagen = (t.data.afmetingen.woonlagen || []).length;
+  if (aantalWoonlagen) {
+    wrap.appendChild(el('button', {
+      type: 'button', class: 'knop spook klein', style: 'margin-left:8px;',
+      onclick: () => { alg.aantalBouwlagen = String(aantalWoonlagen); planOpslaan(); render(); },
+    }, `↺ Overnemen uit Afmetingen (${aantalWoonlagen})`));
+  }
+  return wrap;
+}
 function renderEnergetischAlgemeen() {
   const t = state.taxatie;
   const alg = t.energetisch.algemeen;
   const wrap = el('div', {});
+  wrap.appendChild(renderAantalBouwlagenVeld());
   wrap.appendChild(renderMultiselectGroep('Bron van de informatie', ENERGETISCH_BRON_OPTIES, alg.bron, (optie) => {
     const i = alg.bron.indexOf(optie);
     if (i >= 0) alg.bron.splice(i, 1); else alg.bron.push(optie);
@@ -5248,6 +5287,24 @@ function renderEnergetischAlgemeen() {
     const i = alg.bouwtype.indexOf(optie);
     if (i >= 0) alg.bouwtype.splice(i, 1); else alg.bouwtype.push(optie);
   }));
+  return wrap;
+}
+// Algemeen voor de samengevoegde Bouwkundig & Energetisch-tab: hergebruikt renderEnergetischAlgemeen
+// (Aantal bouwlagen/Bron/Bouwtype — die gelden voor beide kanten) en voegt de 2 velden toe die
+// ALLEEN in Bouwkundig's eigen J.4 Algemeen bestaan (Weeromstandigheden, Is het een woning met VvE).
+function renderBkEnAlgemeen() {
+  const t = state.taxatie;
+  const alg = t.energetisch.algemeen;
+  const wrap = el('div', {});
+  wrap.appendChild(renderEnergetischAlgemeen());
+  wrap.appendChild(renderMultiselectGroep('Weeromstandigheden', WEEROMSTANDIGHEDEN_OPTIES, alg.weeromstandigheden, (optie) => {
+    const i = alg.weeromstandigheden.indexOf(optie);
+    if (i >= 0) alg.weeromstandigheden.splice(i, 1); else alg.weeromstandigheden.push(optie);
+  }));
+  const vveGroep = el('div', { class: 'macro-groep' });
+  vveGroep.appendChild(el('h3', {}, 'Is het een woning met VvE?'));
+  vveGroep.appendChild(renderJaNeeWissel(alg.woningMetVve, (w) => { alg.woningMetVve = w; }));
+  wrap.appendChild(vveGroep);
   return wrap;
 }
 function renderEnergetischTab() {
@@ -5367,11 +5424,19 @@ function renderGecombineerdMateriaalKaart(titel, materiaalLabel, bkDef, bkVeld, 
   // Verwarmingssysteem 1e/2e woonlaag heeft een hint (afgifte op déze woonlaag vs. de bron elders) —
   // zie BOUWKUNDIG_SCHEMA.installaties.verwarming, dezelfde tekst als in het losse Bouwkundig-tabblad.
   if (bkDef.hint) kaart.appendChild(renderBouwdeelHint(bkDef.hint));
-  kaart.appendChild(renderConditieEnAandachtRij(bkDef, bkVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, materiaalLabel));
-  kaart.appendChild(renderMultiselectGridGekoppeld(bkDef, bkVeld, enVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
+  // 2 kolommen (19-09-2026, Arno's verzoek): links conditie + kenmerken (bouwkundig), rechts de
+  // energetische kant (hier: bouw-/installatiejaar) — op smal scherm valt dit vanzelf terug op 1
+  // kolom, zie .gecombineerd-hoofdkolommen in style.css.
+  const linkerKolom = el('div', {},
+    renderConditieEnAandachtRij(bkDef, bkVeld),
+    el('div', { class: 'bouwdeel-veld-label' }, materiaalLabel),
+    renderMultiselectGridGekoppeld(bkDef, bkVeld, enVeld),
+  );
+  const rechterKolom = el('div', {},
+    el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'),
+    renderInstallatiemomentEnOpmerkingen(enVeld, enDef),
+  );
+  kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
 // Voorbeeld 1 van Arno: "Glas 1e woonlaag: conditie (evt. foto en aandachtspunt), glassoorten en
@@ -5464,11 +5529,16 @@ function renderGecombineerdMateriaalIsolatieKaart(titel, materiaalLabel, isolati
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderGecombineerdeKop(titel, bkVeld, enVeld, false));
   if (!bkVeld.aanwezig) return kaart;
-  kaart.appendChild(renderConditieEnAandachtRij(bkDef, bkVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, materiaalLabel));
-  kaart.appendChild(bkDef.kenmerkenKoppeling ? renderMultiselectGridGekoppeld(bkDef, bkVeld, null) : renderPlainMateriaalGrid(bkDef, bkVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie ' + isolatieLabelPrefix.toLowerCase()));
-  kaart.appendChild(renderIsolatieBlok(isolatieLabelPrefix, enVeld, enDef));
+  const linkerKolom = el('div', {},
+    renderConditieEnAandachtRij(bkDef, bkVeld),
+    el('div', { class: 'bouwdeel-veld-label' }, materiaalLabel),
+    bkDef.kenmerkenKoppeling ? renderMultiselectGridGekoppeld(bkDef, bkVeld, null) : renderPlainMateriaalGrid(bkDef, bkVeld),
+  );
+  const rechterKolom = el('div', {},
+    el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie ' + isolatieLabelPrefix.toLowerCase()),
+    renderIsolatieBlok(isolatieLabelPrefix, enVeld, enDef),
+  );
+  kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
 // Voorbeeld 2 van Arno: "Gevel(werk): conditie (evt. foto en aandachtspunt), materialen gevel,
@@ -5505,117 +5575,294 @@ function renderGecombineerdDakKaart(bkDef, bkVeld, hellendDef, hellendVeld, plat
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderGecombineerdeKop('Dak', bkVeld, null, false));
   if (!bkVeld.aanwezig) return kaart;
-  kaart.appendChild(renderConditieEnAandachtRij(bkDef, bkVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Materiaal dak'));
-  kaart.appendChild(renderPlainMateriaalGrid(bkDef, bkVeld));
-  kaart.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie dak'));
-  kaart.appendChild(renderDakIsolatieBlok('Hellend dak aanwezig', hellendVeld, hellendDef));
-  kaart.appendChild(renderDakIsolatieBlok('Plat dak aanwezig', platVeld, platDef));
+  const linkerKolom = el('div', {},
+    renderConditieEnAandachtRij(bkDef, bkVeld),
+    el('div', { class: 'bouwdeel-veld-label' }, 'Materiaal dak'),
+    renderPlainMateriaalGrid(bkDef, bkVeld),
+  );
+  const rechterKolom = el('div', {},
+    el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie dak'),
+    renderDakIsolatieBlok('Hellend dak aanwezig', hellendVeld, hellendDef),
+    renderDakIsolatieBlok('Plat dak aanwezig', platVeld, platDef),
+  );
+  kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
-// Kleine helper: "section-label" + een bouwdeel-lijst met 1 of meer kaarten erin — voorkomt dat elke
-// sectie hieronder dezelfde 3 regels boilerplate herhaalt.
-function renderGecombineerdSectie(wrap, titel, kaarten) {
-  wrap.appendChild(el('div', { class: 'section-label' }, titel));
-  const lijst = el('div', { class: 'bouwdeel-lijst' });
-  kaarten.forEach(k => lijst.appendChild(k));
-  wrap.appendChild(lijst);
+// Kruipruimte (19-09-2026, "check of je niets mist"): Bouwkundig heeft dit als vrij-tekstveld
+// (funderingen.kruipruimte), Energetisch kent los een Kruipruimteisolatie (isolatie.vloer) — zelfde
+// materiaal-versus-isolatie-scheiding als Gevel/Vloer/Dak hierboven, nu voor een tekst-bouwdeel i.p.v.
+// een materiaal-bouwdeel.
+function renderGecombineerdKruipruimteKaart(bkDef, bkVeld, enDef, enVeld) {
+  const kaart = el('div', { class: 'bouwdeel-kaart' });
+  kaart.appendChild(renderGecombineerdeKop('Kruipruimte', bkVeld, null, false));
+  if (!bkVeld.aanwezig) return kaart;
+  const omschrijvingVeld = el('textarea', {
+    class: 'bouwdeel-omschrijving', placeholder: 'Omschrijving kruipruimte…',
+    oninput: (e) => { bkVeld.omschrijving = e.target.value; planOpslaan(); },
+  });
+  omschrijvingVeld.value = bkVeld.omschrijving || '';
+  const linkerKolom = el('div', {},
+    renderConditieEnAandachtRij(bkDef, bkVeld),
+    el('div', { class: 'bouwdeel-veld-label' }, 'Omschrijving kruipruimte'),
+    renderBouwdeelChips(bkVeld, bkDef, 'omschrijving'),
+    omschrijvingVeld,
+  );
+  const rechterKolom = el('div', {},
+    el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie kruipruimte'),
+    renderIsolatieBlok('Kruipruimte', enVeld, enDef),
+  );
+  kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
+  return kaart;
 }
-function renderBkEnBuitenzijde(t) {
-  const wrap = el('div', {});
+// --- Inklapbaar + status (19-09-2026, Arno's verzoek: "maak alle elementen inklapbaar en meld in
+// de ingeklapte versie of alles compleet is, net zoiets als bij Indeling") ---
+// bkEnKaartIngeklapt onthoudt WELKE kaarten dichtgeklapt zijn (op basis van een stabiele key, zie de
+// entry-helpers hieronder). pasInklapbaarToe herbruikt gewoon de bestaande kaart-DOM (van
+// renderBouwdeelKaart/renderEnergetischKaart/renderGecombineerd*Kaart) i.p.v. een aparte inklapbare
+// variant van elke kaartsoort te moeten bouwen: de kop is altijd het eerste kind (elke kaart-functie
+// in dit bestand appendChild't 'm als eerste), dus daar hoeft alleen een toggle-knopje bij; dichtgeklapt
+// vervangen we de rest van de inhoud door 1 compacte statusregel.
+const bkEnKaartIngeklapt = new Set();
+function pasInklapbaarToe(kaart, key, aanwezig, compleet) {
+  if (!aanwezig) return kaart; // niet-aanwezig toont toch al alleen de kop, geen apart toggle nodig
+  const ingeklapt = bkEnKaartIngeklapt.has(key);
+  const kop = kaart.firstChild;
+  if (kop) {
+    kop.insertBefore(el('button', {
+      type: 'button', class: 'woonlaag-toggle',
+      onclick: (e) => { e.stopPropagation(); if (ingeklapt) bkEnKaartIngeklapt.delete(key); else bkEnKaartIngeklapt.add(key); render(); },
+    }, ingeklapt ? '▸' : '▾'), kop.firstChild);
+  }
+  if (ingeklapt) {
+    while (kaart.children.length > 1) kaart.removeChild(kaart.lastChild);
+    kaart.classList.add('ruimte-kaart-ingeklapt');
+    kaart.appendChild(el('div', { class: 'ruimte-status-ingeklapt' },
+      el('span', { class: 'compleet-badge' + (compleet ? ' ok' : '') }, compleet ? '✓ Compleet' : '⚠ Nog niet compleet')));
+  }
+  return kaart;
+}
+// Entry-helpers: bouwen {key, aanwezig, compleet, kaart} — hergebruiken bouwdeelVeldOk() (dezelfde
+// compleetheids-check als de Controle-tab) zodat "compleet" hier en daar altijd hetzelfde betekent.
+function bkStandaloneEntry(sectieObj, def) {
+  const veld = sectieObj[def.key];
+  return { key: 'bk:' + def.key, aanwezig: veld.aanwezig, compleet: bouwdeelVeldOk(def, veld), kaart: renderBouwdeelKaart(sectieObj, def) };
+}
+function enStandaloneEntry(sectieObj, def) {
+  const veld = sectieObj[def.key];
+  return { key: 'en:' + def.key, aanwezig: veld.aanwezig, compleet: bouwdeelVeldOk(def, veld), kaart: renderEnergetischKaart(sectieObj, def) };
+}
+function combiEntry(key, kaart, bkDef, bkVeld, enDef, enVeld) {
+  const compleet = bouwdeelVeldOk(bkDef, bkVeld) && (enDef ? bouwdeelVeldOk(enDef, enVeld) : true);
+  return { key: 'combi:' + key, aanwezig: bkVeld.aanwezig, compleet, kaart };
+}
+function combiEntryDak(key, kaart, bkDef, bkVeld, hellendDef, hellendVeld, platDef, platVeld) {
+  const compleet = bouwdeelVeldOk(bkDef, bkVeld) && bouwdeelVeldOk(hellendDef, hellendVeld) && bouwdeelVeldOk(platDef, platVeld);
+  return { key: 'combi:' + key, aanwezig: bkVeld.aanwezig, compleet, kaart };
+}
+// Bouwt de kaart-lijst van een subtab uit een reeks entries — geen "section-label" meer nodig per
+// bouwdeel-groep (19-09-2026: sinds subtabs is de subtab-knop zelf al de titel, zelfde opzet als de
+// losse Bouwkundig/Energetisch-tabbladen).
+function renderBkEnLijst(entries) {
+  const lijst = el('div', { class: 'bouwdeel-lijst' });
+  entries.forEach(entry => lijst.appendChild(pasInklapbaarToe(entry.kaart, entry.key, entry.aanwezig, entry.compleet)));
+  return lijst;
+}
+const BKEN_SUBTABS = {
+  buitenzijde: [
+    { id: 'daken', label: 'Daken' }, { id: 'gevel', label: 'Gevel' }, { id: 'glas', label: 'Glas' },
+    { id: 'perceel', label: 'Perceel/tuin' }, { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
+  ],
+  binnenzijde: [
+    { id: 'funderingen', label: 'Funderingen' }, { id: 'vloeren', label: 'Vloeren' }, { id: 'wanden', label: 'Wanden' },
+    { id: 'plafonds', label: 'Plafonds' }, { id: 'inrichting', label: 'Inrichting' },
+    { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' },
+  ],
+  installaties: [
+    { id: 'leidingen', label: 'Leidingen' }, { id: 'verwarming', label: 'Verwarming' }, { id: 'warmwater', label: 'Warmwater' },
+    { id: 'ventilatieKoeling', label: 'Ventilatie/Koeling' }, { id: 'elektrotechnisch', label: 'Electrotechnisch' },
+    { id: 'overigeWaarnemingen', label: 'Overige waarnemingen' }, { id: 'energieopwekking', label: 'Energieopwekking' },
+  ],
+};
+// Buitenzijde: Daken, Gevel, Glas, Perceel/tuin, Overige waarnemingen (Arno's indeling 19-09-2026) —
+// Bijgebouwen is HIER bewust weggelaten: dat blok wordt voortaan uitsluitend via Indeling's
+// Bijgebouwen-editor ingevuld en met de bestaande "↺ Overnemen"-knop naar Bouwkundig's eigen
+// schuurBerging/garage/overigeBijgebouwen-velden gehaald (renderBouwkundigTab, ongewijzigd) — geen
+// aparte plek hiervoor nodig in de samengevoegde tab.
+function renderBkEnBuitenzijdeSubtab(t) {
   const gevelDefs = BOUWKUNDIG_SCHEMA.buitenzijde.gevel;
   const dakenDefs = BOUWKUNDIG_SCHEMA.buitenzijde.daken;
+  const perceelDefs = BOUWKUNDIG_SCHEMA.buitenzijde.perceel;
+  const bkOverigeDefs = BOUWKUNDIG_SCHEMA.buitenzijde.overigeWaarnemingen;
   const ramenDefs = ENERGETISCH_SCHEMA.isolatie.ramen;
   const gevelIsolatieDefs = ENERGETISCH_SCHEMA.isolatie.gevel;
   const dakIsolatieDefs = ENERGETISCH_SCHEMA.isolatie.daken;
+  const bkDaken = t.bouwkundig.buitenzijde.daken;
+  const bkGevel = t.bouwkundig.buitenzijde.gevel;
 
-  renderGecombineerdSectie(wrap, 'Glas', [
-    ['1e woonlaag', 'glas1eWoonlaag', 'glas1e'],
-    ['2e woonlaag', 'glas2eWoonlaag', 'glas2e'],
-    ['3e woonlaag', 'glas3eWoonlaag', 'glas3e'],
-    ['overige woonlagen', 'glasOverigeWoonlagen', 'glasOverige'],
-  ].map(([label, bkKey, enKey]) => renderGecombineerdGlasKaart(
-    label, vindDef(gevelDefs, bkKey), t.bouwkundig.buitenzijde.gevel[bkKey],
-    vindDef(ramenDefs, enKey), t.energetisch.isolatie.ramen[enKey],
-  )));
-
-  renderGecombineerdSectie(wrap, 'Gevel', [renderGecombineerdGevelKaart(
-    vindDef(gevelDefs, 'gevelwerk'), t.bouwkundig.buitenzijde.gevel.gevelwerk,
-    vindDef(gevelIsolatieDefs, 'gevelisolatie'), t.energetisch.isolatie.gevel.gevelisolatie,
-  )]);
-
-  renderGecombineerdSectie(wrap, 'Dak', [renderGecombineerdDakKaart(
-    vindDef(dakenDefs, 'materiaalDak'), t.bouwkundig.buitenzijde.daken.materiaalDak,
-    vindDef(dakIsolatieDefs, 'hellendDak'), t.energetisch.isolatie.daken.hellendDak,
-    vindDef(dakIsolatieDefs, 'platDak'), t.energetisch.isolatie.daken.platDak,
-  )]);
-
-  return wrap;
+  if (state.bkEnSubtab === 'daken') {
+    return renderBkEnLijst([
+      bkStandaloneEntry(bkDaken, vindDef(dakenDefs, 'dakconstructie')),
+      combiEntryDak('dak',
+        renderGecombineerdDakKaart(
+          vindDef(dakenDefs, 'materiaalDak'), bkDaken.materiaalDak,
+          vindDef(dakIsolatieDefs, 'hellendDak'), t.energetisch.isolatie.daken.hellendDak,
+          vindDef(dakIsolatieDefs, 'platDak'), t.energetisch.isolatie.daken.platDak,
+        ),
+        vindDef(dakenDefs, 'materiaalDak'), bkDaken.materiaalDak,
+        vindDef(dakIsolatieDefs, 'hellendDak'), t.energetisch.isolatie.daken.hellendDak,
+        vindDef(dakIsolatieDefs, 'platDak'), t.energetisch.isolatie.daken.platDak,
+      ),
+      bkStandaloneEntry(bkDaken, vindDef(dakenDefs, 'dakkapellen')),
+      bkStandaloneEntry(bkDaken, vindDef(dakenDefs, 'schoorstenen')),
+      bkStandaloneEntry(bkDaken, vindDef(dakenDefs, 'goten')),
+      bkStandaloneEntry(bkDaken, vindDef(dakenDefs, 'loodwerk')),
+    ]);
+  }
+  if (state.bkEnSubtab === 'gevel') {
+    const gevelwerkDef = vindDef(gevelDefs, 'gevelwerk');
+    const gevelisolatieDef = vindDef(gevelIsolatieDefs, 'gevelisolatie');
+    return renderBkEnLijst([
+      combiEntry('gevelwerk',
+        renderGecombineerdGevelKaart(gevelwerkDef, bkGevel.gevelwerk, gevelisolatieDef, t.energetisch.isolatie.gevel.gevelisolatie),
+        gevelwerkDef, bkGevel.gevelwerk, gevelisolatieDef, t.energetisch.isolatie.gevel.gevelisolatie),
+      enStandaloneEntry(t.energetisch.isolatie.gevel, vindDef(gevelIsolatieDefs, 'gevelpanelen')),
+      bkStandaloneEntry(bkGevel, vindDef(gevelDefs, 'balkon')),
+      bkStandaloneEntry(bkGevel, vindDef(gevelDefs, 'kozijnen')),
+      bkStandaloneEntry(bkGevel, vindDef(gevelDefs, 'buitendeuren')),
+      bkStandaloneEntry(bkGevel, vindDef(gevelDefs, 'hangEnSluitwerk')),
+      bkStandaloneEntry(bkGevel, vindDef(gevelDefs, 'buitenschilderwerk')),
+    ]);
+  }
+  if (state.bkEnSubtab === 'glas') {
+    return renderBkEnLijst([
+      ['1e woonlaag', 'glas1eWoonlaag', 'glas1e'],
+      ['2e woonlaag', 'glas2eWoonlaag', 'glas2e'],
+      ['3e woonlaag', 'glas3eWoonlaag', 'glas3e'],
+      ['overige woonlagen', 'glasOverigeWoonlagen', 'glasOverige'],
+    ].map(([label, bkKey, enKey]) => {
+      const bkDef = vindDef(gevelDefs, bkKey), enDef = vindDef(ramenDefs, enKey);
+      const bkVeld = bkGevel[bkKey], enVeld = t.energetisch.isolatie.ramen[enKey];
+      return combiEntry(bkKey, renderGecombineerdGlasKaart(label, bkDef, bkVeld, enDef, enVeld), bkDef, bkVeld, enDef, enVeld);
+    }));
+  }
+  if (state.bkEnSubtab === 'perceel') {
+    const bkPerceel = t.bouwkundig.buitenzijde.perceel;
+    return renderBkEnLijst(perceelDefs.map(def => bkStandaloneEntry(bkPerceel, def)));
+  }
+  const bkOverige = t.bouwkundig.buitenzijde.overigeWaarnemingen;
+  return renderBkEnLijst(bkOverigeDefs.map(def => bkStandaloneEntry(bkOverige, def)));
 }
-function renderBkEnBinnenzijde(t) {
-  const wrap = el('div', {});
+// Binnenzijde: Funderingen, Vloeren, Wanden, Plafonds, Inrichting, Overige waarnemingen — exact
+// dezelfde 6-deling als Taxatieweb's eigen J.4 > Binnenzijde (Arno's verzoek 19-09-2026).
+function renderBkEnBinnenzijdeSubtab(t) {
+  const funderingenDefs = BOUWKUNDIG_SCHEMA.binnenzijde.funderingen;
   const vloerenDefs = BOUWKUNDIG_SCHEMA.binnenzijde.vloeren;
+  const wandenDefs = BOUWKUNDIG_SCHEMA.binnenzijde.wanden;
+  const plafondsDefs = BOUWKUNDIG_SCHEMA.binnenzijde.plafonds;
+  const inrichtingDefs = BOUWKUNDIG_SCHEMA.binnenzijde.inrichting;
+  const bkOverigeDefs = BOUWKUNDIG_SCHEMA.binnenzijde.overigeWaarnemingen;
   const vloerIsolatieDefs = ENERGETISCH_SCHEMA.isolatie.vloer;
+  const bkFunderingen = t.bouwkundig.binnenzijde.funderingen;
 
-  renderGecombineerdSectie(wrap, 'Vloer', [
-    ['1e woonlaag', 'woonlaag1', 'vloerisolatie1e'],
-    ['2e woonlaag', 'woonlaag2', 'vloerisolatie2e'],
-    ['3e woonlaag', 'woonlaag3', 'vloerisolatie3e'],
-    ['overige woonlagen', 'woonlaagOverige', 'vloerisolatieOverige'],
-  ].map(([label, bkKey, enKey]) => renderGecombineerdMateriaalIsolatieKaart(
-    'Vloer ' + label, 'Vloersoort', 'Vloer ' + label,
-    vindDef(vloerenDefs, bkKey), t.bouwkundig.binnenzijde.vloeren[bkKey],
-    vindDef(vloerIsolatieDefs, enKey), t.energetisch.isolatie.vloer[enKey],
-  )));
-
-  return wrap;
+  if (state.bkEnSubtab === 'funderingen') {
+    const kruipruimteDef = vindDef(funderingenDefs, 'kruipruimte');
+    const kruipruimteisolatieDef = vindDef(vloerIsolatieDefs, 'kruipruimteisolatie');
+    return renderBkEnLijst([
+      bkStandaloneEntry(bkFunderingen, vindDef(funderingenDefs, 'fundering')),
+      combiEntry('kruipruimte',
+        renderGecombineerdKruipruimteKaart(kruipruimteDef, bkFunderingen.kruipruimte, kruipruimteisolatieDef, t.energetisch.isolatie.vloer.kruipruimteisolatie),
+        kruipruimteDef, bkFunderingen.kruipruimte, kruipruimteisolatieDef, t.energetisch.isolatie.vloer.kruipruimteisolatie),
+      bkStandaloneEntry(bkFunderingen, vindDef(funderingenDefs, 'kelder')),
+    ]);
+  }
+  if (state.bkEnSubtab === 'vloeren') {
+    return renderBkEnLijst([
+      ['1e woonlaag', 'woonlaag1', 'vloerisolatie1e'],
+      ['2e woonlaag', 'woonlaag2', 'vloerisolatie2e'],
+      ['3e woonlaag', 'woonlaag3', 'vloerisolatie3e'],
+      ['overige woonlagen', 'woonlaagOverige', 'vloerisolatieOverige'],
+    ].map(([label, bkKey, enKey]) => {
+      const bkDef = vindDef(vloerenDefs, bkKey), enDef = vindDef(vloerIsolatieDefs, enKey);
+      const bkVeld = t.bouwkundig.binnenzijde.vloeren[bkKey], enVeld = t.energetisch.isolatie.vloer[enKey];
+      return combiEntry(bkKey, renderGecombineerdMateriaalIsolatieKaart('Vloer ' + label, 'Vloersoort', 'Vloer ' + label, bkDef, bkVeld, enDef, enVeld), bkDef, bkVeld, enDef, enVeld);
+    }));
+  }
+  if (state.bkEnSubtab === 'wanden') {
+    return renderBkEnLijst(wandenDefs.map(def => bkStandaloneEntry(t.bouwkundig.binnenzijde.wanden, def)));
+  }
+  if (state.bkEnSubtab === 'plafonds') {
+    return renderBkEnLijst(plafondsDefs.map(def => bkStandaloneEntry(t.bouwkundig.binnenzijde.plafonds, def)));
+  }
+  if (state.bkEnSubtab === 'inrichting') {
+    return renderBkEnLijst(inrichtingDefs.map(def => bkStandaloneEntry(t.bouwkundig.binnenzijde.inrichting, def)));
+  }
+  return renderBkEnLijst(bkOverigeDefs.map(def => bkStandaloneEntry(t.bouwkundig.binnenzijde.overigeWaarnemingen, def)));
 }
-function renderBkEnInstallaties(t) {
-  const wrap = el('div', {});
+// Installaties: Leidingen, Verwarming, Warmwater, Ventilatie/Koeling, Electrotechnische installaties,
+// Overige waarnemingen — exact als Taxatieweb — plus Energieopwekking als 7e subtab (Arno's eigen
+// keuze: Taxatieweb houdt dat als los I.4-hoofdstuk, hier voegen we het toe onder Installaties zodat
+// het ook een plek heeft in deze samengevoegde tab).
+function renderBkEnInstallatiesSubtab(t) {
+  const leidingenDefs = BOUWKUNDIG_SCHEMA.installaties.leidingen;
   const verwarmingDefs = BOUWKUNDIG_SCHEMA.installaties.verwarming;
   const warmwaterDefs = BOUWKUNDIG_SCHEMA.installaties.warmwater;
   const ventilatieKoelingDefs = BOUWKUNDIG_SCHEMA.installaties.ventilatieKoeling;
+  const elektrotechnischDefs = BOUWKUNDIG_SCHEMA.installaties.elektrotechnisch;
+  const bkOverigeDefs = BOUWKUNDIG_SCHEMA.installaties.overigeWaarnemingen;
   const enVerwarmingDefs = ENERGETISCH_SCHEMA.installaties.verwarming;
   const enWarmWaterDefs = ENERGETISCH_SCHEMA.installaties.warmWater;
   const enVentilatieKoelingDefs = ENERGETISCH_SCHEMA.installaties.ventilatieKoeling;
+  const enIsolatieOverigeDefs = ENERGETISCH_SCHEMA.isolatie.overige;
 
-  renderGecombineerdSectie(wrap, 'Verwarmingssysteem', [
-    ['1e woonlaag', 'verwarmingssysteem1eWoonlaag', 'verwarmingssysteem1e'],
-    ['2e en volgende woonlaag', 'verwarmingssysteem2eEnVolgendeWoonlaag', 'verwarmingssysteem2e'],
-  ].map(([label, bkKey, enKey]) => renderGecombineerdMateriaalKaart(
-    'Verwarmingssysteem ' + label, 'Type afgifte',
-    vindDef(verwarmingDefs, bkKey), t.bouwkundig.installaties.verwarming[bkKey],
-    vindDef(enVerwarmingDefs, enKey), t.energetisch.installaties.verwarming[enKey],
-  )));
-
-  renderGecombineerdSectie(wrap, 'Verwarmingstoestel', [renderGecombineerdMateriaalKaart(
-    'Verwarmingstoestel', 'Type verwarmingstoestel',
-    vindDef(verwarmingDefs, 'verwarmingstoestel'), t.bouwkundig.installaties.verwarming.verwarmingstoestel,
-    vindDef(enVerwarmingDefs, 'verwarmingstoestel'), t.energetisch.installaties.verwarming.verwarmingstoestel,
-  )]);
-
-  renderGecombineerdSectie(wrap, 'Warmwatertoestel', [renderGecombineerdMateriaalKaart(
-    'Warmwatertoestel', 'Type warmwatertoestel',
-    vindDef(warmwaterDefs, 'warmwatertoestel'), t.bouwkundig.installaties.warmwater.warmwatertoestel,
-    vindDef(enWarmWaterDefs, 'warmwatertoestel'), t.energetisch.installaties.warmWater.warmwatertoestel,
-  )]);
-
-  renderGecombineerdSectie(wrap, 'Ventilatie', [renderGecombineerdMateriaalKaart(
-    'Ventilatie', 'Type ventilatie',
-    vindDef(ventilatieKoelingDefs, 'ventilatie'), t.bouwkundig.installaties.ventilatieKoeling.ventilatie,
-    vindDef(enVentilatieKoelingDefs, 'ventilatie'), t.energetisch.installaties.ventilatieKoeling.ventilatie,
-  )]);
-
-  renderGecombineerdSectie(wrap, 'Koeling', [renderGecombineerdMateriaalKaart(
-    'Koeling', 'Type koeling',
-    vindDef(ventilatieKoelingDefs, 'koeling'), t.bouwkundig.installaties.ventilatieKoeling.koeling,
-    vindDef(enVentilatieKoelingDefs, 'koeling'), t.energetisch.installaties.ventilatieKoeling.koeling,
-  )]);
-
-  return wrap;
+  if (state.bkEnSubtab === 'leidingen') {
+    return renderBkEnLijst(leidingenDefs.map(def => bkStandaloneEntry(t.bouwkundig.installaties.leidingen, def)));
+  }
+  if (state.bkEnSubtab === 'verwarming') {
+    const entries = [
+      ['1e woonlaag', 'verwarmingssysteem1eWoonlaag', 'verwarmingssysteem1e'],
+      ['2e en volgende woonlaag', 'verwarmingssysteem2eEnVolgendeWoonlaag', 'verwarmingssysteem2e'],
+    ].map(([label, bkKey, enKey]) => {
+      const bkDef = vindDef(verwarmingDefs, bkKey), enDef = vindDef(enVerwarmingDefs, enKey);
+      const bkVeld = t.bouwkundig.installaties.verwarming[bkKey], enVeld = t.energetisch.installaties.verwarming[enKey];
+      return combiEntry(bkKey, renderGecombineerdMateriaalKaart('Verwarmingssysteem ' + label, 'Type afgifte', bkDef, bkVeld, enDef, enVeld), bkDef, bkVeld, enDef, enVeld);
+    });
+    const vDef = vindDef(verwarmingDefs, 'verwarmingstoestel'), enVDef = vindDef(enVerwarmingDefs, 'verwarmingstoestel');
+    const vVeld = t.bouwkundig.installaties.verwarming.verwarmingstoestel, enVVeld = t.energetisch.installaties.verwarming.verwarmingstoestel;
+    entries.unshift(combiEntry('verwarmingstoestel', renderGecombineerdMateriaalKaart('Verwarmingstoestel', 'Type verwarmingstoestel', vDef, vVeld, enVDef, enVVeld), vDef, vVeld, enVDef, enVVeld));
+    return renderBkEnLijst(entries);
+  }
+  if (state.bkEnSubtab === 'warmwater') {
+    const wDef = vindDef(warmwaterDefs, 'warmwatertoestel'), enWDef = vindDef(enWarmWaterDefs, 'warmwatertoestel');
+    const wVeld = t.bouwkundig.installaties.warmwater.warmwatertoestel, enWVeld = t.energetisch.installaties.warmWater.warmwatertoestel;
+    return renderBkEnLijst([
+      combiEntry('warmwatertoestel', renderGecombineerdMateriaalKaart('Warmwatertoestel', 'Type warmwatertoestel', wDef, wVeld, enWDef, enWVeld), wDef, wVeld, enWDef, enWVeld),
+      enStandaloneEntry(t.energetisch.installaties.warmWater, vindDef(enWarmWaterDefs, 'doucheWtw')),
+      enStandaloneEntry(t.energetisch.installaties.warmWater, vindDef(enWarmWaterDefs, 'zonneboilerInstallatie')),
+    ]);
+  }
+  if (state.bkEnSubtab === 'ventilatieKoeling') {
+    return renderBkEnLijst(['ventilatie', 'koeling'].map((sleutel) => {
+      const bkDef = vindDef(ventilatieKoelingDefs, sleutel), enDef = vindDef(enVentilatieKoelingDefs, sleutel);
+      const bkVeld = t.bouwkundig.installaties.ventilatieKoeling[sleutel], enVeld = t.energetisch.installaties.ventilatieKoeling[sleutel];
+      return combiEntry(sleutel, renderGecombineerdMateriaalKaart(bkDef.label, 'Type ' + bkDef.label.toLowerCase(), bkDef, bkVeld, enDef, enVeld), bkDef, bkVeld, enDef, enVeld);
+    }));
+  }
+  if (state.bkEnSubtab === 'elektrotechnisch') {
+    return renderBkEnLijst(elektrotechnischDefs.map(def => bkStandaloneEntry(t.bouwkundig.installaties.elektrotechnisch, def)));
+  }
+  if (state.bkEnSubtab === 'energieopwekking') {
+    return renderBkEnLijst(ENERGETISCH_SCHEMA.energieopwekking.map(def => enStandaloneEntry(t.energetisch.energieopwekking, def)));
+  }
+  // overigeWaarnemingen: bouwkundig's eigen "Overige waarnemingen installaties" + energetisch's
+  // Isolatie>Overige (Leidingisolatie/Energiezuinige kozijnen) — die 2 horen bij geen enkel ander
+  // bouwdeel-paar hierboven, dus krijgen hier een plek zodat ECHT alles gedekt is.
+  return renderBkEnLijst([
+    ...bkOverigeDefs.map(def => bkStandaloneEntry(t.bouwkundig.installaties.overigeWaarnemingen, def)),
+    ...enIsolatieOverigeDefs.map(def => enStandaloneEntry(t.energetisch.isolatie.overige, def)),
+  ]);
 }
 const BKEN_HOOFDTABS = [
-  ['buitenzijde', 'Buitenzijde'], ['binnenzijde', 'Binnenzijde'], ['installaties', 'Installaties'],
+  ['algemeen', 'Algemeen'], ['buitenzijde', 'Buitenzijde'], ['binnenzijde', 'Binnenzijde'], ['installaties', 'Installaties'],
 ];
 function renderBouwkundigEnergetischTab() {
   const t = state.taxatie;
@@ -5623,9 +5870,6 @@ function renderBouwkundigEnergetischTab() {
   wrap.appendChild(el('div', { class: 'bouwdeel-hint', style: 'margin-bottom:10px;' },
     '💡 Dit tabblad toont dezelfde gegevens als Bouwkundig en Energetisch, alleen per bouwdeel samengevoegd. Wijzigen hier wijzigt ook die twee tabbladen (en andersom) — er wordt niets dubbel opgeslagen.'));
 
-  // Hoofdtabs (19-09-2026, Arno's verzoek: "wat tabs aanbrengen, zodat de lijst niet zo lang wordt")
-  // — zelfde 3-deling als Bouwkundig's eigen Buitenzijde/Binnenzijde/Installaties, zodat de indeling
-  // herkenbaar blijft t.o.v. de originele opnamestaten i.p.v. een nieuwe indeling te verzinnen.
   const hoofdtabs = el('div', { class: 'weergave-wissel bouwkundig-hoofdtabs' });
   BKEN_HOOFDTABS.forEach(([id, label]) => {
     hoofdtabs.appendChild(el('button', {
@@ -5635,9 +5879,28 @@ function renderBouwkundigEnergetischTab() {
   });
   wrap.appendChild(hoofdtabs);
 
-  if (state.bkEnHoofdtab === 'binnenzijde') wrap.appendChild(renderBkEnBinnenzijde(t));
-  else if (state.bkEnHoofdtab === 'installaties') wrap.appendChild(renderBkEnInstallaties(t));
-  else wrap.appendChild(renderBkEnBuitenzijde(t));
+  if (state.bkEnHoofdtab === 'algemeen') {
+    wrap.appendChild(renderBkEnAlgemeen());
+    return wrap;
+  }
+
+  // Subtabs (19-09-2026, Arno's verzoek: "misschien verstandig om subtabs op te nemen" — de lijst
+  // per hoofdtab werd te lang) — zelfde patroon als Bouwkundig/Energetisch's eigen subtabs: bij het
+  // wisselen van hoofdtab valt een niet-bestaande subtab terug op de eerste van de nieuwe hoofdtab.
+  const subtabsSchema = BKEN_SUBTABS[state.bkEnHoofdtab];
+  if (!subtabsSchema.some(s => s.id === state.bkEnSubtab)) state.bkEnSubtab = subtabsSchema[0].id;
+  const subtabs = el('div', { class: 'weergave-wissel bouwkundig-subtabs' });
+  subtabsSchema.forEach(sub => {
+    subtabs.appendChild(el('button', {
+      class: 'klein' + (state.bkEnSubtab === sub.id ? ' actief' : ''),
+      onclick: () => { state.bkEnSubtab = sub.id; render(); },
+    }, sub.label));
+  });
+  wrap.appendChild(subtabs);
+
+  if (state.bkEnHoofdtab === 'binnenzijde') wrap.appendChild(renderBkEnBinnenzijdeSubtab(t));
+  else if (state.bkEnHoofdtab === 'installaties') wrap.appendChild(renderBkEnInstallatiesSubtab(t));
+  else wrap.appendChild(renderBkEnBuitenzijdeSubtab(t));
 
   return wrap;
 }
