@@ -4795,17 +4795,32 @@ function renderAttentieKnop(id) {
 // Controle-tab om gemarkeerde (!) velden te waarschuwen als ze nog leeg zijn. Staat een bouwdeel op
 // "niet aanwezig", dan is dat een complete keuze (geen waarschuwing) — alleen een AANWEZIG bouwdeel
 // zonder materiaal-/tekstinhoud telt als "nog niet ingevuld".
+// LET OP (19-09-2026, Arno's vraag "wanneer is iets compleet, hoe bepaal je dat?"): hierbij gevonden
+// dat dit voorheen niet klopte met wat Taxatieweb zelf verplicht stelt — een materiaalTijd/isolatie/
+// dak-veld liet zich al "compleet" noemen zodra er een materiaal was aangevinkt / geïsoleerd op Ja
+// stond, ZONDER het Installatiemoment te checken — terwijl Taxatieweb dat veld zelf al sinds het
+// begin als "Dit veld is verplicht" toont zodra dat blok zichtbaar wordt (live bevestigd op De
+// Wiersse 25). Nu dus consistent: materiaal/isolatie-keuze EN (als van toepassing) een gekozen
+// Installatiemoment moeten allebei kloppen voor "compleet".
 function bouwdeelVeldOk(def, bouwdeel) {
   if (!bouwdeel || !bouwdeel.aanwezig) return true;
   if (def.type === 'materiaal' || def.type === 'materiaalTijd') {
-    if (def.kenmerkenKoppeling) return bepaalOpties(def).some((o) => kenmerkGeselecteerd(def.kenmerkenKoppeling, o));
-    if (def.installatieKoppeling) return bepaalOpties(def).some((o) => installatieGeselecteerd(def.installatieKoppeling.sleutel, o));
-    return !!(bouwdeel.materialen && bouwdeel.materialen.length);
+    const materiaalGekozen = def.kenmerkenKoppeling ? bepaalOpties(def).some((o) => kenmerkGeselecteerd(def.kenmerkenKoppeling, o))
+      : def.installatieKoppeling ? bepaalOpties(def).some((o) => installatieGeselecteerd(def.installatieKoppeling.sleutel, o))
+      : !!(bouwdeel.materialen && bouwdeel.materialen.length);
+    if (!materiaalGekozen) return false;
+    return def.type !== 'materiaalTijd' || !!bouwdeel.installatiemoment;
   }
   if (def.type === 'risico') return !!(bouwdeel.omschrijving && bouwdeel.omschrijving.trim());
+  // isolatie: 'aanwezig' hierboven is hier al gegarandeerd true (= "geïsoleerd: ja"), dus compleet
+  // betekent hier alleen nog: is het Installatiemoment ingevuld.
+  if (def.type === 'isolatie') return !!bouwdeel.installatiemoment;
+  // dak: 'aanwezig' betekent hier "dit daktype bestaat" — dat is LOS van 'geisoleerd'. Geen isolatie
+  // (of nog niet gekozen) is een complete keuze op zich; wél isolatie vereist ook een Installatiemoment.
+  if (def.type === 'dak') return bouwdeel.geisoleerd !== true || !!bouwdeel.installatiemoment;
   if (bouwdeel.omschrijving !== undefined) return !!(bouwdeel.omschrijving && bouwdeel.omschrijving.trim());
   if (bouwdeel.opmerkingen !== undefined) return !!(bouwdeel.opmerkingen && bouwdeel.opmerkingen.trim());
-  return true; // isolatie/dak-type velden hebben geen vrij tekstveld — "aanwezig" is dan al compleet
+  return true;
 }
 // Loopt alle BOUWKUNDIG_SCHEMA- en ENERGETISCH_SCHEMA-velden af op zoek naar de met ! gemarkeerde
 // velden (attentieId in data.attentieVelden), voor de Controle-tab.
@@ -5052,9 +5067,9 @@ function renderSelectVeld(labelText, waarde, opties, onChange) {
 // groot), maar dezelfde "kies + voeg toe → verwijderbare chip"-opzet als de rest van de app. De
 // "↺ Samenvoegen"-knop zet de jaren als tekst in opmerkingen — een expliciete actie (net als de
 // andere "↺ Overnemen"-knoppen elders), nooit een automatische/stille overschrijving.
-// Zelfde look als de andere velden in deze rij (Installatiemoment/Installatiejaar) — een compacte
-// .bouwdeel-detail-veld i.p.v. een eigen volle-breedte blok (19-09-2026, Arno's verzoek), en in
-// dezelfde .bouwdeel-details-grid-rij geplaatst i.p.v. eronder (zie renderInstallatiemomentEnOpmerkingen).
+// Zelfde look als het Installatiejaar-veld ernaast — een compacte .bouwdeel-detail-veld i.p.v. een
+// eigen volle-breedte blok (19-09-2026), geplaatst in dezelfde .installatiemoment-stapel (zie
+// renderInstallatiemomentEnOpmerkingen).
 function renderMeerdereJarenVeld(veld) {
   if (!Array.isArray(veld.meerdereJaren)) veld.meerdereJaren = [];
   const wrap = el('label', { class: 'bouwdeel-detail-veld meerdere-jaren-veld' },
@@ -5084,23 +5099,23 @@ function renderMeerdereJarenVeld(veld) {
   return wrap;
 }
 function renderInstallatiemomentEnOpmerkingen(veld, def) {
-  const wrap = el('div', {});
-  const rij = el('div', { class: 'bouwdeel-details-grid' });
-  rij.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
-  // Jaar-keuzelijst naast Installatiemoment, alleen bij "Installatiejaar" (Arno's verzoek
-  // 13-09-2026: "past er prima naast" — daarna weer aangepast: "Bij keuze bouwjaar in opnamestaat
-  // geen keuzeveld weergeven, want dan is het bouwjaar gelijk aan het bouwjaar van de woning" — dat
-  // staat al bij Objectkenmerken, dus bij "Bouwjaar" is een los jaartal hier overbodig).
+  const wrap = el('div', { class: 'installatiemoment-stapel' });
+  // Vroeger een 4-koloms-grid (Installatiemoment/Installatiejaar/Meerdere jaartallen naast elkaar) —
+  // paste prima op een breed desktopscherm, maar kwam op een smallere kolom (iPad, of de
+  // samengevoegde tab se rechterkolom) "op elkaar gepropt" te staan (19-09-2026, Arno's melding).
+  // Nu gewoon onder elkaar: eerst de keuze (Installatiemoment), dan pas het jaar-veld met z'n eigen
+  // opgeslagen labels eronder — werkt op elke breedte, geen media-query meer nodig.
+  wrap.appendChild(renderSelectVeld('Installatiemoment', veld.installatiemoment, INSTALLATIEMOMENT_OPTIES, (w) => { veld.installatiemoment = w; }));
+  // Jaar-keuzelijst, alleen bij "Installatiejaar" (Arno's verzoek 13-09-2026 — bij "Bouwjaar" staat
+  // dat al bij Objectkenmerken, dus een los jaartal hier is dan overbodig).
   if (veld.installatiemoment === 'Installatiejaar') {
-    rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
+    wrap.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
       el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
       renderJaarKeuze(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); render(); })));
     // Meerdere jaartallen (18-09-2026, Arno's verzoek): sommige onderdelen zijn in fases aangebracht/
-    // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg — direct achter het
-    // jaartal-veld in dezelfde rij (19-09-2026, Arno: "identiek qua look, achter de rij").
-    rij.appendChild(renderMeerdereJarenVeld(veld));
+    // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg.
+    wrap.appendChild(renderMeerdereJarenVeld(veld));
   }
-  wrap.appendChild(rij);
   if (def) wrap.appendChild(renderBouwdeelChips(veld, def, 'opmerkingen'));
   const opmerkingen = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
@@ -5197,15 +5212,19 @@ function renderZonnepanelenKaart(veld, def) {
   const kaart = el('div', { class: 'bouwdeel-kaart' });
   kaart.appendChild(renderEnergetischKop(veld, def, kaart));
   if (!veld.aanwezig) return kaart;
-  // "Omschrijving zonnepanelen": Taxatieweb laat je kiezen of je Wattpiek of aantal panelen invult
-  // (Arno's verzoek 13-09-2026), i.p.v. altijd een kaal getalveld "Aantal".
-  kaart.appendChild(renderSelectVeld('Omschrijving zonnepanelen', veld.metenType, ENERGETISCH_METEN_TYPE_OPTIES, (w) => { veld.metenType = w; }));
+  // Compacter in 2 kolommen (19-09-2026, Arno's verzoek) — Omschrijving+Aantal naast elkaar
+  // bovenaan links, Oriëntatie eronder; Eigendom + Bouw-/installatiejaar rechts.
   const aantalInput = el('input', {
     type: 'number', placeholder: '0',
     oninput: (e) => { veld.aantal = e.target.value; planOpslaan(); },
   });
   aantalInput.value = veld.aantal || '';
-  kaart.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, veld.metenType || 'Aantal Wattpiek of aantal panelen', aantalInput));
+  // "Omschrijving zonnepanelen": Taxatieweb laat je kiezen of je Wattpiek of aantal panelen invult
+  // (Arno's verzoek 13-09-2026), i.p.v. altijd een kaal getalveld "Aantal".
+  const omschrijvingAantalRij = el('div', { class: 'rij-2koloms' },
+    renderSelectVeld('Omschrijving zonnepanelen', veld.metenType, ENERGETISCH_METEN_TYPE_OPTIES, (w) => { veld.metenType = w; }),
+    el('label', { class: 'bouwdeel-detail-veld' }, veld.metenType || 'Aantal Wattpiek of aantal panelen', aantalInput),
+  );
   // Oriëntatie is in Taxatieweb een checkbox-multiselect (meerdere windrichtingen tegelijk mogelijk),
   // geen keuzelijst — zelfde grid-patroon als een materiaal-multiselect.
   const orientatieGrid = el('div', { class: 'bouwdeel-materiaal-grid' });
@@ -5222,10 +5241,17 @@ function renderZonnepanelenKaart(veld, def) {
         },
       }), optie));
   });
-  kaart.appendChild(el('span', { class: 'energetisch-veld-label' }, 'Oriëntatie'));
-  kaart.appendChild(orientatieGrid);
-  kaart.appendChild(renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }));
-  kaart.appendChild(renderInstallatiemomentEnOpmerkingen(veld, def));
+  const linkerKolom = el('div', {},
+    omschrijvingAantalRij,
+    el('span', { class: 'energetisch-veld-label' }, 'Oriëntatie'),
+    orientatieGrid,
+  );
+  const rechterKolom = el('div', {},
+    renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }),
+    el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'),
+    renderInstallatiemomentEnOpmerkingen(veld, def),
+  );
+  kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
 function renderEnergetischKaart(sectieObj, def) {
@@ -5383,34 +5409,31 @@ function renderGecombineerdeKop(titel, bkVeld, enVeld, syncEnAanwezig = true) {
     el('input', { type: 'checkbox', checked: bkVeld.aanwezig ? 'checked' : null }),
     el('span', { class: 'bouwdeel-titel' }, titel));
 }
-// Conditie + Aandachtspunten/foto in 2 kolommen (18-09-2026, Arno's verzoek: "verticaal ruimte
-// uitsparen"), op smal scherm (telefoon) onder elkaar — zie .gecombineerd-conditie-rij in style.css.
+// Conditie, dan Aandachtspunten/foto eronder (18-09-2026 eerst naast elkaar, 19-09-2026 weer onder
+// elkaar gezet — zie .gecombineerd-conditie-stapel in style.css).
 function renderConditieEnAandachtRij(bkDef, bkVeld) {
   const slechteConditie = bkVeld.conditie === 2 || bkVeld.conditie === 3;
-  // Aandachtspunten achter de foto op 1 rij (19-09-2026, Arno's verzoek: "scheelt een rij") — klapt
-  // alleen uit (toelichtingsveld eronder, volle breedte) zodra op Ja gezet.
+  // Foto-knop + Aandachtspunten op 1 rij (19-09-2026, "scheelt een rij"), maar weer ONDER de
+  // conditie i.p.v. ernaast (19-09-2026, tweede ronde: "zet fotoknop en aandachtspunten in deze
+  // opmaak weer onder conditie") — nu de kaart al een eigen linker/rechterkolom heeft
+  // (.gecombineerd-hoofdkolommen), maakte een TWEEDE kolommenpaar hierbinnen het juist drukker.
   const fotoEnAandachtRij = el('div', { class: 'gecombineerd-foto-aandacht-rij' },
     renderFotoKnopRij(bkDef.label, bkDef.fotoCategorie || bkDef.label, bkVeld.aandachtspuntenAanwezig === true),
     el('div', { class: 'bouwdeel-aandacht-links' },
       el('span', { class: 'bouwdeel-veld-label' }, 'Aandachtspunten'),
       renderJaNeeWissel(bkVeld.aandachtspuntenAanwezig, (w) => { bkVeld.aandachtspuntenAanwezig = w; })),
   );
-  const aandachtKolom = el('div', { class: 'gecombineerd-kolom' },
-    fotoEnAandachtRij,
-    slechteConditie ? renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true) : null,
-  );
+  const wrap = el('div', { class: 'gecombineerd-conditie-stapel' }, conditieRij(bkVeld), fotoEnAandachtRij);
+  if (slechteConditie) wrap.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true));
   if (bkVeld.aandachtspuntenAanwezig === true) {
     const toelichting = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aandachtspunt…',
       oninput: (e) => { bkVeld.aandachtspuntenToelichting = e.target.value; planOpslaan(); },
     });
     toelichting.value = bkVeld.aandachtspuntenToelichting || '';
-    aandachtKolom.appendChild(toelichting);
+    wrap.appendChild(toelichting);
   }
-  return el('div', { class: 'gecombineerd-conditie-rij' },
-    el('div', { class: 'gecombineerd-kolom' }, conditieRij(bkVeld)),
-    aandachtKolom,
-  );
+  return wrap;
 }
 // Generieke samengevoegde kaart voor materiaal-achtige velden waarvan de aangevinkte keuzes AL
 // gedeeld zijn tussen Bouwkundig en Energetisch (kenmerkenKoppeling of installatieKoppeling) — Glas,
@@ -5453,8 +5476,10 @@ function renderGecombineerdGlasKaart(labelSuffix, bkDef, bkVeld, enDef, enVeld) 
 // dus schrijft deze ene tekstveld-instantie naar BEIDE kanten tegelijk zodat niets ineens leeg lijkt
 // zodra je terugschakelt naar het losse Bouwkundig- of Energetisch-tabblad. enVeld is optioneel —
 // bij een bouwdeel zonder materiaal-tegenhanger aan de andere kant (bv. Vloersoort, waar Energetisch
-// alleen isolatie kent) volstaat alleen bkVeld.
-function renderMultiselectGridGekoppeld(def, bkVeld, enVeld) {
+// alleen isolatie kent) volstaat alleen bkVeld. opmerkingenVeld (19-09-2026, "samenvoegen naar
+// opmerkingen"): los van enVeld omdat dat er niet altijd is (Vloersoort) of geen opmerkingenveld
+// heeft — valt terug op enVeld zelf zodra het niet apart wordt meegegeven.
+function renderMultiselectGridGekoppeld(def, bkVeld, enVeld, opmerkingenVeld) {
   const koppelingGeselecteerd = (optie) => def.kenmerkenKoppeling
     ? kenmerkGeselecteerd(def.kenmerkenKoppeling, optie)
     : installatieGeselecteerd(def.installatieKoppeling.sleutel, optie);
@@ -5478,6 +5503,25 @@ function renderMultiselectGridGekoppeld(def, bkVeld, enVeld) {
     overigeVeld.value = bkVeld.overigeTekst || (enVeld && enVeld.overigeTekst) || '';
     wrap.appendChild(overigeVeld);
   }
+  // "↺ Samenvoegen naar opmerkingen" (19-09-2026, Arno's verzoek: "geselecteerde labels markeren en
+  // later bij het overzetten in Taxatieweb in het opmerkingenveld samenvoegen") — zelfde idee als de
+  // bestaande jaartallen-samenvoegknop, nu voor de aangevinkte materiaal-labels zelf. Schrijft naar
+  // enVeld.opmerkingen (dat veld gaat toch al 1-op-1 als tekst over naar Taxatieweb), niet naar de
+  // checkbox-status zelf — puur een kopieerbare tekstregel als geheugensteun voor Arno.
+  const doelOpmerkingen = opmerkingenVeld || enVeld;
+  if (doelOpmerkingen && doelOpmerkingen.opmerkingen !== undefined) {
+    const gekozen = bepaalOpties(def).filter((o) => koppelingGeselecteerd(o));
+    if (gekozen.length) {
+      wrap.appendChild(el('button', {
+        type: 'button', class: 'knop spook klein', style: 'margin-top:6px;',
+        onclick: () => {
+          const regel = def.label + ': ' + nederlandseLijst(gekozen) + '.';
+          doelOpmerkingen.opmerkingen = (doelOpmerkingen.opmerkingen || '').trim() ? doelOpmerkingen.opmerkingen.trim() + '\n' + regel : regel;
+          planOpslaan(); render();
+        },
+      }, '↺ Samenvoegen naar opmerkingen'));
+    }
+  }
   return wrap;
 }
 // Isolatie-type velden (18-09-2026, Arno's verzoek): "je moet opnemen OF iets geïsoleerd is per
@@ -5487,18 +5531,14 @@ function renderMultiselectGridGekoppeld(def, bkVeld, enVeld) {
 // kop, want dat zou "is er gevelwerk" en "is de gevel geïsoleerd" door elkaar halen (zie
 // renderGecombineerdeKop). Geen isolatie ⇒ Gedeeltelijk/installatiejaar/opmerkingen niet tonen.
 function renderIsolatieBlok(labelPrefix, enVeld, enDef) {
-  const wrap = el('div', {});
-  // "Gedeeltelijk geïsoleerd" achter "Isolatie" op dezelfde rij (19-09-2026, Arno's verzoek:
-  // "scheelt weer een rij") — zelfde .bouwdeel-conditie-rij (flex-wrap), nu met 2 label+knoppen-paren.
-  const rij = el('div', { class: 'bouwdeel-conditie-rij' },
-    el('span', { class: 'energetisch-veld-label' }, labelPrefix + ' geïsoleerd'),
-    renderJaNeeWissel(enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
-  if (enVeld.aanwezig === true) {
-    rij.appendChild(el('span', { class: 'energetisch-veld-label gecombineerd-label-extra' }, 'Gedeeltelijk geïsoleerd'));
-    rij.appendChild(renderJaNeeWissel(enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
-  }
-  wrap.appendChild(rij);
+  // Overzichtelijkere look (19-09-2026, tweede ronde): "Gedeeltelijk geïsoleerd" stond op dezelfde
+  // rij als "Isolatie" gepropt — nu weer een eigen rij eronder (renderJaNeeToggle), en het geheel in
+  // een lichte kaart (.isolatieblok) zodat het duidelijk als 1 samenhangend blokje oogt naast de
+  // bouwkundige kolom.
+  const wrap = el('div', { class: 'isolatieblok' });
+  wrap.appendChild(renderJaNeeToggle(labelPrefix + ' geïsoleerd', enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
   if (enVeld.aanwezig !== true) return wrap;
+  wrap.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
   wrap.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
   wrap.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
   return wrap;
@@ -5532,12 +5572,11 @@ function renderGecombineerdMateriaalIsolatieKaart(titel, materiaalLabel, isolati
   const linkerKolom = el('div', {},
     renderConditieEnAandachtRij(bkDef, bkVeld),
     el('div', { class: 'bouwdeel-veld-label' }, materiaalLabel),
-    bkDef.kenmerkenKoppeling ? renderMultiselectGridGekoppeld(bkDef, bkVeld, null) : renderPlainMateriaalGrid(bkDef, bkVeld),
+    bkDef.kenmerkenKoppeling ? renderMultiselectGridGekoppeld(bkDef, bkVeld, null, enVeld) : renderPlainMateriaalGrid(bkDef, bkVeld),
   );
-  const rechterKolom = el('div', {},
-    el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie ' + isolatieLabelPrefix.toLowerCase()),
-    renderIsolatieBlok(isolatieLabelPrefix, enVeld, enDef),
-  );
+  // Geen aparte "Isolatie X"-label meer boven het isolatieblok (19-09-2026, overzichtelijkere
+  // look) — het blokje zelf begint al met "X geïsoleerd", dat was dubbelop.
+  const rechterKolom = el('div', {}, renderIsolatieBlok(isolatieLabelPrefix, enVeld, enDef));
   kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
@@ -5551,18 +5590,12 @@ function renderGecombineerdGevelKaart(bkDef, bkVeld, enDef, enVeld) {
 // "aanwezig" betekent hier "bestaat dit daktype (hellend/plat) op deze woning" en staat LOS van
 // "geïsoleerd" — zie leegDakVeld()/renderDakKaart. Vandaar een eigen blok i.p.v. renderIsolatieBlok.
 function renderDakIsolatieBlok(label, enVeld, enDef) {
-  const wrap = el('div', {});
+  const wrap = el('div', { class: 'isolatieblok' });
   wrap.appendChild(renderJaNeeToggle(label, enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
   if (enVeld.aanwezig !== true) return wrap;
-  const rij = el('div', { class: 'bouwdeel-conditie-rij' },
-    el('span', { class: 'energetisch-veld-label' }, 'Geïsoleerd'),
-    renderJaNeeWissel(enVeld.geisoleerd, (w) => { enVeld.geisoleerd = w; }));
-  if (enVeld.geisoleerd === true) {
-    rij.appendChild(el('span', { class: 'energetisch-veld-label gecombineerd-label-extra' }, 'Gedeeltelijk'));
-    rij.appendChild(renderJaNeeWissel(enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
-  }
-  wrap.appendChild(rij);
+  wrap.appendChild(renderJaNeeToggle('Geïsoleerd', enVeld.geisoleerd, (w) => { enVeld.geisoleerd = w; }));
   if (enVeld.geisoleerd !== true) return wrap;
+  wrap.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
   wrap.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
   wrap.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
   return wrap;
@@ -5580,7 +5613,7 @@ function renderGecombineerdDakKaart(bkDef, bkVeld, hellendDef, hellendVeld, plat
     el('div', { class: 'bouwdeel-veld-label' }, 'Materiaal dak'),
     renderPlainMateriaalGrid(bkDef, bkVeld),
   );
-  const rechterKolom = el('div', {},
+  const rechterKolom = el('div', { class: 'isolatieblokken-stapel' },
     el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie dak'),
     renderDakIsolatieBlok('Hellend dak aanwezig', hellendVeld, hellendDef),
     renderDakIsolatieBlok('Plat dak aanwezig', platVeld, platDef),
@@ -5607,10 +5640,7 @@ function renderGecombineerdKruipruimteKaart(bkDef, bkVeld, enDef, enVeld) {
     renderBouwdeelChips(bkVeld, bkDef, 'omschrijving'),
     omschrijvingVeld,
   );
-  const rechterKolom = el('div', {},
-    el('div', { class: 'bouwdeel-veld-label' }, 'Isolatie kruipruimte'),
-    renderIsolatieBlok('Kruipruimte', enVeld, enDef),
-  );
+  const rechterKolom = el('div', {}, renderIsolatieBlok('Kruipruimte', enVeld, enDef));
   kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
   return kaart;
 }
@@ -5632,12 +5662,14 @@ function pasInklapbaarToe(kaart, key, aanwezig, compleet) {
       type: 'button', class: 'woonlaag-toggle',
       onclick: (e) => { e.stopPropagation(); if (ingeklapt) bkEnKaartIngeklapt.delete(key); else bkEnKaartIngeklapt.add(key); render(); },
     }, ingeklapt ? '▸' : '▾'), kop.firstChild);
+    // Compleet/Nog niet compleet IN de titelrij, rechts uitgelijnd (19-09-2026, Arno's verzoek) —
+    // i.p.v. een aparte statusregel eronder; zichtbaar zowel open als dichtgeklapt, want een
+    // compleetheids-check is net zo nuttig zonder de kaart open te klappen.
+    kop.appendChild(el('span', { class: 'compleet-badge compleet-badge-kop' + (compleet ? ' ok' : '') }, compleet ? '✓ Compleet' : '⚠ Nog niet compleet'));
   }
   if (ingeklapt) {
     while (kaart.children.length > 1) kaart.removeChild(kaart.lastChild);
     kaart.classList.add('ruimte-kaart-ingeklapt');
-    kaart.appendChild(el('div', { class: 'ruimte-status-ingeklapt' },
-      el('span', { class: 'compleet-badge' + (compleet ? ' ok' : '') }, compleet ? '✓ Compleet' : '⚠ Nog niet compleet')));
   }
   return kaart;
 }
