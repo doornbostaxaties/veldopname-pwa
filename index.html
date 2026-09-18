@@ -19,7 +19,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <!-- CACHEBUST (18-09-2026): GitHub Pages stuurt Cache-Control: max-age=600 mee voor app.js/
+       style.css — zonder een query-string die per deploy verandert, blijft de browser tot 10 minuten
+       na een update alsnog de OUDE versie serveren aan dit <script src>/<link href>, ook na een
+       harde herlaadbeurt (de service worker zelf werkt wél meteen bij, maar dat helpt niet als de
+       browser de fetch daaronder al uit z'n eigen HTTP-cache beantwoordt vóórdat de SW 'm ziet).
+       Bump CACHEBUST bij elke deploy die app.js/style.css wijzigt, dan is de nieuwe versie altijd
+       meteen zichtbaar i.p.v. pas na ~10 minuten wachten. -->
+  <link rel="stylesheet" href="style.css?v=20260918a" />
 </head>
 <body>
   <div id="app"></div>
@@ -30,7 +37,7 @@
        browser 'm nog niet eerder gecachet heeft (de service worker cachet alleen bestanden van dit
        eigen domein, geen CDN's — zie sw.js). -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="db.js"></script>
-  <script src="app.js"></script>
+  <script src="db.js?v=20260918a"></script>
+  <script src="app.js?v=20260918a"></script>
 </body>
 </html>
