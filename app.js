@@ -5292,14 +5292,11 @@ function renderMultiselectGridGekoppeld(def) {
   });
   return grid;
 }
-// Voorbeeld 2 van Arno: "Gevel(werk): conditie (evt. foto en aandachtspunt), materialen gevel,
-// isolatie gevel en bouw-/installatiejaar" — materialen gevel (Bouwkundig) en isolatie (Energetisch)
-// zijn HIER geen gedeelde waarde (andere vraag), dus die tonen we allebei, elk vanuit hun eigen veld.
 // Isolatie-type velden (18-09-2026, Arno's verzoek): "je moet opnemen OF iets geïsoleerd is per
 // onderdeel, pas als dit 'ja' is de rest laten zien" — precies hoe Taxatieweb dit zelf ook doet
-// (isolatie-kaart se eigen "aanwezig"-vinkje = "geïsoleerd: ja/nee"). In de samengevoegde kaart is
-// dat een LOS, EXPLICIET Ja/Nee-veld — bewust GEEN hergebruik van de gedeelde "aanwezig" hierboven,
-// want dat zou "is er gevelwerk" en "is de gevel geïsoleerd" door elkaar halen (zie
+// (de isolatie-kaart z'n eigen "aanwezig"-vinkje = "geïsoleerd: ja/nee"). In de samengevoegde kaart
+// is dat een LOS, EXPLICIET Ja/Nee-veld — bewust GEEN hergebruik van de gedeelde "aanwezig" van de
+// kop, want dat zou "is er gevelwerk" en "is de gevel geïsoleerd" door elkaar halen (zie
 // renderGecombineerdeKop). Geen isolatie ⇒ Gedeeltelijk/installatiejaar/opmerkingen niet tonen.
 function renderIsolatieBlok(labelPrefix, enVeld, enDef) {
   const wrap = el('div', {});
