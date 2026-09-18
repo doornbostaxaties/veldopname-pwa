@@ -4936,7 +4936,9 @@ function renderBouwkundigTab() {
 // --- Energetisch (Fase 2 "volledige opname", I.4 Energetische opnamestaat) ---
 // Generieke Ja/Nee-rij zonder toelichtingsveld (voor Gedeeltelijk/Geïsoleerd — dit zijn simpele
 // vlaggen, geen aandachtspunt-toelichting zoals bij Bouwkundig).
-function renderJaNeeToggle(labelText, huidigeWaarde, onChange) {
+// Losgetrokken van renderJaNeeToggle (19-09-2026) zodat 2 Ja/Nee-vragen op 1 rij kunnen (zie
+// renderIsolatieBlok: "Gedeeltelijk geïsoleerd" achter "Isolatie" i.p.v. een eigen rij).
+function renderJaNeeWissel(huidigeWaarde, onChange) {
   const wissel = el('div', { class: 'weergave-wissel' });
   [[false, 'Nee'], [true, 'Ja']].forEach(([waarde, tekst]) => {
     wissel.appendChild(el('button', {
@@ -4944,7 +4946,10 @@ function renderJaNeeToggle(labelText, huidigeWaarde, onChange) {
       onclick: () => { onChange(waarde); planOpslaan(); render(); },
     }, tekst));
   });
-  return el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'energetisch-veld-label' }, labelText), wissel);
+  return wissel;
+}
+function renderJaNeeToggle(labelText, huidigeWaarde, onChange) {
+  return el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'energetisch-veld-label' }, labelText), renderJaNeeWissel(huidigeWaarde, onChange));
 }
 function renderSelectVeld(labelText, waarde, opties, onChange) {
   return el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, labelText),
@@ -4961,29 +4966,32 @@ function renderSelectVeld(labelText, waarde, opties, onChange) {
 // groot), maar dezelfde "kies + voeg toe → verwijderbare chip"-opzet als de rest van de app. De
 // "↺ Samenvoegen"-knop zet de jaren als tekst in opmerkingen — een expliciete actie (net als de
 // andere "↺ Overnemen"-knoppen elders), nooit een automatische/stille overschrijving.
+// Zelfde look als de andere velden in deze rij (Installatiemoment/Installatiejaar) — een compacte
+// .bouwdeel-detail-veld i.p.v. een eigen volle-breedte blok (19-09-2026, Arno's verzoek), en in
+// dezelfde .bouwdeel-details-grid-rij geplaatst i.p.v. eronder (zie renderInstallatiemomentEnOpmerkingen).
 function renderMeerdereJarenVeld(veld) {
   if (!Array.isArray(veld.meerdereJaren)) veld.meerdereJaren = [];
-  const wrap = el('div', { class: 'meerdere-jaren-veld' });
-  wrap.appendChild(el('span', { class: 'bouwdeel-veld-label' }, 'Meerdere jaartallen (optioneel, bv. gefaseerd aangebracht)'));
-  const chipRij = el('div', { class: 'chip-rij' });
-  veld.meerdereJaren.forEach((jaar, i) => {
-    chipRij.appendChild(el('span', { class: 'chip' }, jaar,
-      el('button', { onclick: () => { veld.meerdereJaren.splice(i, 1); planOpslaan(); render(); } }, '✕')));
-  });
-  wrap.appendChild(chipRij);
-  wrap.appendChild(renderJaarSelect('', (w) => {
-    if (w && !veld.meerdereJaren.includes(w)) { veld.meerdereJaren.push(w); planOpslaan(); render(); }
-  }, 'meerdere-jaren-toevoegen'));
+  const wrap = el('label', { class: 'bouwdeel-detail-veld meerdere-jaren-veld' },
+    el('span', { class: 'energetisch-veld-label' }, 'Meerdere jaartallen'),
+    renderJaarSelect('', (w) => {
+      if (w && !veld.meerdereJaren.includes(w)) { veld.meerdereJaren.push(w); planOpslaan(); render(); }
+    }, 'meerdere-jaren-toevoegen'));
   if (veld.meerdereJaren.length) {
+    const chipRij = el('div', { class: 'chip-rij' });
+    veld.meerdereJaren.forEach((jaar, i) => {
+      chipRij.appendChild(el('span', { class: 'chip' }, jaar,
+        el('button', { onclick: () => { veld.meerdereJaren.splice(i, 1); planOpslaan(); render(); } }, '✕')));
+    });
+    wrap.appendChild(chipRij);
     wrap.appendChild(el('button', {
-      type: 'button', class: 'knop spook klein', style: 'margin-top:6px;',
+      type: 'button', class: 'knop spook klein', style: 'margin-top:4px;',
       onclick: () => {
         const jarenOplopend = [...veld.meerdereJaren].sort();
         const regel = 'Jaartallen: ' + nederlandseLijst(jarenOplopend) + '.';
         veld.opmerkingen = (veld.opmerkingen || '').trim() ? veld.opmerkingen.trim() + '\n' + regel : regel;
         planOpslaan(); render();
       },
-    }, '↺ Samenvoegen in opmerkingen'));
+    }, '↺ Samenvoegen'));
   }
   return wrap;
 }
@@ -4999,12 +5007,12 @@ function renderInstallatiemomentEnOpmerkingen(veld, def) {
     rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
       el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
       renderJaarSelect(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
+    // Meerdere jaartallen (18-09-2026, Arno's verzoek): sommige onderdelen zijn in fases aangebracht/
+    // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg — direct achter het
+    // jaartal-veld in dezelfde rij (19-09-2026, Arno: "identiek qua look, achter de rij").
+    rij.appendChild(renderMeerdereJarenVeld(veld));
   }
   wrap.appendChild(rij);
-  // Meerdere jaartallen (18-09-2026, Arno's verzoek): sommige onderdelen zijn in fases aangebracht/
-  // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg — los, optioneel lijstje
-  // ernaast, apart samen te vatten in de opmerkingen.
-  if (veld.installatiemoment === 'Installatiejaar') wrap.appendChild(renderMeerdereJarenVeld(veld));
   if (def) wrap.appendChild(renderBouwdeelChips(veld, def, 'opmerkingen'));
   const opmerkingen = el('textarea', {
     class: 'bouwdeel-omschrijving', placeholder: 'Opmerkingen…',
@@ -5300,9 +5308,17 @@ function renderMultiselectGridGekoppeld(def) {
 // renderGecombineerdeKop). Geen isolatie ⇒ Gedeeltelijk/installatiejaar/opmerkingen niet tonen.
 function renderIsolatieBlok(labelPrefix, enVeld, enDef) {
   const wrap = el('div', {});
-  wrap.appendChild(renderJaNeeToggle(labelPrefix + ' geïsoleerd', enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
+  // "Gedeeltelijk geïsoleerd" achter "Isolatie" op dezelfde rij (19-09-2026, Arno's verzoek:
+  // "scheelt weer een rij") — zelfde .bouwdeel-conditie-rij (flex-wrap), nu met 2 label+knoppen-paren.
+  const rij = el('div', { class: 'bouwdeel-conditie-rij' },
+    el('span', { class: 'energetisch-veld-label' }, labelPrefix + ' geïsoleerd'),
+    renderJaNeeWissel(enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
+  if (enVeld.aanwezig === true) {
+    rij.appendChild(el('span', { class: 'energetisch-veld-label gecombineerd-label-extra' }, 'Gedeeltelijk geïsoleerd'));
+    rij.appendChild(renderJaNeeWissel(enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
+  }
+  wrap.appendChild(rij);
   if (enVeld.aanwezig !== true) return wrap;
-  wrap.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
   wrap.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
   wrap.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
   return wrap;

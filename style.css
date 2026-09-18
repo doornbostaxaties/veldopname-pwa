@@ -483,8 +483,13 @@ h1, h2, h3, p { margin: 0; }
 .gecombineerd-kolom { display: flex; flex-direction: column; gap: 8px; }
 @media (max-width: 600px) { .gecombineerd-conditie-rij { grid-template-columns: 1fr; gap: 10px; } }
 /* Meerdere jaartallen (18-09-2026) — chip-rij + toevoeg-select, zelfde stijl als de rest van de app. */
-.meerdere-jaren-veld { margin: 8px 0; }
-.meerdere-jaren-toevoegen { margin-top: 6px; }
+/* 19-09-2026: Meerdere jaartallen nu als gewone .bouwdeel-detail-veld in dezelfde rij als
+   Installatiemoment/Installatiejaar i.p.v. een eigen los blok — chips/knop erbinnen mogen best iets
+   breder worden dan de andere cellen, vandaar geen vaste breedte hier. */
+.meerdere-jaren-veld .chip-rij { margin-top: 4px; }
+/* Isolatie + Gedeeltelijk geïsoleerd op 1 rij (19-09-2026, "scheelt een rij") — klein
+   linkermarge tussen de 2 label+knoppen-paren zodat ze niet aan elkaar plakken. */
+.gecombineerd-label-extra { margin-left: 14px; }
 /* Woonlaag-pictogram (18-09-2026) — zelfde ronde-badge-look als .bouwdeel-attentie-knop hiernaast,
    navy-op-navy-100 zoals de rest van de huisstijl. */
 .woonlaag-icoon {
