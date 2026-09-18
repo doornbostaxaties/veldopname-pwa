@@ -4973,9 +4973,11 @@ function renderMeerdereJarenVeld(veld) {
   if (!Array.isArray(veld.meerdereJaren)) veld.meerdereJaren = [];
   const wrap = el('label', { class: 'bouwdeel-detail-veld meerdere-jaren-veld' },
     el('span', { class: 'energetisch-veld-label' }, 'Meerdere jaartallen'),
+    // Geen eigen klasse meesturen (19-09-2026, was "look niet goed") — gewoon de standaard
+    // 'energetisch-select'-stijl van renderJaarSelect, exact zoals Installatiejaar ernaast.
     renderJaarSelect('', (w) => {
       if (w && !veld.meerdereJaren.includes(w)) { veld.meerdereJaren.push(w); planOpslaan(); render(); }
-    }, 'meerdere-jaren-toevoegen'));
+    }));
   if (veld.meerdereJaren.length) {
     const chipRij = el('div', { class: 'chip-rij' });
     veld.meerdereJaren.forEach((jaar, i) => {
@@ -5257,15 +5259,26 @@ function renderGecombineerdeKop(titel, bkVeld, enVeld, syncEnAanwezig = true) {
 // uitsparen"), op smal scherm (telefoon) onder elkaar — zie .gecombineerd-conditie-rij in style.css.
 function renderConditieEnAandachtRij(bkDef, bkVeld) {
   const slechteConditie = bkVeld.conditie === 2 || bkVeld.conditie === 3;
-  const aandachtKolom = el('div', { class: 'gecombineerd-kolom' },
+  // Aandachtspunten achter de foto op 1 rij (19-09-2026, Arno's verzoek: "scheelt een rij") — klapt
+  // alleen uit (toelichtingsveld eronder, volle breedte) zodra op Ja gezet.
+  const fotoEnAandachtRij = el('div', { class: 'gecombineerd-foto-aandacht-rij' },
     renderFotoKnopRij(bkDef.label, bkDef.fotoCategorie || bkDef.label, bkVeld.aandachtspuntenAanwezig === true),
-    slechteConditie ? renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true) : null,
-    jaNeeMetToelichtingRij(
-      'Aandachtspunten', bkVeld.aandachtspuntenAanwezig, (w) => { bkVeld.aandachtspuntenAanwezig = w; planOpslaan(); },
-      bkVeld.aandachtspuntenToelichting, (v) => { bkVeld.aandachtspuntenToelichting = v; planOpslaan(); },
-      'Toelichting aandachtspunt…',
-    ),
+    el('div', { class: 'bouwdeel-aandacht-links' },
+      el('span', { class: 'bouwdeel-veld-label' }, 'Aandachtspunten'),
+      renderJaNeeWissel(bkVeld.aandachtspuntenAanwezig, (w) => { bkVeld.aandachtspuntenAanwezig = w; })),
   );
+  const aandachtKolom = el('div', { class: 'gecombineerd-kolom' },
+    fotoEnAandachtRij,
+    slechteConditie ? renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true) : null,
+  );
+  if (bkVeld.aandachtspuntenAanwezig === true) {
+    const toelichting = el('textarea', {
+      class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aandachtspunt…',
+      oninput: (e) => { bkVeld.aandachtspuntenToelichting = e.target.value; planOpslaan(); },
+    });
+    toelichting.value = bkVeld.aandachtspuntenToelichting || '';
+    aandachtKolom.appendChild(toelichting);
+  }
   return el('div', { class: 'gecombineerd-conditie-rij' },
     el('div', { class: 'gecombineerd-kolom' }, conditieRij(bkVeld)),
     aandachtKolom,
