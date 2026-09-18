@@ -269,6 +269,10 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 .chip-knop:active { background: var(--navy-100); color: var(--navy); border-color: var(--navy); }
+/* Snelkeuze van al elders in deze taxatie gebruikte jaartallen, boven elke jaar-keuzelijst
+   (19-09-2026, Arno n.a.v. Provadie: "jaartallen herbruiken, makkelijk klikken") — 1 tik i.p.v.
+   door tientallen jaren scrollen. */
+.jaar-snelkeuze-rij { margin-bottom: 6px; }
 .bouwdeel-chip-rij { margin: 0; flex: 1; }
 /* ✎-knopje + editor per bouwdeel-chiplijst (13-09-2026, Arno: "net zoiets als in Provadie", en
    sleepbaar herordenen net als de rest van dit project al kan). */

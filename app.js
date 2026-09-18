@@ -584,6 +584,58 @@ function renderJaarSelect(waarde, onChange, klasse) {
     el('option', { value: '' }, 'Selecteer'),
     ...JAREN_OPTIES.map(j => el('option', { value: j, selected: String(waarde) === j ? 'selected' : null }, j)));
 }
+// Alle jaartallen die AL ELDERS in deze taxatie zijn ingevuld (19-09-2026, Arno's verzoek n.a.v.
+// Provadie: "jaartallen hergebruiken op andere plekken, makkelijk klikken") — Bouwjaar
+// (Objectkenmerken), elk Bouwkundig-bouwdeel met een 'jaar'-detail (Verwarmings-/Warmwatertoestel),
+// en elk Energetisch-veld z'n Installatiejaar + "Meerdere jaartallen". Meest recent eerst.
+function alleGebruikteJaartallen() {
+  const t = state.taxatie;
+  const jaren = new Set();
+  const voegToe = (w) => { const s = String(w || '').trim(); if (s) jaren.add(s); };
+  voegToe(t.bewoning.bouwjaar);
+  ['buitenzijde', 'binnenzijde', 'installaties'].forEach((hoofdId) => {
+    Object.entries(BOUWKUNDIG_SCHEMA[hoofdId] || {}).forEach(([sectieId, defs]) => {
+      defs.forEach((def) => {
+        if (!def.details) return;
+        const bouwdeel = t.bouwkundig[hoofdId] && t.bouwkundig[hoofdId][sectieId] && t.bouwkundig[hoofdId][sectieId][def.key];
+        if (!bouwdeel || !bouwdeel.details) return;
+        def.details.forEach((d) => { if (d.type === 'jaar') voegToe(bouwdeel.details[d.key]); });
+      });
+    });
+  });
+  const scanEnergetischGroep = (obj) => {
+    Object.values(obj || {}).forEach((veld) => {
+      if (!veld || typeof veld !== 'object') return;
+      voegToe(veld.jaar);
+      (veld.meerdereJaren || []).forEach(voegToe);
+    });
+  };
+  ['isolatie', 'installaties'].forEach((hoofd) => {
+    Object.values(t.energetisch[hoofd] || {}).forEach((sectie) => scanEnergetischGroep(sectie));
+  });
+  scanEnergetischGroep(t.energetisch.energieopwekking);
+  return [...jaren].sort((a, b) => b.localeCompare(a));
+}
+// Wikkelt renderJaarSelect met snelkeuze-chips voor jaartallen die al elders gekozen zijn — 1 tik
+// i.p.v. door tientallen jaren scrollen als hetzelfde jaartal (bv. een verbouwing) meerdere
+// onderdelen tegelijk trof. De gewone keuzelijst blijft altijd beschikbaar voor een nieuw jaartal.
+// Zelfde aanroepvorm als renderJaarSelect, dus overal 1-op-1 inwisselbaar.
+function renderJaarKeuze(waarde, onChange, klasse) {
+  const wrap = el('div', { class: 'jaar-keuze' });
+  const gebruikt = alleGebruikteJaartallen().filter((j) => j !== String(waarde || ''));
+  if (gebruikt.length) {
+    const chipRij = el('div', { class: 'chip-rij jaar-snelkeuze-rij' });
+    gebruikt.forEach((jaar) => {
+      chipRij.appendChild(el('button', {
+        type: 'button', class: 'chip-knop',
+        onclick: () => { onChange(jaar); planOpslaan(); render(); },
+      }, jaar));
+    });
+    wrap.appendChild(chipRij);
+  }
+  wrap.appendChild(renderJaarSelect(waarde, onChange, klasse));
+  return wrap;
+}
 const ENERGETISCH_SCHEMA = {
   isolatie: {
     gevel: [
@@ -4261,7 +4313,7 @@ function renderObjectkenmerkenTab() {
   },
     el('option', { value: '' }, 'Selecteer'),
     ...WONINGTYPE_OPTIES.map(o => el('option', { value: o, selected: t.bewoning.woningtype === o ? 'selected' : null }, o)));
-  const bouwjaarVeld = renderJaarSelect(t.bewoning.bouwjaar, (w) => { t.bewoning.bouwjaar = w; planOpslaan(); });
+  const bouwjaarVeld = renderJaarKeuze(t.bewoning.bouwjaar, (w) => { t.bewoning.bouwjaar = w; planOpslaan(); });
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Woningtype', woningtypeVeld));
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
   groepKenmerken.appendChild(kenmerkenRij);
@@ -4434,7 +4486,7 @@ function renderDetailVeld(bouwdeel, d) {
   }
   if (d.type === 'jaar') {
     return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
-      renderJaarSelect(waarde, (w) => { bouwdeel.details[d.key] = w; planOpslaan(); }, 'bouwdeel-detail-select'));
+      renderJaarKeuze(waarde, (w) => { bouwdeel.details[d.key] = w; planOpslaan(); }, 'bouwdeel-detail-select'));
   }
   // 'getal'
   const input = el('input', {
@@ -4975,7 +5027,7 @@ function renderMeerdereJarenVeld(veld) {
     el('span', { class: 'energetisch-veld-label' }, 'Meerdere jaartallen'),
     // Geen eigen klasse meesturen (19-09-2026, was "look niet goed") — gewoon de standaard
     // 'energetisch-select'-stijl van renderJaarSelect, exact zoals Installatiejaar ernaast.
-    renderJaarSelect('', (w) => {
+    renderJaarKeuze('', (w) => {
       if (w && !veld.meerdereJaren.includes(w)) { veld.meerdereJaren.push(w); planOpslaan(); render(); }
     }));
   if (veld.meerdereJaren.length) {
@@ -5008,7 +5060,7 @@ function renderInstallatiemomentEnOpmerkingen(veld, def) {
   if (veld.installatiemoment === 'Installatiejaar') {
     rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
       el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
-      renderJaarSelect(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
+      renderJaarKeuze(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
     // Meerdere jaartallen (18-09-2026, Arno's verzoek): sommige onderdelen zijn in fases aangebracht/
     // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg — direct achter het
     // jaartal-veld in dezelfde rij (19-09-2026, Arno: "identiek qua look, achter de rij").
