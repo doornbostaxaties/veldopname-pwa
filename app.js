@@ -619,7 +619,10 @@ function alleGebruikteJaartallen() {
 // Wikkelt renderJaarSelect met snelkeuze-chips voor jaartallen die al elders gekozen zijn — 1 tik
 // i.p.v. door tientallen jaren scrollen als hetzelfde jaartal (bv. een verbouwing) meerdere
 // onderdelen tegelijk trof. De gewone keuzelijst blijft altijd beschikbaar voor een nieuw jaartal.
-// Zelfde aanroepvorm als renderJaarSelect, dus overal 1-op-1 inwisselbaar.
+// Zelfde aanroepvorm als renderJaarSelect, dus overal 1-op-1 inwisselbaar — LET OP (bug 19-09-2026):
+// de meegegeven onChange moet altijd zelf ook render() aanroepen, niet alleen planOpslaan(). Zonder
+// render() blijft deze chip-rij na een gewone keuzelijst-selectie de OUDE waarde uitsluiten i.p.v.
+// de nieuwe — een chip ernaast klikken zette het jaartal dan stilletjes terug naar de oude waarde.
 function renderJaarKeuze(waarde, onChange, klasse) {
   const wrap = el('div', { class: 'jaar-keuze' });
   const gebruikt = alleGebruikteJaartallen().filter((j) => j !== String(waarde || ''));
@@ -4313,7 +4316,7 @@ function renderObjectkenmerkenTab() {
   },
     el('option', { value: '' }, 'Selecteer'),
     ...WONINGTYPE_OPTIES.map(o => el('option', { value: o, selected: t.bewoning.woningtype === o ? 'selected' : null }, o)));
-  const bouwjaarVeld = renderJaarKeuze(t.bewoning.bouwjaar, (w) => { t.bewoning.bouwjaar = w; planOpslaan(); });
+  const bouwjaarVeld = renderJaarKeuze(t.bewoning.bouwjaar, (w) => { t.bewoning.bouwjaar = w; planOpslaan(); render(); });
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Woningtype', woningtypeVeld));
   kenmerkenRij.appendChild(el('label', { class: 'objectkenmerken-veld' }, 'Bouwjaar', bouwjaarVeld));
   groepKenmerken.appendChild(kenmerkenRij);
@@ -4486,7 +4489,7 @@ function renderDetailVeld(bouwdeel, d) {
   }
   if (d.type === 'jaar') {
     return el('label', { class: 'bouwdeel-detail-veld' }, d.label,
-      renderJaarKeuze(waarde, (w) => { bouwdeel.details[d.key] = w; planOpslaan(); }, 'bouwdeel-detail-select'));
+      renderJaarKeuze(waarde, (w) => { bouwdeel.details[d.key] = w; planOpslaan(); render(); }, 'bouwdeel-detail-select'));
   }
   // 'getal'
   const input = el('input', {
@@ -5060,7 +5063,7 @@ function renderInstallatiemomentEnOpmerkingen(veld, def) {
   if (veld.installatiemoment === 'Installatiejaar') {
     rij.appendChild(el('label', { class: 'bouwdeel-detail-veld' },
       el('span', { class: 'energetisch-veld-label' }, veld.installatiemoment),
-      renderJaarKeuze(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); })));
+      renderJaarKeuze(veld.jaar, (w) => { veld.jaar = w; planOpslaan(); render(); })));
     // Meerdere jaartallen (18-09-2026, Arno's verzoek): sommige onderdelen zijn in fases aangebracht/
     // vervangen (bv. isolatie), dus 1 hoofdjaar hierboven is soms niet genoeg — direct achter het
     // jaartal-veld in dezelfde rij (19-09-2026, Arno: "identiek qua look, achter de rij").
