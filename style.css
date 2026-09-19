@@ -492,6 +492,11 @@ h1, h2, h3, p { margin: 0; }
    ("dat past vast niet") gewoon terug naar 1 kolom, onder elkaar. */
 .gecombineerd-hoofdkolommen { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 600px) { .gecombineerd-hoofdkolommen { grid-template-columns: 1fr; gap: 14px; } }
+/* Een materiaal-grid binnen zo'n kolom is altijd smaller dan de volle paginabreedte — de gewone
+   4-koloms-grid (die pas <600px viewport naar 2 gaat) knijpt zich hier dus alsnog op elke
+   schermbreedte (19-09-2026, zelfde "op elkaar gepropt"-probleem als bij Installatiemoment, nu bij
+   Bouwtype/Bron in de Algemeen-tab). Hier altijd 2 kolommen, ongeacht viewport. */
+.gecombineerd-hoofdkolommen .bouwdeel-materiaal-grid { grid-template-columns: repeat(2, 1fr); }
 /* Compleetheids-badge op een ingeklapte kaart (19-09-2026, "meld of alles compleet is, net zoiets
    als bij Indeling") — hergebruikt dezelfde ok/pending-kleuren als de rest van de app i.p.v. een
    nieuw kleurenpaar te verzinnen. */
