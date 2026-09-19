@@ -516,7 +516,7 @@ h1, h2, h3, p { margin: 0; }
    4-koloms-grid (die pas <600px viewport naar 2 gaat) knijpt zich hier dus alsnog op elke
    schermbreedte (19-09-2026, zelfde "op elkaar gepropt"-probleem als bij Installatiemoment, nu bij
    Bouwtype/Bron in de Algemeen-tab). Hier altijd 2 kolommen, ongeacht viewport. */
-.gecombineerd-hoofdkolommen .bouwdeel-materiaal-grid { grid-template-columns: repeat(2, 1fr); }
+.gecombineerd-hoofdkolommen .bouwdeel-materiaal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* Compleetheids-badge op een ingeklapte kaart (19-09-2026, "meld of alles compleet is, net zoiets
    als bij Indeling") — hergebruikt dezelfde ok/pending-kleuren als de rest van de app i.p.v. een
    nieuw kleurenpaar te verzinnen. */
@@ -588,7 +588,15 @@ h1, h2, h3, p { margin: 0; }
    het netjes terug naar 1-2 kolommen — geen apart mobiel-breakpoint nodig. */
 /* Max. 4 kolommen (Arno: "wordt wat onoverzichtelijk" met auto-fill op een brede iPad) — vast
    aantal i.p.v. auto-fill, met dezelfde telefoon-terugval als de andere grids hieronder. */
-.bouwdeel-materiaal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin: 10px 0; }
+/* minmax(0, 1fr) i.p.v. kaal 1fr (19-09-2026, gevonden in de Snel invullen-pop-up: "Elektrische
+   radiator" c.s. duwden de grid breder dan zijn container, met een horizontale scrollbalk tot
+   gevolg — 1fr op zich staat een kolom nooit smaller toe dan de langste tekst erin, minmax(0,1fr)
+   laat 'm wél krimpen zodat de tekst afbreekt i.p.v. de rand op te zoeken). Voorkomt dit overal waar
+   deze grid in een smallere container terechtkomt, niet alleen hier. */
+.bouwdeel-materiaal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 10px; margin: 10px 0; }
+/* In de Snel invullen-pop-up (max-width 460px) zijn 4 kolommen alsnog te smal om leesbaar te
+   blijven — hier bewust 2 kolommen, net als bij de samengevoegde Bouwkundig & Energetisch-kolommen. */
+.snel-invullen-inhoud .bouwdeel-materiaal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bouwdeel-materiaal-optie { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .bouwdeel-omschrijving {
   width: 100%; min-height: 60px; border: 1px solid var(--divider); border-radius: 10px;
@@ -602,7 +610,7 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-omschrijving-naast { flex: 1; min-height: 44px; margin-bottom: 0; }
 /* Details (Bouwjaar/Eigendom bij Verwarmings-/Warmwatertoestel, Aantal groepen e.d. bij Meterkast)
    — zelfde auto-fill-aanpak als de materiaal-grid. */
-.bouwdeel-details-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; margin: 10px 0; }
+.bouwdeel-details-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; margin: 10px 0; }
 .bouwdeel-detail-veld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .bouwdeel-detail-veld input, .bouwdeel-detail-select {
   font: inherit; font-size: 13px; font-weight: 400; color: var(--text); padding: 7px 9px;
