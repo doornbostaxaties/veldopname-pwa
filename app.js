@@ -2331,6 +2331,14 @@ function renderWoonlaagKenmerken(woonlaag, wIdx) {
   },
     el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
     el('div', { class: 'bouwdeel-titel' }, 'Kenmerken verdieping'),
+    // "⚡ Snel invullen" (19-09-2026, Arno's verzoek): tussendoor, terwijl je toch al met deze
+    // woonlaag bezig bent, meteen Vloerisolatie/Glas/Verwarmingssysteem-jaartal kunnen invullen —
+    // schrijft rechtstreeks naar dezelfde velden als de Bouwkundig & Energetisch-tab, dus niets
+    // dubbels. e.stopPropagation() voorkomt dat de klik ook de kenmerken-kaart dichtklapt.
+    el('button', {
+      type: 'button', class: 'knop spook klein snel-invullen-knop',
+      onclick: (e) => { e.stopPropagation(); openWoonlaagSnelInvullen(wIdx); },
+    }, '⚡ Snel invullen'),
   ));
   if (ingeklapt) return kaart;
   KENMERKEN_VERDIEPING_VELDEN.forEach(({ sleutel, label }) => {
@@ -2352,6 +2360,87 @@ function renderWoonlaagKenmerken(woonlaag, wIdx) {
     kaart.appendChild(grid);
   });
   return kaart;
+}
+// "⚡ Snel invullen" (19-09-2026, Arno's verzoek) — pop-up per woonlaag met alleen het hoognodige uit
+// de Bouwkundig & Energetisch-tab dat nog NIET via "Kenmerken verdieping" hierboven bereikbaar is:
+// de materiaal-keuzes (vloersoort/glastype/verwarmingssysteem) staan al in Kenmerken verdieping (1
+// gedeelde opslagplek, zie kenmerkenKoppeling) — wat ontbrak was snel de isolatie-vraag en het
+// bouw-/installatiejaar kunnen invullen zonder naar een ander tabblad te hoeven. Schrijft rechtstreeks
+// naar dezelfde t.energetisch-velden, dus 100% in sync met die tab (en andersom).
+// Bewust MINIMAAL gehouden (Arno's eigen woorden: "alléén het hoognodige") — geen Gedeeltelijk/
+// Opmerkingen/foto's, geen Installatiemoment-keuzelijst (wordt stilzwijgend op "Installatiejaar" gezet
+// zodra je hier een jaartal kiest, dat is toch verreweg het vaakst van toepassing).
+const VLOER_ISOLATIE_KEY_PER_SLOT = { '1e': 'vloerisolatie1e', '2e': 'vloerisolatie2e', '3e': 'vloerisolatie3e', overige: 'vloerisolatieOverige' };
+const GLAS_KEY_PER_SLOT = { '1e': 'glas1e', '2e': 'glas2e', '3e': 'glas3e', overige: 'glasOverige' };
+const VERWARMINGSSYSTEEM_KEY_PER_SLOT = { '1e': 'verwarmingssysteem1e', '2eEnVolgende': 'verwarmingssysteem2e' };
+// Zelfde 1e/2e/3e/overige-indeling als woonlagenVoorSlot() elders (kenmerkenKoppeling) — hier de
+// OMGEKEERDE richting: van een woonlaag-index naar het bijbehorende slot. tweeweg=true voor
+// verwarmingssysteem, dat maar 2 slots kent (1e, en "2e en volgende" voor alle overige woonlagen).
+function slotVoorWoonlaagIndex(wIdx, tweeweg) {
+  if (tweeweg) return wIdx === 0 ? '1e' : '2eEnVolgende';
+  if (wIdx === 0) return '1e';
+  if (wIdx === 1) return '2e';
+  if (wIdx === 2) return '3e';
+  return 'overige';
+}
+// Jaar-select met de snelkeuze-chips ERACHTER i.p.v. eronder (19-09-2026, Arno: "past makkelijk") —
+// in deze compacte pop-up (geen Meerdere-jaartallen-blok ernaast) is daar wél ruimte voor, anders dan
+// in de volle Bouwkundig & Energetisch-kaarten. Zet het Installatiemoment stilzwijgend op
+// "Installatiejaar" zodra hier een jaartal gekozen wordt.
+function renderPopupJaarKeuze(veld, herteken) {
+  const kiesJaar = (w) => { veld.installatiemoment = 'Installatiejaar'; veld.jaar = w; planOpslaan(); herteken(); };
+  const rij = el('div', { class: 'popup-jaar-rij' }, renderJaarSelect(veld.jaar, kiesJaar));
+  alleGebruikteJaartallen().filter((j) => j !== String(veld.jaar || '')).forEach((jaar) => {
+    rij.appendChild(el('button', { type: 'button', class: 'chip-knop', onclick: () => kiesJaar(jaar) }, jaar));
+  });
+  return rij;
+}
+// 1 blokje: "X aanwezig: Ja/Nee", en pas bij Ja de jaar-keuze erbij. Eigen Ja/Nee-knoppen i.p.v.
+// renderJaNeeWissel/renderJaNeeToggle hergebruiken — die roepen zelf altijd de globale render() aan
+// (herbouwt #app), terwijl deze pop-up BUITEN #app leeft (net als de foto-lightbox) en dus zijn eigen
+// `herteken()` nodig heeft om meteen bij te werken (anders blijft de pop-up de oude Ja/Nee-stand tonen
+// tot 'ie een keer dicht en weer open gaat).
+function renderPopupJaarBlok(titel, veld, herteken) {
+  const wissel = el('div', { class: 'weergave-wissel' });
+  [[false, 'Nee'], [true, 'Ja']].forEach(([w, tekst]) => {
+    wissel.appendChild(el('button', {
+      class: 'klein' + (veld.aanwezig === w ? ' actief' : ''),
+      onclick: () => { veld.aanwezig = w; planOpslaan(); herteken(); },
+    }, tekst));
+  });
+  const blok = el('div', { class: 'snel-invullen-blok' },
+    el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, titel),
+    el('div', { class: 'bouwdeel-conditie-rij' }, el('span', { class: 'energetisch-veld-label' }, 'Aanwezig'), wissel),
+  );
+  if (veld.aanwezig === true) blok.appendChild(renderPopupJaarKeuze(veld, herteken));
+  return blok;
+}
+function openWoonlaagSnelInvullen(wIdx) {
+  const t = state.taxatie;
+  const woonlaag = t.data.indeling.woonlagen[wIdx];
+  const vloerVeld = t.energetisch.isolatie.vloer[VLOER_ISOLATIE_KEY_PER_SLOT[slotVoorWoonlaagIndex(wIdx, false)]];
+  const glasVeld = t.energetisch.isolatie.ramen[GLAS_KEY_PER_SLOT[slotVoorWoonlaagIndex(wIdx, false)]];
+  const verwarmingSleutel = VERWARMINGSSYSTEEM_KEY_PER_SLOT[slotVoorWoonlaagIndex(wIdx, true)];
+  const verwarmingVeld = t.energetisch.installaties.verwarming[verwarmingSleutel];
+  const verwarmingDef = vindDef(ENERGETISCH_SCHEMA.installaties.verwarming, verwarmingSleutel);
+
+  const overlay = el('div', { class: 'lightbox snel-invullen-overlay' });
+  const sluiten = () => { overlay.remove(); render(); };
+  const herteken = () => {
+    overlay.innerHTML = '';
+    overlay.appendChild(el('div', { class: 'lightbox-top' },
+      el('span', { class: 'lightbox-titel' }, '⚡ Snel invullen — ' + (woonlaag.naam || `Woonlaag ${wIdx + 1}`)),
+      el('button', { onclick: sluiten }, '✕'),
+    ));
+    overlay.appendChild(el('div', { class: 'snel-invullen-inhoud' },
+      renderPopupJaarBlok('Vloerisolatie', vloerVeld, herteken),
+      renderPopupJaarBlok('Glas — bouw-/installatiejaar', glasVeld, herteken),
+      renderPopupJaarBlok(verwarmingDef.label + ' — bouw-/installatiejaar', verwarmingVeld, herteken),
+    ));
+  };
+  herteken();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) sluiten(); });
+  document.body.appendChild(overlay);
 }
 // Kleine pictogrammen per bouwlaagtype (18-09-2026, Arno's verzoek n.a.v. de taXapi-vergelijking:
 // "leuk idee, kun je dat ontwerpen in eenzelfde look") — puur decoratief, voor snellere oriëntatie
