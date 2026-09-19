@@ -269,10 +269,10 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 .chip-knop:active { background: var(--navy-100); color: var(--navy); border-color: var(--navy); }
-/* Snelkeuze van al elders in deze taxatie gebruikte jaartallen, boven elke jaar-keuzelijst
-   (19-09-2026, Arno n.a.v. Provadie: "jaartallen herbruiken, makkelijk klikken") — 1 tik i.p.v.
-   door tientallen jaren scrollen. */
-.jaar-snelkeuze-rij { margin-bottom: 6px; }
+/* Snelkeuze van al elders in deze taxatie gebruikte jaartallen, ONDER elke jaar-keuzelijst
+   (19-09-2026, Arno n.a.v. Provadie: "jaartallen herbruiken, makkelijk klikken"; tweede ronde: "keuzes
+   jaren boven chips plaatsen") — 1 tik i.p.v. door tientallen jaren scrollen. */
+.jaar-snelkeuze-rij { margin-top: 6px; }
 .bouwdeel-chip-rij { margin: 0; flex: 1; }
 /* ✎-knopje + editor per bouwdeel-chiplijst (13-09-2026, Arno: "net zoiets als in Provadie", en
    sleepbaar herordenen net als de rest van dit project al kan). */
@@ -546,6 +546,9 @@ h1, h2, h3, p { margin: 0; }
 .bouwdeel-attentie-knop.actief { background: var(--danger); border-color: var(--danger); color: #fff; }
 .bouwdeel-kaart-attentie { border-color: var(--danger); border-left-width: 4px; background: var(--danger-bg); }
 .bouwdeel-veld-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
+/* Kopjes die een los blok inleiden (bv. "Bouw-/installatiejaar" boven het jaartallen-blok) willen
+   iets meer lucht en gewicht dan een gewoon rij-label (19-09-2026, Arno's verzoek). */
+.bouwdeel-veld-kop { display: block; font-size: 13.5px; margin: 14px 0 6px; color: var(--text); }
 /* Conditie: label + chips op één regel (i.p.v. label erboven, chips op een eigen regel) — scheelt
    een regel per bouwdeel, Arno's expliciete verzoek (11-09-2026). */
 .bouwdeel-conditie-rij { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; }

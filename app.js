@@ -634,6 +634,9 @@ function alleGebruikteJaartallen() {
 // de nieuwe — een chip ernaast klikken zette het jaartal dan stilletjes terug naar de oude waarde.
 function renderJaarKeuze(waarde, onChange, klasse) {
   const wrap = el('div', { class: 'jaar-keuze' });
+  // Keuzelijst BOVEN de snelkeuze-chips (19-09-2026, tweede ronde: "keuzes jaren boven chips
+  // plaatsen") — zelfde "keuze eerst, labels/chips eronder"-volgorde als elders in deze tab.
+  wrap.appendChild(renderJaarSelect(waarde, onChange, klasse));
   const gebruikt = alleGebruikteJaartallen().filter((j) => j !== String(waarde || ''));
   if (gebruikt.length) {
     const chipRij = el('div', { class: 'chip-rij jaar-snelkeuze-rij' });
@@ -645,7 +648,6 @@ function renderJaarKeuze(waarde, onChange, klasse) {
     });
     wrap.appendChild(chipRij);
   }
-  wrap.appendChild(renderJaarSelect(waarde, onChange, klasse));
   return wrap;
 }
 const ENERGETISCH_SCHEMA = {
@@ -5245,10 +5247,10 @@ function renderZonnepanelenKaart(veld, def) {
     omschrijvingAantalRij,
     el('span', { class: 'energetisch-veld-label' }, 'Oriëntatie'),
     orientatieGrid,
+    renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }),
   );
   const rechterKolom = el('div', {},
-    renderSelectVeld('Eigendom', veld.eigendom, ENERGETISCH_EIGENDOM_OPTIES, (w) => { veld.eigendom = w; }),
-    el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'),
+    el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, 'Bouw-/installatiejaar'),
     renderInstallatiemomentEnOpmerkingen(veld, def),
   );
   kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
@@ -5300,38 +5302,43 @@ function renderAantalBouwlagenVeld() {
   }
   return wrap;
 }
-function renderEnergetischAlgemeen() {
-  const t = state.taxatie;
-  const alg = t.energetisch.algemeen;
-  const wrap = el('div', {});
-  wrap.appendChild(renderAantalBouwlagenVeld());
-  wrap.appendChild(renderMultiselectGroep('Bron van de informatie', ENERGETISCH_BRON_OPTIES, alg.bron, (optie) => {
+function renderBronVeld() {
+  const alg = state.taxatie.energetisch.algemeen;
+  return renderMultiselectGroep('Bron van de informatie', ENERGETISCH_BRON_OPTIES, alg.bron, (optie) => {
     const i = alg.bron.indexOf(optie);
     if (i >= 0) alg.bron.splice(i, 1); else alg.bron.push(optie);
-  }));
-  wrap.appendChild(renderMultiselectGroep('Bouwtype', ENERGETISCH_BOUWTYPE_OPTIES, alg.bouwtype, (optie) => {
+  });
+}
+function renderBouwtypeVeld() {
+  const alg = state.taxatie.energetisch.algemeen;
+  return renderMultiselectGroep('Bouwtype', ENERGETISCH_BOUWTYPE_OPTIES, alg.bouwtype, (optie) => {
     const i = alg.bouwtype.indexOf(optie);
     if (i >= 0) alg.bouwtype.splice(i, 1); else alg.bouwtype.push(optie);
-  }));
-  return wrap;
+  });
 }
-// Algemeen voor de samengevoegde Bouwkundig & Energetisch-tab: hergebruikt renderEnergetischAlgemeen
-// (Aantal bouwlagen/Bron/Bouwtype — die gelden voor beide kanten) en voegt de 2 velden toe die
-// ALLEEN in Bouwkundig's eigen J.4 Algemeen bestaan (Weeromstandigheden, Is het een woning met VvE).
+function renderEnergetischAlgemeen() {
+  return el('div', {}, renderAantalBouwlagenVeld(), renderBronVeld(), renderBouwtypeVeld());
+}
+// Algemeen voor de samengevoegde Bouwkundig & Energetisch-tab: hergebruikt dezelfde bouwstenen als
+// renderEnergetischAlgemeen (Aantal bouwlagen/Bron/Bouwtype — die gelden voor beide kanten) plus de 2
+// velden die ALLEEN in Bouwkundig's eigen J.4 Algemeen bestaan (Weeromstandigheden, Woning met VvE).
+// In 2 kolommen (19-09-2026, Arno's verzoek) — links "over het gebouw" (Aantal bouwlagen/Bouwtype,
+// gedeeld met Energetisch), rechts "over de opname" (Bron/Weeromstandigheden/VvE).
 function renderBkEnAlgemeen() {
-  const t = state.taxatie;
-  const alg = t.energetisch.algemeen;
-  const wrap = el('div', {});
-  wrap.appendChild(renderEnergetischAlgemeen());
-  wrap.appendChild(renderMultiselectGroep('Weeromstandigheden', WEEROMSTANDIGHEDEN_OPTIES, alg.weeromstandigheden, (optie) => {
-    const i = alg.weeromstandigheden.indexOf(optie);
-    if (i >= 0) alg.weeromstandigheden.splice(i, 1); else alg.weeromstandigheden.push(optie);
-  }));
+  const alg = state.taxatie.energetisch.algemeen;
+  const linkerKolom = el('div', {}, renderAantalBouwlagenVeld(), renderBouwtypeVeld());
   const vveGroep = el('div', { class: 'macro-groep' });
   vveGroep.appendChild(el('h3', {}, 'Is het een woning met VvE?'));
   vveGroep.appendChild(renderJaNeeWissel(alg.woningMetVve, (w) => { alg.woningMetVve = w; }));
-  wrap.appendChild(vveGroep);
-  return wrap;
+  const rechterKolom = el('div', {},
+    renderBronVeld(),
+    renderMultiselectGroep('Weeromstandigheden', WEEROMSTANDIGHEDEN_OPTIES, alg.weeromstandigheden, (optie) => {
+      const i = alg.weeromstandigheden.indexOf(optie);
+      if (i >= 0) alg.weeromstandigheden.splice(i, 1); else alg.weeromstandigheden.push(optie);
+    }),
+    vveGroep,
+  );
+  return el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom);
 }
 function renderEnergetischTab() {
   const t = state.taxatie;
@@ -5456,7 +5463,7 @@ function renderGecombineerdMateriaalKaart(titel, materiaalLabel, bkDef, bkVeld, 
     renderMultiselectGridGekoppeld(bkDef, bkVeld, enVeld),
   );
   const rechterKolom = el('div', {},
-    el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'),
+    el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, 'Bouw-/installatiejaar'),
     renderInstallatiemomentEnOpmerkingen(enVeld, enDef),
   );
   kaart.appendChild(el('div', { class: 'gecombineerd-hoofdkolommen' }, linkerKolom, rechterKolom));
@@ -5539,7 +5546,7 @@ function renderIsolatieBlok(labelPrefix, enVeld, enDef) {
   wrap.appendChild(renderJaNeeToggle(labelPrefix + ' geïsoleerd', enVeld.aanwezig, (w) => { enVeld.aanwezig = w; }));
   if (enVeld.aanwezig !== true) return wrap;
   wrap.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
-  wrap.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
+  wrap.appendChild(el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, 'Bouw-/installatiejaar'));
   wrap.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
   return wrap;
 }
@@ -5596,7 +5603,7 @@ function renderDakIsolatieBlok(label, enVeld, enDef) {
   wrap.appendChild(renderJaNeeToggle('Geïsoleerd', enVeld.geisoleerd, (w) => { enVeld.geisoleerd = w; }));
   if (enVeld.geisoleerd !== true) return wrap;
   wrap.appendChild(renderJaNeeToggle('Gedeeltelijk geïsoleerd', enVeld.gedeeltelijk, (w) => { enVeld.gedeeltelijk = w; }));
-  wrap.appendChild(el('div', { class: 'bouwdeel-veld-label' }, 'Bouw-/installatiejaar'));
+  wrap.appendChild(el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, 'Bouw-/installatiejaar'));
   wrap.appendChild(renderInstallatiemomentEnOpmerkingen(enVeld, enDef));
   return wrap;
 }
