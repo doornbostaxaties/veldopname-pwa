@@ -2122,17 +2122,45 @@ function renderMetingTab() {
     // allebei gebouwd (ze bewerken toch al dezelfde blok-data); CSS bepaalt of alleen de actieve
     // weergave zichtbaar is (smal scherm, zie de 'modus-'-klasse op .woonlaag-kaart hierboven) of
     // beide naast elkaar (vanaf 650px, ruim genoeg voor de smalste iPhone in liggende stand).
+    // tekenkaderRef (20-09-2026, "kun je de blokken in de tekening ook meeschalen als ik getallen
+    // invul?"): de lijst-invoervelden voor lengte/breedte stonden al in dezelfde blok-data als de
+    // tekening, maar riepen alleen renderZonderReload() aan (ververst enkel de m²-totalen) — de SVG-
+    // rechthoek zelf werd pas bijgewerkt bij de volgende volledige render(). Nu wordt de tekenkader-
+    // referentie (met een eigen .verversen()) vastgelegd zodra 'ie verderop gebouwd is, en roepen de
+    // lengte/breedte-velden 'm meteen aan zodat het blok live meeschaalt tijdens het typen.
+    let tekenkaderRef = null;
     const lijstKolom = el('div', { class: 'weergave-kolom weergave-lijst' });
     (woonlaag.blokken || []).forEach((blok, bIdx) => {
-      const blokNaamInput = el('input', { value: blok.naam || '', placeholder: 'Basis', oninput: (e) => { blok.naam = e.target.value; planOpslaan(); } });
+      const blokNaamInput = el('input', { value: blok.naam || '', placeholder: 'Basis', oninput: (e) => { blok.naam = e.target.value; planOpslaan(); if (tekenkaderRef) tekenkaderRef.verversen(); } });
       koppelDatalist(blokNaamInput, 'ruimteblokken');
+      // Blok kopiëren naar een andere woonlaag (20-09-2026, "kun je ook blokken en/of verdiepingen
+      // kopieerbaar maken (tussen woonlagen)?") — kleine select i.p.v. losse knop+dialoog, kiezen =
+      // meteen kopiëren; x/y op null zodat autoPlaatsBlok() de kopie in de doel-woonlaag netjes
+      // opnieuw plaatst i.p.v. exact op dezelfde plek als in de bron-woonlaag te overlappen.
+      const kopieerSelect = el('select', {
+        class: 'blok-kopieer-select', title: 'Blok kopiëren naar…',
+        onchange: (e) => {
+          const doelIdx = parseInt(e.target.value, 10);
+          e.target.value = '';
+          if (isNaN(doelIdx)) return;
+          const doel = t.data.afmetingen.woonlagen[doelIdx];
+          const kopie = JSON.parse(JSON.stringify(blok));
+          kopie.x = null; kopie.y = null;
+          doel.blokken.push(kopie);
+          planOpslaan(); render();
+        },
+      }, el('option', { value: '' }, '⧉'));
+      t.data.afmetingen.woonlagen.forEach((wl, i) => {
+        if (i === wIdx) return;
+        kopieerSelect.appendChild(el('option', { value: String(i) }, wl.naam || `${i + 1}e woonlaag`));
+      });
       const rij = el('div', { class: 'blok-rij' },
         blokNaamInput,
-        el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); } }),
+        el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } }),
         el('span', { class: 'maal' }, '×'),
-        el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); } }),
+        el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } }),
         (() => {
-          const sel = el('select', { onchange: (e) => { blok.type = e.target.value; planOpslaan(); } });
+          const sel = el('select', { onchange: (e) => { blok.type = e.target.value; planOpslaan(); if (tekenkaderRef) tekenkaderRef.verversen(); } });
           [['wonen', 'Wonen'], ['overig', 'Overig inpandig'], ['buitenruimte', 'Buitenruimte'], ['correctie', 'Correctie']].forEach(([val, label]) => {
             const optie = el('option', { value: val }, label);
             if (blok.type === val) optie.selected = true;
@@ -2140,13 +2168,40 @@ function renderMetingTab() {
           });
           return sel;
         })(),
+        kopieerSelect,
         el('button', { class: 'verwijder', onclick: () => { woonlaag.blokken.splice(bIdx, 1); planOpslaan(); render(); } }, '✕'),
       );
       lijstKolom.appendChild(rij);
     });
-    const tekenKolom = el('div', { class: 'weergave-kolom weergave-tekening' }, renderTekenkader(woonlaag, wIdx));
+    const tekenkader = renderTekenkader(woonlaag, wIdx);
+    tekenkaderRef = tekenkader;
+    const tekenKolom = el('div', { class: 'weergave-kolom weergave-tekening' }, tekenkader);
     kaart.appendChild(el('div', { class: 'meting-weergaven' }, tekenKolom, lijstKolom));
     kaart.appendChild(el('button', { class: 'knop spook klein', onclick: () => { woonlaag.blokken.push(leegBlok()); planOpslaan(); render(); } }, '+ Blok toevoegen'));
+    // Alle blokken van deze woonlaag in één keer naar een andere woonlaag kopiëren (bv. identieke
+    // verdiepingen) — zelfde kopieer-mechanisme als per blok hierboven, nu voor de hele set ineens.
+    if (t.data.afmetingen.woonlagen.length > 1) {
+      const kopieerAlles = el('select', {
+        class: 'woonlaag-kopieer-select', title: 'Alle blokken van deze woonlaag kopiëren naar…',
+        onchange: (e) => {
+          const doelIdx = parseInt(e.target.value, 10);
+          e.target.value = '';
+          if (isNaN(doelIdx)) return;
+          const doel = t.data.afmetingen.woonlagen[doelIdx];
+          woonlaag.blokken.forEach((blok) => {
+            const kopie = JSON.parse(JSON.stringify(blok));
+            kopie.x = null; kopie.y = null;
+            doel.blokken.push(kopie);
+          });
+          planOpslaan(); render();
+        },
+      }, el('option', { value: '' }, '⧉ Alle blokken kopiëren naar…'));
+      t.data.afmetingen.woonlagen.forEach((wl, i) => {
+        if (i === wIdx) return;
+        kopieerAlles.appendChild(el('option', { value: String(i) }, wl.naam || `${i + 1}e woonlaag`));
+      });
+      kaart.appendChild(kopieerAlles);
+    }
     wrap.appendChild(kaart);
   });
   wrap.appendChild(el('button', {
@@ -2274,6 +2329,7 @@ function renderTekenkader(woonlaag, wIdx) {
 
   tekenRooster();
   hertekenBlokken();
+  kader.verversen = () => { tekenRooster(); hertekenBlokken(); };
   return kader;
 }
 

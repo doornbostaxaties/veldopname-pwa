@@ -162,13 +162,18 @@ h1, h2, h3, p { margin: 0; }
 .woonlaag-titel { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; justify-content: space-between; }
 .woonlaag-titel input { border: none; background: none; font: inherit; font-weight: 600; font-size: 13.5px; flex: 1; }
 .woonlaag-titel .totaal { font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.blok-rij { display: grid; grid-template-columns: 1fr 60px 14px 60px 100px 28px; align-items: center; gap: 6px; }
+.blok-rij { display: grid; grid-template-columns: 1fr 60px 14px 60px 100px 34px 28px; align-items: center; gap: 6px; }
 .blok-rij input, .blok-rij select {
   font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--divider);
   background: var(--surface-2); color: var(--text); width: 100%; font-variant-numeric: tabular-nums;
 }
 .blok-rij .maal { text-align: center; color: var(--text-faint); font-size: 12px; }
 .blok-rij .verwijder { border: none; background: none; color: var(--text-faint); font-size: 16px; cursor: pointer; }
+.blok-kopieer-select { padding: 7px 2px !important; text-align: center; }
+.woonlaag-kopieer-select {
+  font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--divider);
+  background: var(--surface-2); color: var(--text-dim); width: 100%; margin-top: 6px;
+}
 
 .knop {
   font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: var(--navy);
