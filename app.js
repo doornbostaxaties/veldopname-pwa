@@ -2160,7 +2160,17 @@ function renderMetingTab() {
         el('span', { class: 'maal' }, '×'),
         el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } }),
         (() => {
-          const sel = el('select', { onchange: (e) => { blok.type = e.target.value; planOpslaan(); if (tekenkaderRef) tekenkaderRef.verversen(); } });
+          // "Correctie" ook rood markeren in de keuzelijst zelf, niet alleen in de tekening (20-09-
+          // 2026, "zodat je ziet dat dit eraf gaat") — klasse wordt hier en bij elke wissel gezet,
+          // want een native <select> update z'n eigen stijl niet vanzelf zonder volledige render().
+          const sel = el('select', {
+            class: blok.type === 'correctie' ? 'blok-type-correctie' : '',
+            onchange: (e) => {
+              blok.type = e.target.value; planOpslaan();
+              e.target.classList.toggle('blok-type-correctie', blok.type === 'correctie');
+              if (tekenkaderRef) tekenkaderRef.verversen();
+            },
+          });
           [['wonen', 'Wonen'], ['overig', 'Overig inpandig'], ['buitenruimte', 'Buitenruimte'], ['correctie', 'Correctie']].forEach(([val, label]) => {
             const optie = el('option', { value: val }, label);
             if (blok.type === val) optie.selected = true;
@@ -2169,7 +2179,13 @@ function renderMetingTab() {
           return sel;
         })(),
         kopieerSelect,
-        el('button', { class: 'verwijder', onclick: () => { woonlaag.blokken.splice(bIdx, 1); planOpslaan(); render(); } }, '✕'),
+        el('button', {
+          class: 'verwijder',
+          onclick: () => {
+            if (!confirm('Blok verwijderen. Weet je het zeker?')) return;
+            woonlaag.blokken.splice(bIdx, 1); planOpslaan(); render();
+          },
+        }, '✕'),
       );
       lijstKolom.appendChild(rij);
     });
@@ -2177,7 +2193,11 @@ function renderMetingTab() {
     tekenkaderRef = tekenkader;
     const tekenKolom = el('div', { class: 'weergave-kolom weergave-tekening' }, tekenkader);
     kaart.appendChild(el('div', { class: 'meting-weergaven' }, tekenKolom, lijstKolom));
-    kaart.appendChild(el('button', { class: 'knop spook klein', onclick: () => { woonlaag.blokken.push(leegBlok()); planOpslaan(); render(); } }, '+ Blok toevoegen'));
+    // "Alle blokken kopiëren naar…" naast "+ Blok toevoegen" gezet (20-09-2026, Arno's verzoek) i.p.v.
+    // eronder, zodat de twee blok-acties bij elkaar staan.
+    const onderRij = el('div', { class: 'meting-onderrij' },
+      el('button', { class: 'knop spook klein', onclick: () => { woonlaag.blokken.push(leegBlok()); planOpslaan(); render(); } }, '+ Blok toevoegen'),
+    );
     // Alle blokken van deze woonlaag in één keer naar een andere woonlaag kopiëren (bv. identieke
     // verdiepingen) — zelfde kopieer-mechanisme als per blok hierboven, nu voor de hele set ineens.
     if (t.data.afmetingen.woonlagen.length > 1) {
@@ -2200,8 +2220,9 @@ function renderMetingTab() {
         if (i === wIdx) return;
         kopieerAlles.appendChild(el('option', { value: String(i) }, wl.naam || `${i + 1}e woonlaag`));
       });
-      kaart.appendChild(kopieerAlles);
+      onderRij.appendChild(kopieerAlles);
     }
+    kaart.appendChild(onderRij);
     wrap.appendChild(kaart);
   });
   wrap.appendChild(el('button', {
