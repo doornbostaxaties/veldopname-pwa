@@ -795,10 +795,13 @@ function naarGetal(w) {
 function formatM2(n) {
   return (Math.round(n * 100) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
+// Zelfde telling als berekenTotalen()'s 'wonen'-som hieronder (20-09-2026, Arno: "overige inpandig
+// telt niet meer mee en correctie moet er vanaf") — 'overig' en 'buitenruimte' tellen niet mee in
+// het woonlaag-totaal (die hebben hun eigen aparte optelling elders), 'correctie' gaat er juist af.
 function woonlaagTotaal(woonlaag) {
   return (woonlaag.blokken || []).reduce((som, b) => {
     if (b.type === 'correctie') return som - naarGetal(b.lengte) * naarGetal(b.breedte);
-    if (b.type === 'buitenruimte') return som;
+    if (b.type === 'buitenruimte' || b.type === 'overig') return som;
     return som + naarGetal(b.lengte) * naarGetal(b.breedte);
   }, 0);
 }
@@ -2166,7 +2169,7 @@ function renderMetingTab() {
           const sel = el('select', {
             class: blok.type === 'correctie' ? 'blok-type-correctie' : '',
             onchange: (e) => {
-              blok.type = e.target.value; planOpslaan();
+              blok.type = e.target.value; planOpslaan(); renderZonderReload();
               e.target.classList.toggle('blok-type-correctie', blok.type === 'correctie');
               if (tekenkaderRef) tekenkaderRef.verversen();
             },
@@ -2614,6 +2617,37 @@ function pictogramVoorWoonlaag(naam) {
   wrap.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${WOONLAAG_ICOON_SVG[sleutel]}</svg>`;
   return wrap;
 }
+// Pictogrammen voor "Bij-/aanbouwen en buitenvoorzieningen" (20-09-2026, Arno's verzoek) — zelfde
+// opzet/stijl als WOONLAAG_ICOON_SVG hierboven, herkenning op trefwoord in het type (bijgebouwTypes-
+// macro), 'algemeen' voor de sectie-kop zelf en 'overig' als fallback voor een niet-herkend type.
+const BIJGEBOUW_ICOON_SVG = {
+  algemeen: '<path d="M3 21V11l6-4 6 4v10"/><path d="M9 21v-5h3v5"/><path d="M15 21v-7h5v7"/><path d="M15 14l2.5-2 2.5 2"/>',
+  garage: '<path d="M3 10l9-6 9 6v11H3z"/><path d="M7 21v-6h4v6M13 21v-6h4v6"/>',
+  carport: '<path d="M2 9l10-5 10 5"/><path d="M2 9h20"/><path d="M5 9v11M19 9v11"/>',
+  schuurBerging: '<path d="M4 21V11l8-6 8 6v10"/><path d="M4 21h16"/><rect x="10" y="14" width="4" height="7"/>',
+  overkapping: '<path d="M3 9h18"/><path d="M3 9l3-4M21 9l-3-4"/><path d="M6 9v12M18 9v12"/>',
+  veranda: '<path d="M3 10l2-5h14l2 5"/><path d="M3 10h18"/><path d="M5 10v11M19 10v11"/><path d="M5 16h14"/>',
+  overig: '<path d="M4 9l8-5 8 5"/><rect x="4" y="9" width="16" height="12" rx="1.5"/>',
+};
+function bijgebouwIcoonSleutel(type) {
+  const n = (type || '').toLowerCase();
+  if (n.includes('garage')) return 'garage';
+  if (n.includes('carport')) return 'carport';
+  if (n.includes('schuur') || n.includes('berging') || n.includes('loods') || n.includes('kapschuur')) return 'schuurBerging';
+  if (n.includes('overkapping') || n.includes('afdak')) return 'overkapping';
+  if (n.includes('veranda') || n.includes('serre') || n.includes('erker')) return 'veranda';
+  return 'overig';
+}
+function pictogramVoorBijgebouw(type) {
+  const wrap = el('span', { class: 'woonlaag-icoon' });
+  wrap.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${BIJGEBOUW_ICOON_SVG[bijgebouwIcoonSleutel(type)]}</svg>`;
+  return wrap;
+}
+function pictogramBijgebouwenSectie() {
+  const wrap = el('span', { class: 'woonlaag-icoon' });
+  wrap.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${BIJGEBOUW_ICOON_SVG.algemeen}</svg>`;
+  return wrap;
+}
 function renderIndelingTab() {
   const t = state.taxatie;
   indelingCollapseStandaardToepassen();
@@ -2890,6 +2924,7 @@ function renderBijgebouwKaart(item, idx, verwijder) {
     onclick: () => { if (ingeklapt) bijgebouwIngeklapt.delete(idx); else bijgebouwIngeklapt.add(idx); render(); },
   },
     el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
+    pictogramVoorBijgebouw(item.type),
     el('span', { class: 'bouwdeel-titel' }, item.type || 'Nieuw bijgebouw'));
   kaart.appendChild(kop);
   if (ingeklapt) {
@@ -2960,6 +2995,7 @@ function renderBijgebouwenSectie() {
     onclick: () => { bijgebouwenSectieIngeklapt = !bijgebouwenSectieIngeklapt; render(); },
   },
     el('button', { type: 'button', class: 'woonlaag-toggle' }, bijgebouwenSectieIngeklapt ? '▸' : '▾'),
+    pictogramBijgebouwenSectie(),
     el('span', { class: 'woonlaag-naam-invoer' }, 'Bij-/aanbouwen en buitenvoorzieningen')));
   if (!bijgebouwenSectieIngeklapt) {
     const inhoud = el('div', { class: 'woonlaag-inhoud' });

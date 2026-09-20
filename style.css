@@ -176,11 +176,20 @@ h1, h2, h3, p { margin: 0; }
 .blok-rij select.blok-type-correctie {
   color: var(--danger); border-color: var(--danger); background: var(--danger-bg); font-weight: 600;
 }
-.meting-onderrij { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-.meting-onderrij .knop { margin-bottom: 0; flex: 0 0 auto; }
+.meting-onderrij { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.meting-onderrij .knop { margin-bottom: 0; flex: 1 1 auto; }
 .woonlaag-kopieer-select {
   font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--divider);
-  background: var(--surface-2); color: var(--text-dim); flex: 1; min-width: 0;
+  background: var(--surface-2); color: var(--text-dim); flex: 1 1 auto; min-width: 0;
+}
+/* "+ Blok toevoegen" en "Alle blokken kopiëren naar…" op bredere schermen gelijk laten lopen met de
+   twee kolommen erboven (20-09-2026, Arno: "+Blok toevoegen net zo breed als tekenvenster",
+   "Alle blokken kopiëren smaller maken, gelijk met lijst") — zelfde 380px/flex:1-verdeling als
+   .weergave-tekening/.weergave-lijst hierboven. */
+@media (min-width: 650px) {
+  .meting-onderrij { flex-wrap: nowrap; gap: 14px; }
+  .meting-onderrij .knop { flex: 0 0 380px; min-width: 350px; }
+  .meting-onderrij .woonlaag-kopieer-select { flex: 1 1 auto; }
 }
 
 .knop {
