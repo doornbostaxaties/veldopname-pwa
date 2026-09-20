@@ -2311,10 +2311,10 @@ const ruimteIngeklapt = new Set();
 
 // Arno's verzoek 16-09-2026: verdiepingnamen groter/dikgedrukt, elke verdieping inklapbaar en in een
 // eigen visueel "blok" met alle ruimtes erin — voor herkenbaarheid bij een opname met veel woonlagen.
-// "Kenmerken verdieping" → "Vloersoort" (20-09-2026, Arno's verzoek: "hernoemen naar vloersoort en
-// alleen nog vloersoort noemen, rest staat onder snel invullen") — toonde vroeger 5 velden, nu alleen
-// nog Vloersoort; Kozijnen/Glastypes/Verwarmingssysteem/Vloerafwerking zijn verhuisd naar de
-// "⚡ Snel invullen"-pop-up (zie openWoonlaagSnelInvullen), zelfde opslagplek (woonlaag.kenmerken)
+// "Kenmerken verdieping" → "Vloerafwerking" (20-09-2026, Arno's correctie: "ik bedoelde vloertype
+// [=Vloerafwerking-macro: Laminaat/Parket/Tapijt/...], die moet bovenaan staan — vloersoort [Beton/
+// Hout/...] naar Snel invullen") — toont hier dus nog maar 1 veld: Vloerafwerking. Vloersoort zit nu
+// (samen met Vloerisolatie) in de "⚡ Snel invullen"-pop-up, zelfde opslagplek (woonlaag.kenmerken)
 // dus nergens dubbel of iets kwijt.
 function renderWoonlaagKenmerken(woonlaag, wIdx) {
   if (!woonlaag.kenmerken) woonlaag.kenmerken = leegWoonlaagKenmerken();
@@ -2325,13 +2325,13 @@ function renderWoonlaagKenmerken(woonlaag, wIdx) {
     onclick: () => { if (ingeklapt) kenmerkenIngeklapt.delete(wIdx); else kenmerkenIngeklapt.add(wIdx); render(); },
   },
     el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
-    el('div', { class: 'bouwdeel-titel' }, 'Vloersoort'),
+    el('div', { class: 'bouwdeel-titel' }, 'Vloerafwerking'),
   ));
   if (ingeklapt) return kaart;
-  if (!Array.isArray(woonlaag.kenmerken.vloersoort)) woonlaag.kenmerken.vloersoort = [];
-  const gekozen = woonlaag.kenmerken.vloersoort;
+  if (!Array.isArray(woonlaag.kenmerken.vloerafwerking)) woonlaag.kenmerken.vloerafwerking = [];
+  const gekozen = woonlaag.kenmerken.vloerafwerking;
   const grid = el('div', { class: 'bouwdeel-materiaal-grid' });
-  (state.macros.vloersoort || []).forEach((optie) => {
+  (state.macros.vloerafwerking || []).forEach((optie) => {
     grid.appendChild(el('label', { class: 'bouwdeel-materiaal-optie' },
       el('input', {
         type: 'checkbox', checked: gekozen.includes(optie) ? 'checked' : null,
@@ -2400,19 +2400,15 @@ function renderPopupInstallatiemomentEnJaar(veld, herteken) {
   return wrap;
 }
 // Isolatie-type velden (Vloer): Geïsoleerd, en pas bij Ja ook Gedeeltelijk geïsoleerd + Installatiemoment.
-function renderPopupIsolatieBlok(titel, veld, herteken) {
-  const blok = el('div', { class: 'snel-invullen-blok' },
-    el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, titel),
-    renderPopupJaNeeRij('Geïsoleerd', veld.aanwezig, (w) => { veld.aanwezig = w; planOpslaan(); herteken(); }),
-  );
+function vulPopupIsolatieVelden(blok, veld, herteken) {
+  blok.appendChild(renderPopupJaNeeRij('Geïsoleerd', veld.aanwezig, (w) => { veld.aanwezig = w; planOpslaan(); herteken(); }));
   if (veld.aanwezig === true) {
     blok.appendChild(renderPopupJaNeeRij('Gedeeltelijk geïsoleerd', veld.gedeeltelijk, (w) => { veld.gedeeltelijk = w; planOpslaan(); herteken(); }));
     blok.appendChild(renderPopupInstallatiemomentEnJaar(veld, herteken));
   }
-  return blok;
 }
-// Materiaal-kenmerken (Vloersoort/Kozijnen/Glastypes/Verwarmingssysteem/Vloerafwerking — Arno: "zet
-// de volgende kenmerken ook over") — exact dezelfde opslagplek/opties als "Vloersoort" hierboven
+// Materiaal-kenmerken (Vloersoort/Kozijnen/Glastypes/Verwarmingssysteem — Arno: "zet de volgende
+// kenmerken ook over") — exact dezelfde opslagplek/opties als "Vloerafwerking" hierboven
 // (woonlaag.kenmerken), hier met een eigen onchange die herteken() aanroept i.p.v. de globale render().
 function bouwPopupKenmerkenGrid(woonlaag, sleutel, herteken) {
   if (!Array.isArray(woonlaag.kenmerken[sleutel])) woonlaag.kenmerken[sleutel] = [];
@@ -2447,6 +2443,17 @@ function renderPopupKenmerkenPlusJaarBlok(titel, woonlaag, kenmerkSleutel, jaarV
   if (jaarVeld.aanwezig === true) blok.appendChild(renderPopupInstallatiemomentEnJaar(jaarVeld, herteken));
   return blok;
 }
+// Materiaal-kenmerk + isolatieblok samengevoegd (20-09-2026, Arno: "vloersoort naar snel invullen")
+// — voor Vloer, die net als in de volle Bouwkundig & Energetisch-tab (renderGecombineerdMateriaal-
+// IsolatieKaart) materiaal (Vloersoort) en isolatie als 1 samenhangend bouwdeel toont.
+function renderPopupKenmerkenPlusIsolatieBlok(titel, woonlaag, kenmerkSleutel, isolatieVeld, herteken) {
+  const blok = el('div', { class: 'snel-invullen-blok' },
+    el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, titel),
+    bouwPopupKenmerkenGrid(woonlaag, kenmerkSleutel, herteken),
+  );
+  vulPopupIsolatieVelden(blok, isolatieVeld, herteken);
+  return blok;
+}
 function openWoonlaagSnelInvullen(wIdx) {
   const t = state.taxatie;
   const woonlaag = t.data.indeling.woonlagen[wIdx];
@@ -2466,11 +2473,10 @@ function openWoonlaagSnelInvullen(wIdx) {
       el('button', { onclick: sluiten }, '✕'),
     ));
     overlay.appendChild(el('div', { class: 'snel-invullen-inhoud' },
-      renderPopupIsolatieBlok('Vloerisolatie', vloerVeld, herteken),
+      renderPopupKenmerkenPlusIsolatieBlok('Vloer', woonlaag, 'vloersoort', vloerVeld, herteken),
       renderPopupKenmerkenGrid(woonlaag, 'kozijnen', 'Kozijnen', herteken),
       renderPopupKenmerkenPlusJaarBlok('Glas', woonlaag, 'glastypes', glasVeld, herteken),
       renderPopupKenmerkenPlusJaarBlok(verwarmingDef.label, woonlaag, 'verwarmingssysteem', verwarmingVeld, herteken),
-      renderPopupKenmerkenGrid(woonlaag, 'vloerafwerking', 'Vloerafwerking', herteken),
     ));
   };
   herteken();
