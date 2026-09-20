@@ -384,13 +384,15 @@ h1, h2, h3, p { margin: 0; }
    overlay, top-balk met titel+✕), alleen de inhoud eronder is hier een scrollbare lijst met kaartjes
    i.p.v. een foto. Tweede ronde (19-09-2026, Arno: "raar, te breed en niet compleet" op iPad) —
    de kaartjes trokken zich over de VOLLE breedte, wat op een breder scherm dunne, verweesde balken
-   in een grote zwarte leegte opleverde i.p.v. een compact pop-upje. Nu een echte, smalle kolom
-   (max-width) die middenin blijft, ongeacht schermbreedte. */
+   in een grote zwarte leegte opleverde i.p.v. een compact pop-upje. Derde ronde (20-09-2026, Arno:
+   "graag 2 kolommen breed, dit past makkelijk, op mobiel 1 kolom") — nu een 2-koloms grid i.p.v. 1
+   smalle kolom, met dezelfde mobiel-terugval als .gecombineerd-hoofdkolommen elders. */
 .snel-invullen-inhoud {
   flex: 1; overflow-y: auto; padding: 4px 14px calc(14px + var(--safe-bottom));
-  display: flex; flex-direction: column; gap: 12px;
-  max-width: 460px; width: 100%; margin: 0 auto; box-sizing: border-box;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;
+  max-width: 720px; width: 100%; margin: 0 auto; box-sizing: border-box;
 }
+@media (max-width: 600px) { .snel-invullen-inhoud { grid-template-columns: 1fr; } }
 .snel-invullen-blok { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
 /* Jaar-keuzelijst met de snelkeuze-chips ERACHTER i.p.v. eronder (19-09-2026, Arno: "past makkelijk")
    — nowrap + overflow-x:auto i.p.v. flex-wrap (tweede ronde: "chips staan niet achter de
