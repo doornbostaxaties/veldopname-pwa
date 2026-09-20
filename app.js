@@ -2084,6 +2084,10 @@ function autoPlaatsBlok(woonlaag, blok) {
   blok.y = 0.5 + Math.floor(idx / 4) * 4.5;
 }
 
+// Woonlagen in Meting ook inklapbaar (20-09-2026, Arno: "verdiepingen in tekenen ook inklapbaar
+// maken") — zelfde eenvoudige ephemere Set-aanpak als indelingIngeklapt/ruimteIngeklapt hierboven,
+// geldt voor zowel de teken- als lijst-weergave (allebei in dezelfde .woonlaag-kaart).
+const metingIngeklapt = new Set();
 function renderMetingTab() {
   const t = state.taxatie;
   const wrap = el('div', {});
@@ -2104,8 +2108,10 @@ function renderMetingTab() {
   wrap.appendChild(el('div', { class: 'section-label' }, 'Woonlagen'));
   t.data.afmetingen.woonlagen.forEach((woonlaag, wIdx) => {
     const kaart = el('div', { class: 'woonlaag-kaart modus-' + state.afmetingenWeergave });
+    const ingeklapt = metingIngeklapt.has(wIdx);
     const naamInput = el('input', {
       value: woonlaag.naam || `${wIdx + 1}e woonlaag`, placeholder: `${wIdx + 1}e woonlaag`,
+      onclick: (e) => e.stopPropagation(),
       oninput: (e) => {
         woonlaag.naam = e.target.value;
         zorgVoorIndelingWoonlaag(t.data, wIdx).naam = e.target.value; // gelijk houden met Indeling
@@ -2113,12 +2119,17 @@ function renderMetingTab() {
       },
     });
     koppelDatalist(naamInput, 'verdiepingen');
-    kaart.appendChild(el('div', { class: 'woonlaag-titel' },
+    kaart.appendChild(el('div', {
+      class: 'woonlaag-titel',
+      onclick: () => { if (ingeklapt) metingIngeklapt.delete(wIdx); else metingIngeklapt.add(wIdx); render(); },
+    },
+      el('button', { type: 'button', class: 'woonlaag-toggle' }, ingeklapt ? '▸' : '▾'),
       el('span', { class: 'woonlaag-nummer' }, String(wIdx + 1)),
       pictogramVoorWoonlaag(woonlaag.naam),
       naamInput,
       el('span', { class: 'totaal' }, formatM2(woonlaagTotaal(woonlaag)) + ' m²'),
     ));
+    if (ingeklapt) { wrap.appendChild(kaart); return; }
 
     // Arno (13-09-2026): "in Meting het tekenvenster en lijst naast elkaar zetten als de
     // schermbreedte voldoende is (vanaf iPhone in liggende stand)" — beide weergaven worden nu altijd
@@ -2131,6 +2142,11 @@ function renderMetingTab() {
     // rechthoek zelf werd pas bijgewerkt bij de volgende volledige render(). Nu wordt de tekenkader-
     // referentie (met een eigen .verversen()) vastgelegd zodra 'ie verderop gebouwd is, en roepen de
     // lengte/breedte-velden 'm meteen aan zodat het blok live meeschaalt tijdens het typen.
+    // lijstInputRefs (20-09-2026, "afmeting getekende blokken na tekenen (loslaten) overnemen in de
+    // lijst") — bijhouden van de lengte/breedte-<input>'s per blok-index, zodat beginSchalen() in
+    // renderTekenkader() hieronder de zojuist getekende afmeting rechtstreeks in de lijst kan zetten
+    // i.p.v. dat pas zichtbaar te maken bij de volgende volledige render().
+    const lijstInputRefs = [];
     let tekenkaderRef = null;
     const lijstKolom = el('div', { class: 'weergave-kolom weergave-lijst' });
     (woonlaag.blokken || []).forEach((blok, bIdx) => {
@@ -2157,11 +2173,14 @@ function renderMetingTab() {
         if (i === wIdx) return;
         kopieerSelect.appendChild(el('option', { value: String(i) }, wl.naam || `${i + 1}e woonlaag`));
       });
+      const lengteInput = el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } });
+      const breedteInput = el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } });
+      lijstInputRefs[bIdx] = { lengteInput, breedteInput };
       const rij = el('div', { class: 'blok-rij' },
         blokNaamInput,
-        el('input', { value: blok.lengte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.lengte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } }),
+        lengteInput,
         el('span', { class: 'maal' }, '×'),
-        el('input', { value: blok.breedte || '', placeholder: '0,00', inputmode: 'decimal', oninput: (e) => { blok.breedte = e.target.value; planOpslaan(); renderZonderReload(); if (tekenkaderRef) tekenkaderRef.verversen(); } }),
+        breedteInput,
         (() => {
           // "Correctie" ook rood markeren in de keuzelijst zelf, niet alleen in de tekening (20-09-
           // 2026, "zodat je ziet dat dit eraf gaat") — klasse wordt hier en bij elke wissel gezet,
@@ -2192,7 +2211,7 @@ function renderMetingTab() {
       );
       lijstKolom.appendChild(rij);
     });
-    const tekenkader = renderTekenkader(woonlaag, wIdx);
+    const tekenkader = renderTekenkader(woonlaag, wIdx, lijstInputRefs);
     tekenkaderRef = tekenkader;
     const tekenKolom = el('div', { class: 'weergave-kolom weergave-tekening' }, tekenkader);
     kaart.appendChild(el('div', { class: 'meting-weergaven' }, tekenKolom, lijstKolom));
@@ -2258,7 +2277,7 @@ function renderMetingTab() {
 // object (blok.naam/type/lengte/breedte/x/y) als de lijst-weergave — alleen de manier van
 // bewerken verandert. Zie taxatieweb-opname.user.js (Plattegrondschetser, sinds v0.17.0) voor het
 // origineel waar dit 1-op-1 op gebaseerd is.
-function renderTekenkader(woonlaag, wIdx) {
+function renderTekenkader(woonlaag, wIdx, lijstInputRefs) {
   woonlaag.blokken.forEach(b => autoPlaatsBlok(woonlaag, b));
   const kader = el('div', { class: 'tekenkader' });
   const svg = svgEl('svg', {});
@@ -2336,16 +2355,22 @@ function renderTekenkader(woonlaag, wIdx) {
     e.preventDefault(); e.stopPropagation();
     const startX = e.clientX, startY = e.clientY;
     const breedte0 = naarGetal(blok.breedte || 3), lengte0 = naarGetal(blok.lengte || 3);
+    // Afmeting + m²-totaal live meeschalen tijdens het slepen zelf (20-09-2026, Arno: "afmeting
+    // getekende blokken na tekenen (loslaten) overnemen in de lijst" + "totale oppervlakte steeds
+    // updaten") — niet pas bij loslaten() bijwerken, de lijst-invoervelden en het totaal volgen nu
+    // meteen mee terwijl je het grijpertje sleept.
     function schalen(ev) {
       blok.breedte = Math.max(0.5, breedte0 + (ev.clientX - startX) / BLOK_SCHAAL).toFixed(2);
       blok.lengte = Math.max(0.5, lengte0 + (ev.clientY - startY) / BLOK_SCHAAL).toFixed(2);
       tekenRooster(); hertekenBlokken();
+      const refs = lijstInputRefs && lijstInputRefs[bIdx];
+      if (refs) { refs.lengteInput.value = blok.lengte; refs.breedteInput.value = blok.breedte; }
+      renderZonderReload();
     }
     function loslaten() {
       window.removeEventListener('pointermove', schalen);
       window.removeEventListener('pointerup', loslaten);
       planOpslaan();
-      renderZonderReload();
     }
     window.addEventListener('pointermove', schalen);
     window.addEventListener('pointerup', loslaten);
@@ -2620,14 +2645,17 @@ function pictogramVoorWoonlaag(naam) {
 // Pictogrammen voor "Bij-/aanbouwen en buitenvoorzieningen" (20-09-2026, Arno's verzoek) — zelfde
 // opzet/stijl als WOONLAAG_ICOON_SVG hierboven, herkenning op trefwoord in het type (bijgebouwTypes-
 // macro), 'algemeen' voor de sectie-kop zelf en 'overig' als fallback voor een niet-herkend type.
+// Platte daken (20-09-2026, Arno: "garage en berging ed. met platte daken tekenen") — bewust
+// onderscheiden van WOONLAAG_ICOON_SVG's puntdaken (dat zijn echte woonverdiepingen), bijgebouwen
+// hebben hier allemaal een rechte daklijn (rechthoek/balk), geen driehoekige piek.
 const BIJGEBOUW_ICOON_SVG = {
-  algemeen: '<path d="M3 21V11l6-4 6 4v10"/><path d="M9 21v-5h3v5"/><path d="M15 21v-7h5v7"/><path d="M15 14l2.5-2 2.5 2"/>',
-  garage: '<path d="M3 10l9-6 9 6v11H3z"/><path d="M7 21v-6h4v6M13 21v-6h4v6"/>',
-  carport: '<path d="M2 9l10-5 10 5"/><path d="M2 9h20"/><path d="M5 9v11M19 9v11"/>',
-  schuurBerging: '<path d="M4 21V11l8-6 8 6v10"/><path d="M4 21h16"/><rect x="10" y="14" width="4" height="7"/>',
-  overkapping: '<path d="M3 9h18"/><path d="M3 9l3-4M21 9l-3-4"/><path d="M6 9v12M18 9v12"/>',
-  veranda: '<path d="M3 10l2-5h14l2 5"/><path d="M3 10h18"/><path d="M5 10v11M19 10v11"/><path d="M5 16h14"/>',
-  overig: '<path d="M4 9l8-5 8 5"/><rect x="4" y="9" width="16" height="12" rx="1.5"/>',
+  algemeen: '<path d="M3 21V11l6-4 6 4v10"/><path d="M9 21v-5h3v5"/><rect x="14" y="14" width="6" height="7"/>',
+  garage: '<rect x="3" y="7" width="18" height="13" rx="1"/><path d="M7 20v-6h4v6M13 20v-6h4v6"/>',
+  carport: '<rect x="2" y="6" width="20" height="3" rx="1"/><path d="M5 9v11M19 9v11"/>',
+  schuurBerging: '<rect x="4" y="8" width="16" height="12" rx="1"/><rect x="10" y="13" width="4" height="7"/>',
+  overkapping: '<path d="M3 21V9h3"/><rect x="6" y="7" width="16" height="2.5" rx="1"/><path d="M9 9.5v11.5M20 9.5v11.5"/>',
+  veranda: '<rect x="3" y="7" width="18" height="2.2" rx="1"/><path d="M5 9.2v11.8M19 9.2v11.8"/><path d="M5 15h14"/>',
+  overig: '<rect x="4" y="8" width="16" height="12" rx="1.5"/>',
 };
 function bijgebouwIcoonSleutel(type) {
   const n = (type || '').toLowerCase();

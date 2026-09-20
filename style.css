@@ -159,7 +159,7 @@ h1, h2, h3, p { margin: 0; }
   background: var(--surface); border: 1px solid var(--divider); border-radius: 14px;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;
 }
-.woonlaag-titel { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.woonlaag-titel { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; justify-content: space-between; cursor: pointer; }
 .woonlaag-titel input { border: none; background: none; font: inherit; font-weight: 600; font-size: 13.5px; flex: 1; }
 .woonlaag-titel .totaal { font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .blok-rij { display: grid; grid-template-columns: 1fr 60px 14px 60px 138px 42px 28px; align-items: center; gap: 6px; }
