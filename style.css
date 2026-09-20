@@ -220,11 +220,15 @@ h1, h2, h3, p { margin: 0; }
 }
 .woonlaag-naam-invoer:focus { outline: none; }
 .woonlaag-inhoud { padding: 12px; }
-.kenmerken-verdieping-kaart { background: var(--navy-100); border-color: transparent; margin-bottom: 14px; padding: 0; }
-.kenmerken-kop { padding: 12px 14px; background: transparent; cursor: pointer; }
+/* Compacter (20-09-2026, Arno: "Vloerafwerking witte balk wat compacter maken, is nu behoorlijk
+   aanwezig") — minder padding rondom en een kleinere rij-tussenruimte in de grid, want met ~25
+   opties (Laminaat/Parket/Tapijt/...) werd dit kaartje al snel een groot blok. */
+.kenmerken-verdieping-kaart { background: var(--navy-100); border-color: transparent; margin-bottom: 10px; padding: 0; }
+.kenmerken-kop { padding: 8px 14px; background: transparent; cursor: pointer; }
 .kenmerken-verdieping-kaart > .bouwdeel-veld-label,
 .kenmerken-verdieping-kaart > .bouwdeel-materiaal-grid { margin-left: 14px; margin-right: 14px; }
-.kenmerken-verdieping-kaart > .bouwdeel-materiaal-grid:last-child { padding-bottom: 12px; }
+.kenmerken-verdieping-kaart > .bouwdeel-materiaal-grid { gap: 3px 8px; margin-top: 0; margin-bottom: 0; }
+.kenmerken-verdieping-kaart > .bouwdeel-materiaal-grid:last-child { padding-bottom: 10px; }
 .kenmerken-veld-label { margin-top: 10px; }
 .kenmerken-veld-label:first-of-type { margin-top: 4px; }
 .ruimte-kaart {
@@ -385,14 +389,17 @@ h1, h2, h3, p { margin: 0; }
    i.p.v. een foto. Tweede ronde (19-09-2026, Arno: "raar, te breed en niet compleet" op iPad) —
    de kaartjes trokken zich over de VOLLE breedte, wat op een breder scherm dunne, verweesde balken
    in een grote zwarte leegte opleverde i.p.v. een compact pop-upje. Derde ronde (20-09-2026, Arno:
-   "graag 2 kolommen breed, dit past makkelijk, op mobiel 1 kolom") — nu een 2-koloms grid i.p.v. 1
-   smalle kolom, met dezelfde mobiel-terugval als .gecombineerd-hoofdkolommen elders. */
+   "kolom 1 = vloer+verwarming, kolom 2 = kozijnen+glas") — 2 losse kolom-divs (.snel-invullen-kolom)
+   i.p.v. een CSS-grid die van links naar rechts per RIJ zou vullen; min-width:0 op de kolommen zelf
+   voorkomt dat flex-items nooit smaller worden dan hun inhoud (dezelfde overloop-valkuil als bij een
+   grid-kolom zonder minmax(0,1fr), nu voor flex). */
 .snel-invullen-inhoud {
   flex: 1; overflow-y: auto; padding: 4px 14px calc(14px + var(--safe-bottom));
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;
+  display: flex; gap: 12px; align-items: start;
   max-width: 720px; width: 100%; margin: 0 auto; box-sizing: border-box;
 }
-@media (max-width: 600px) { .snel-invullen-inhoud { grid-template-columns: 1fr; } }
+.snel-invullen-kolom { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
+@media (max-width: 600px) { .snel-invullen-inhoud { flex-direction: column; } }
 .snel-invullen-blok { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
 /* Jaar-keuzelijst met de snelkeuze-chips ERACHTER i.p.v. eronder (19-09-2026, Arno: "past makkelijk")
    — nowrap + overflow-x:auto i.p.v. flex-wrap (tweede ronde: "chips staan niet achter de

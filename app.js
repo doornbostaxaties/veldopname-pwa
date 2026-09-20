@@ -2296,12 +2296,27 @@ function alleRuimtes() {
 
 // Ingeklapt-status per woonlaag — bewust NIET in taxatie.data (puur schermstatus, geen opnamedata),
 // zelfde soort los UI-state-object als bouwdeelChipEditorOpen elders in dit bestand. Sleutel = index
-// in woonlagen[], gereset bij een herlaadbeurt (allemaal weer uitgeklapt, dat is de veilige default).
+// in woonlagen[]. Standaard leeg (= alles uitgeklapt) totdat indelingCollapseStandaardToepassen()
+// hieronder de eenmalige "alles dicht bij openen"-vulling doet.
 const indelingIngeklapt = new Set();
-// Zelfde soort los ingeklapt-statusje, maar dan voor het "Kenmerken verdieping"-blok specifiek
-// (Arno's verzoek 16-09-2026) — onafhankelijk van indelingIngeklapt, zodat je de ruimtes van een
-// verdieping kunt zien terwijl de kenmerken zelf ingeklapt blijven, of andersom.
+// Zelfde soort los ingeklapt-statusje, maar dan voor het "Vloerafwerking"-blok specifiek (Arno's
+// verzoek 16-09-2026) — onafhankelijk van indelingIngeklapt, zodat je de ruimtes van een verdieping
+// kunt zien terwijl Vloerafwerking zelf ingeklapt blijft, of andersom.
 const kenmerkenIngeklapt = new Set();
+// "Alles standaard ingeklapt in Indeling bij openen pagina" (20-09-2026, Arno's verzoek) — vult
+// indelingIngeklapt/kenmerkenIngeklapt EENMALIG met alle woonlaag-indices, de EERSTE keer dat je
+// Indeling voor DEZE taxatie bekijkt (bijgehouden per rapport_id, niet gewoon 1x per pagina-sessie —
+// anders zou wisselen tussen taxaties in dezelfde sessie een verkeerde/oude taxatie z'n stand
+// hergebruiken). Nadien mag de gebruiker vrij in-/uitklappen zonder dat dit terugveert.
+let indelingCollapseVoorRapport = null;
+function indelingCollapseStandaardToepassen() {
+  const t = state.taxatie;
+  if (indelingCollapseVoorRapport === t.rapport_id) return;
+  indelingCollapseVoorRapport = t.rapport_id;
+  indelingIngeklapt.clear();
+  kenmerkenIngeklapt.clear();
+  t.data.indeling.woonlagen.forEach((_, wIdx) => { indelingIngeklapt.add(wIdx); kenmerkenIngeklapt.add(wIdx); });
+}
 // Zelfde ephemere status, maar per RUIMTE (17-09-2026, Arno's verzoek: "ruimtes per verdieping ook
 // inklapbaar maken en kunnen verslepen") — sleutel "wIdx:rIdx", dus gekoppeld aan de huidige positie
 // in de array (net als hierboven bij woonlagen); na een sleep-herordening kan dit dus een ander item
@@ -2472,12 +2487,19 @@ function openWoonlaagSnelInvullen(wIdx) {
       el('span', { class: 'lightbox-titel' }, '⚡ Snel invullen — ' + (woonlaag.naam || `Woonlaag ${wIdx + 1}`)),
       el('button', { onclick: sluiten }, '✕'),
     ));
-    overlay.appendChild(el('div', { class: 'snel-invullen-inhoud' },
+    // Vaste 2-koloms indeling (20-09-2026, Arno's verzoek: "kolom 1 = vloertype, vloerisolatie en
+    // Verwarmingssysteem, kolom 2 = kozijnen en glas") — 2 losse kolom-divs i.p.v. een CSS-grid die
+    // van links naar rechts per RIJ vult, want dat zou Vloer+Kozijnen naast elkaar zetten i.p.v.
+    // Vloer+Verwarmingssysteem onder elkaar in dezelfde kolom.
+    const linkerKolom = el('div', { class: 'snel-invullen-kolom' },
       renderPopupKenmerkenPlusIsolatieBlok('Vloer', woonlaag, 'vloersoort', vloerVeld, herteken),
+      renderPopupKenmerkenPlusJaarBlok(verwarmingDef.label, woonlaag, 'verwarmingssysteem', verwarmingVeld, herteken),
+    );
+    const rechterKolom = el('div', { class: 'snel-invullen-kolom' },
       renderPopupKenmerkenGrid(woonlaag, 'kozijnen', 'Kozijnen', herteken),
       renderPopupKenmerkenPlusJaarBlok('Glas', woonlaag, 'glastypes', glasVeld, herteken),
-      renderPopupKenmerkenPlusJaarBlok(verwarmingDef.label, woonlaag, 'verwarmingssysteem', verwarmingVeld, herteken),
-    ));
+    );
+    overlay.appendChild(el('div', { class: 'snel-invullen-inhoud' }, linkerKolom, rechterKolom));
   };
   herteken();
   overlay.addEventListener('click', (e) => { if (e.target === overlay) sluiten(); });
@@ -2503,6 +2525,7 @@ function pictogramVoorWoonlaag(naam) {
 }
 function renderIndelingTab() {
   const t = state.taxatie;
+  indelingCollapseStandaardToepassen();
   const wrap = el('div', {});
   t.data.indeling.woonlagen.forEach((woonlaag, wIdx) => {
     const ingeklapt = indelingIngeklapt.has(wIdx);
