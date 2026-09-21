@@ -1324,8 +1324,9 @@ function nederlandseLijst(items) {
 // ongewijzigd, alleen de gewone beginhoofdletter verdwijnt. Alleen gebruikt bij het samenvoegen van
 // VASTE macro-chips, niet bij vrij getypte tekst (toevoegingen ed. blijven letterlijk zoals getypt).
 function chipKleineLetter(tekst) {
-  const eersteWoord = (tekst || '').split(' ')[0];
-  if (/^[A-Z0-9+]{2,}$/.test(eersteWoord)) return tekst;
+  if (!tekst) return tekst;
+  const afkorting = tekst.match(/^[A-Z0-9+]+/); // leidende hoofdletters/cijfers/plussen
+  if (afkorting && afkorting[0].length >= 2) return tekst; // bv. "PVC-vloer", "HR++ glas", "MDF"
   return tekst.charAt(0).toLowerCase() + tekst.slice(1);
 }
 function nederlandseLijstChips(items) {
