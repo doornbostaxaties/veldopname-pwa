@@ -274,22 +274,22 @@ h1, h2, h3, p { margin: 0; }
 }
 .ruimte-status-badge.ok { background: var(--ok-bg); opacity: 1; }
 /* Afwerking/Trap mini-pop-up-knoppen (21-09-2026) — zelfde ronde, subtiele knop-look als
-   .chip-bewerk-knop, in de ruimte-titelbalk naast het invoerveld. .ruimte-mini-wrap is het
-   positioneringsanker voor het paneel eronder (derde ronde: "rechterzijde, compact, bij ernaast
-   klikken dichtklappen") én de scope die de globale buiten-klik-sluiter herkent. */
-.ruimte-mini-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+   .chip-bewerk-knop, in de ruimte-titelbalk naast het invoerveld. */
 .ruimte-mini-knop {
   flex-shrink: 0; border: none; background: var(--bg); color: var(--text-faint); width: 26px; height: 26px;
   border-radius: 50%; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .ruimte-mini-knop:active { background: var(--navy-100); }
 /* Afwerking-/Trap-paneel (21-09-2026, tweede ronde: "mini pop-up direct bij de knop, niet het hele
-   scherm bedekken"; derde ronde: "rechterzijde (compact), meer kleur/nadruk") — zweeft als compact
-   kaartje rechts uitgelijnd onder de knop die 'm opende (position:absolute t.o.v. .ruimte-mini-wrap),
-   met de goud-accentkleur (dezelfde als de chips) i.p.v. het neutrale grijs van de eerdere versie. */
+   scherm bedekken"; derde ronde: "rechterzijde (compact), meer kleur/nadruk"; vierde ronde na een
+   scheve/afgeknipte pop-up in de praktijk: "overlay pop-up gaat niet goed") — position:fixed i.p.v.
+   absolute, JS berekent top/left via getBoundingClientRect() van de knop (zie
+   positioneerRuimteMiniPaneel in app.js), dus geen afhankelijkheid meer van een positioned ouder die
+   'm per ongeluk kon clippen. .ruimte-mini-popover-vangnet is een onzichtbare volledig-scherm laag
+   erachter die een klik erbuiten opvangt en het paneel sluit. */
+.ruimte-mini-popover-vangnet { position: fixed; inset: 0; z-index: 90; background: transparent; }
 .ruimte-mini-paneel {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
-  width: 230px; max-width: 75vw; box-sizing: border-box;
+  position: fixed; z-index: 91; box-sizing: border-box;
   display: flex; flex-direction: column; gap: 10px; padding: 12px;
   border: 1.5px solid var(--goud-700); border-radius: 12px; background: var(--goud-100);
   box-shadow: 0 8px 22px rgba(0,0,0,.35);

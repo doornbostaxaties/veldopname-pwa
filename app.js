@@ -2884,16 +2884,16 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
   rijBoven.appendChild(ruimteNaamInput);
   // Afwerking + Trap (21-09-2026, Arno n.a.v. de Provadie-rondgang; tweede ronde: "mini pop-up
   // direct bij de knop, niet het hele scherm bedekken"; derde ronde: "rechterzijde, compact, meer
-  // kleur, bij ernaast klikken dichtklappen") — een eigen .ruimte-mini-wrap per knop, zodat (a) het
-  // paneel via align-self:flex-end rechts uitlijnt i.p.v. de volle kaartbreedte te pakken, en (b) de
-  // globale buiten-klik-sluiter hieronder kan herkennen of een klik BINNEN zo'n wrap viel. Trap
-  // alleen tonen als er iets is om "naartoe" te wijzen.
-  const afwerkingWrap = el('span', { class: 'ruimte-mini-wrap' }, el('button', {
+  // kleur"; vierde ronde na een scheve/afgeknipte pop-up in de praktijk: "overlay pop-up gaat niet
+  // goed") — position:absolute binnen de kaart liep vast op .woonlaag-blok's overflow:hidden (de
+  // pop-up viel dan half weg of verkeerd uitgelijnd, zie Arno's screenshot). Nu net als
+  // eigenSuggestiesLijst hierboven: position:fixed + getBoundingClientRect van de knop zelf, dus
+  // altijd correct t.o.v. het scherm, ongeacht clipping van ouders. Trap alleen tonen als er iets is
+  // om "naartoe" te wijzen.
+  rijBoven.appendChild(el('button', {
     type: 'button', class: 'ruimte-mini-knop', title: 'Afwerking (vloer/muren/plafond)',
-    onclick: (e) => { e.stopPropagation(); if (ruimteAfwerkingOpen.has(ruimte)) ruimteAfwerkingOpen.delete(ruimte); else ruimteAfwerkingOpen.add(ruimte); render(); },
+    onclick: (e) => { e.stopPropagation(); openRuimteAfwerkingPopover(ruimte, e.currentTarget); },
   }, '🎨'));
-  if (ruimteAfwerkingOpen.has(ruimte)) afwerkingWrap.appendChild(renderRuimteAfwerkingPanel(ruimte));
-  rijBoven.appendChild(afwerkingWrap);
   const alleWoonlagen = state.taxatie.data.indeling.woonlagen || [];
   const andereWoonlagen = alleWoonlagen.filter((w) => w.naam && w.naam.trim() && w.naam !== sleepInfo?.huidigeWoonlaagNaam);
   if (andereWoonlagen.length) {
@@ -2902,12 +2902,10 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
     // bijna altijd naar de verdieping erboven, niet terug naar de begane grond.
     const volgende = typeof sleepInfo?.huidigeWoonlaagIdx === 'number' ? alleWoonlagen[sleepInfo.huidigeWoonlaagIdx + 1] : null;
     const standaardDoelNaam = (volgende && volgende.naam && volgende.naam.trim() && andereWoonlagen.includes(volgende)) ? volgende.naam : andereWoonlagen[0].naam;
-    const trapWrap = el('span', { class: 'ruimte-mini-wrap' }, el('button', {
+    rijBoven.appendChild(el('button', {
       type: 'button', class: 'ruimte-mini-knop', title: 'Trap toevoegen',
-      onclick: (e) => { e.stopPropagation(); if (ruimteTrapOpen.has(ruimte)) ruimteTrapOpen.delete(ruimte); else ruimteTrapOpen.add(ruimte); render(); },
+      onclick: (e) => { e.stopPropagation(); openRuimteTrapPopover(ruimte, andereWoonlagen, standaardDoelNaam, e.currentTarget); },
     }, '🪜'));
-    if (ruimteTrapOpen.has(ruimte)) trapWrap.appendChild(renderRuimteTrapPanel(ruimte, andereWoonlagen, standaardDoelNaam));
-    rijBoven.appendChild(trapWrap);
   }
   rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
   kaart.appendChild(rijBoven);
@@ -2961,71 +2959,78 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
   return kaart;
 }
 // Afwerking + Trap per ruimte (21-09-2026, Arno n.a.v. de Provadie-rondgang; tweede ronde: "mini
-// pop-up direct bij de knop, niet het hele scherm bedekken") — GEEN lightbox-overlay (die dekte het
-// hele scherm af), maar een klein paneeltje dat gewoon inline onder de ruimte-titelbalk verschijnt,
-// net als de bestaande chip-editors (bouwdeelChipEditorOpen). ruimteAfwerkingOpen/ruimteTrapOpen:
-// Sets van ruimte-object-referenties (niet index, want die verschuift bij slepen/verwijderen) die
-// bijhouden welk paneel openstaat — ephemere UI-status, niet opgeslagen.
-const ruimteAfwerkingOpen = new Set();
-const ruimteTrapOpen = new Set();
-// Buiten het paneel klikken sluit het weer (21-09-2026, derde ronde) — zelfde patroon als
-// instellingenMenuOpen's window-click-listener hierboven: de knoppen zelf roepen e.stopPropagation()
-// aan zodat het OPENEN-klikje deze listener niet meteen weer laat sluiten.
-window.addEventListener('click', (e) => {
-  if (!ruimteAfwerkingOpen.size && !ruimteTrapOpen.size) return;
-  const binnenWrap = e.composedPath().some((el) => el.classList && el.classList.contains('ruimte-mini-wrap'));
-  if (!binnenWrap) { ruimteAfwerkingOpen.clear(); ruimteTrapOpen.clear(); trapKeuzeState.clear(); render(); }
-});
-function renderRuimteAfwerkingPanel(ruimte) {
-  const maakSelect = (label, huidig, opties, onChange) => {
-    const sel = el('select', {
-      class: 'energetisch-select',
-      onchange: (e) => { onChange(e.target.value); planOpslaan(); render(); },
-    },
-      el('option', { value: '' }, 'Selecteer'),
-      ...opties.map((o) => el('option', { value: o, selected: huidig === o ? 'selected' : null }, o)));
-    return el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, label), sel);
-  };
-  return el('div', { class: 'ruimte-mini-paneel' },
-    maakSelect('Vloer', ruimte.afwerkingVloer, state.macros.vloerafwerking || [], (w) => { ruimte.afwerkingVloer = w; }),
-    maakSelect('Muren', ruimte.afwerkingMuren, (state.macros.bouwdeelChips && state.macros.bouwdeelChips.wandenEnBinnenmuren) || [], (w) => { ruimte.afwerkingMuren = w; }),
-    maakSelect('Plafond', ruimte.afwerkingPlafond, (state.macros.bouwdeelChips && state.macros.bouwdeelChips.plafonds) || [], (w) => { ruimte.afwerkingPlafond = w; }),
-  );
+// pop-up direct bij de knop, niet het hele scherm bedekken"; derde ronde: "rechterzijde, compact,
+// meer kleur"; vierde ronde na Arno's screenshot van een scheve pop-up: "overlay pop-up gaat niet
+// goed") — position:fixed + getBoundingClientRect van de knop (zelfde aanpak als
+// eigenSuggestiesLijst hierboven), zodat de pop-up altijd correct t.o.v. het scherm uitgelijnd staat
+// en nooit vastloopt op de overflow:hidden van een voorouder-kaart. Eén gedeeld transparant
+// klik-vangnet achter het paneel sluit 'm bij een klik erbuiten; een klik op het paneel zelf stopt
+// de propagatie zodat dat vangnet niet meteen weer dichtklapt.
+function sluitRuimteMiniPopover() {
+  const bestaand = document.querySelector('.ruimte-mini-popover-vangnet');
+  if (bestaand) bestaand.remove();
+}
+function positioneerRuimteMiniPaneel(paneel, knopEl) {
+  const rect = knopEl.getBoundingClientRect();
+  const breedte = 230;
+  const links = Math.max(8, Math.min(rect.right - breedte, window.innerWidth - breedte - 8));
+  paneel.style.top = (rect.bottom + 6) + 'px';
+  paneel.style.left = links + 'px';
+  paneel.style.width = breedte + 'px';
+}
+function openRuimteMiniPopover(knopEl, bouwPaneelInhoud) {
+  sluitRuimteMiniPopover();
+  const vangnet = el('div', { class: 'ruimte-mini-popover-vangnet', onclick: sluitRuimteMiniPopover });
+  const paneel = el('div', { class: 'ruimte-mini-paneel', onclick: (e) => e.stopPropagation() });
+  bouwPaneelInhoud(paneel);
+  vangnet.appendChild(paneel);
+  document.body.appendChild(vangnet);
+  positioneerRuimteMiniPaneel(paneel, knopEl);
+}
+function openRuimteAfwerkingPopover(ruimte, knopEl) {
+  openRuimteMiniPopover(knopEl, (paneel) => {
+    const maakSelect = (label, huidig, opties, onChange) => {
+      const sel = el('select', {
+        class: 'energetisch-select',
+        onchange: (e) => { onChange(e.target.value); planOpslaan(); render(); },
+      },
+        el('option', { value: '' }, 'Selecteer'),
+        ...opties.map((o) => el('option', { value: o, selected: huidig === o ? 'selected' : null }, o)));
+      return el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, label), sel);
+    };
+    paneel.appendChild(maakSelect('Vloer', ruimte.afwerkingVloer, state.macros.vloerafwerking || [], (w) => { ruimte.afwerkingVloer = w; }));
+    paneel.appendChild(maakSelect('Muren', ruimte.afwerkingMuren, (state.macros.bouwdeelChips && state.macros.bouwdeelChips.wandenEnBinnenmuren) || [], (w) => { ruimte.afwerkingMuren = w; }));
+    paneel.appendChild(maakSelect('Plafond', ruimte.afwerkingPlafond, (state.macros.bouwdeelChips && state.macros.bouwdeelChips.plafonds) || [], (w) => { ruimte.afwerkingPlafond = w; }));
+  });
 }
 // Trap-handigheidje (21-09-2026, Arno: "ik noem altijd op woonlagen de trap, tekst wordt dan
 // '<vaste/vlizo>trap naar de <verdieping>' — kun je hier een mini pop-up met keuzes voor bedenken?")
 // — kiest het type + de doel-woonlaag, plakt de kant-en-klare zin (exact dezelfde stijl als de
 // bestaande toevoegingen-macro's, bv. "vaste trap naar de eerste verdieping") als toevoeging bij
 // deze ruimte. andereWoonlagen is al gefilterd op de HUIDIGE woonlaag (zie renderRuimteKaart).
-// trapKeuzeState: de nog-niet-bevestigde Type/Naar-keuze terwijl het paneel openstaat — bewust NIET
-// op ruimte zelf gezet (zou als vreemde extra velden meesyncen), pas bij "+ Toevoegen" wordt de
-// samengestelde zin echt in ruimte.toevoegingen opgeslagen.
 const TRAP_TYPES = ['vaste trap', 'vlizotrap', 'losse trap'];
-const trapKeuzeState = new Map();
-function renderRuimteTrapPanel(ruimte, andereWoonlagen, standaardDoelNaam) {
-  if (!trapKeuzeState.has(ruimte)) trapKeuzeState.set(ruimte, { type: TRAP_TYPES[0], doelNaam: standaardDoelNaam || andereWoonlagen[0].naam });
-  const keuze = trapKeuzeState.get(ruimte);
-  const typeSelect = el('select', {
-    class: 'energetisch-select', onchange: (e) => { keuze.type = e.target.value; },
-  }, ...TRAP_TYPES.map((o) => el('option', { value: o, selected: o === keuze.type ? 'selected' : null }, o)));
-  const doelSelect = el('select', {
-    class: 'energetisch-select', onchange: (e) => { keuze.doelNaam = e.target.value; },
-  }, ...andereWoonlagen.map((w) => el('option', { value: w.naam, selected: w.naam === keuze.doelNaam ? 'selected' : null }, w.naam)));
-  return el('div', { class: 'ruimte-mini-paneel' },
-    el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, 'Type'), typeSelect),
-    el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, 'Naar'), doelSelect),
-    el('button', {
+function openRuimteTrapPopover(ruimte, andereWoonlagen, standaardDoelNaam, knopEl) {
+  openRuimteMiniPopover(knopEl, (paneel) => {
+    const keuze = { type: TRAP_TYPES[0], doelNaam: standaardDoelNaam || andereWoonlagen[0].naam };
+    const typeSelect = el('select', {
+      class: 'energetisch-select', onchange: (e) => { keuze.type = e.target.value; },
+    }, ...TRAP_TYPES.map((o) => el('option', { value: o, selected: o === keuze.type ? 'selected' : null }, o)));
+    const doelSelect = el('select', {
+      class: 'energetisch-select', onchange: (e) => { keuze.doelNaam = e.target.value; },
+    }, ...andereWoonlagen.map((w) => el('option', { value: w.naam, selected: w.naam === keuze.doelNaam ? 'selected' : null }, w.naam)));
+    paneel.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, 'Type'), typeSelect));
+    paneel.appendChild(el('label', { class: 'bouwdeel-detail-veld' }, el('span', { class: 'energetisch-veld-label' }, 'Naar'), doelSelect));
+    paneel.appendChild(el('button', {
       type: 'button', class: 'knop spook klein', style: 'margin-top:4px;',
       onclick: () => {
         const tekst = `${keuze.type} naar de ${keuze.doelNaam.toLowerCase()}`;
         if (!Array.isArray(ruimte.toevoegingen)) ruimte.toevoegingen = [];
         if (!ruimte.toevoegingen.includes(tekst)) ruimte.toevoegingen.push(tekst);
-        trapKeuzeState.delete(ruimte);
-        ruimteTrapOpen.delete(ruimte);
         planOpslaan(); render();
+        sluitRuimteMiniPopover();
       },
-    }, '+ Toevoegen'),
-  );
+    }, '+ Toevoegen'));
+  });
 }
 
 // --- Bij-/aanbouwen en buitenvoorzieningen (17-09-2026, Arno's verzoek: "een oplossing voor
