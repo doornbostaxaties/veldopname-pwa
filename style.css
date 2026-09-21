@@ -280,12 +280,13 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 50%; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .ruimte-mini-knop:active { background: var(--navy-100); }
-/* Afwerking-/Trap-pop-up inhoud (21-09-2026) — compacte kolom van keuzelijsten, zelfde chrome
-   (.lightbox/.lightbox-top) als de foto-lightbox en Snel invullen hergebruikt. */
-.ruimte-afwerking-inhoud {
-  flex: 1; overflow-y: auto; padding: 4px 14px calc(14px + var(--safe-bottom));
-  display: flex; flex-direction: column; gap: 12px;
-  max-width: 360px; width: 100%; margin: 0 auto; box-sizing: border-box;
+/* Afwerking-/Trap-paneel (21-09-2026, tweede ronde: "mini pop-up direct bij de knop, niet het hele
+   scherm bedekken") — GEEN lightbox meer, gewoon inline onder de ruimte-titelbalk, zelfde look als
+   de bestaande chip-editor ".chip-editor" (stippellijn-kadertje) zodat meteen duidelijk is dat dit
+   een tijdelijk open klapblokje is, geen vast onderdeel van de kaart. */
+.ruimte-mini-paneel {
+  display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px;
+  padding: 10px; border: 1px dashed var(--divider); border-radius: 10px; background: var(--surface-2);
 }
 .bijgebouw-info-ingeklapt { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .bijgebouw-info-ingeklapt .ruimte-naam-ingeklapt { font-size: 12.5px; }
