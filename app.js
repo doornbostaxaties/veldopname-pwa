@@ -1317,6 +1317,20 @@ function nederlandseLijst(items) {
   if (items.length === 1) return items[0];
   return items.slice(0, -1).join(', ') + ' en ' + items[items.length - 1];
 }
+// Chips (macrokeuzes) staan in het keuzevak zelf MET hoofdletter, maar lezen natuurlijker in kleine
+// letters zodra ze in een lopende zin samengevoegd worden (21-09-2026, Arno: "als je teksten
+// samenvoegt, maak dan van de chips kleine letters, tenzij het officieel een hoofdletter moet
+// zijn") — een chip die met een afkorting begint (bv. "HR++ glas", "PVC-vloer", "MDF") blijft
+// ongewijzigd, alleen de gewone beginhoofdletter verdwijnt. Alleen gebruikt bij het samenvoegen van
+// VASTE macro-chips, niet bij vrij getypte tekst (toevoegingen ed. blijven letterlijk zoals getypt).
+function chipKleineLetter(tekst) {
+  const eersteWoord = (tekst || '').split(' ')[0];
+  if (/^[A-Z0-9+]{2,}$/.test(eersteWoord)) return tekst;
+  return tekst.charAt(0).toLowerCase() + tekst.slice(1);
+}
+function nederlandseLijstChips(items) {
+  return nederlandseLijst(items.map(chipKleineLetter));
+}
 // bijgebouwen (17-09-2026): optioneel, standaard [] — komt uit data.bijgebouwen, apart van
 // `indeling` omdat het een sibling-veld is, geen onderdeel van indeling zelf. Arno's verzoek: "deze
 // teksten komen samengevat terug in de indeling" — vandaar een eigen blok onderaan de tekst.
@@ -2538,9 +2552,10 @@ function vulPopupIsolatieVelden(blok, veld, herteken) {
 // Materiaal-kenmerken (Vloersoort/Kozijnen/Glastypes/Verwarmingssysteem — Arno: "zet de volgende
 // kenmerken ook over") — exact dezelfde opslagplek/opties als "Vloerafwerking" hierboven
 // (woonlaag.kenmerken), hier met een eigen onchange die herteken() aanroept i.p.v. de globale render().
-// Lijst zelf ook bewerkbaar (20-09-2026, "kun je de macrolijst ook aanpasbaar maken") — zelfde ✎-knop
-// + chip-editor als overal elders, met herteken meegegeven zodat de pop-up zichzelf bijwerkt i.p.v.
-// pas na sluiten en heropenen (zie renderMacroBewerkKnop/renderChipEditor's herRender-parameter).
+// GEEN macro-bewerkknop hier (21-09-2026, Arno: "macro's bewerken niet in snel invullen zetten, maar
+// alleen via opnamestaat") — Snel invullen is puur voor het kiezen van bestaande opties tijdens het
+// opnemen, de macrolijst zelf pas je aan via de normale opnamestaat-kaart (bv. Vloerafwerking in
+// Indeling, of de kenmerken-kaarten in Bouwkundig/Energetisch).
 function bouwPopupKenmerkenGrid(woonlaag, sleutel, herteken) {
   if (!Array.isArray(woonlaag.kenmerken[sleutel])) woonlaag.kenmerken[sleutel] = [];
   const gekozen = woonlaag.kenmerken[sleutel];
@@ -2556,10 +2571,7 @@ function bouwPopupKenmerkenGrid(woonlaag, sleutel, herteken) {
         },
       }), optie));
   });
-  const wrap = el('div', {}, el('div', { class: 'bouwdeel-veld-label-rij' }, renderMacroBewerkKnop(sleutel, herteken)));
-  if (bouwdeelChipEditorOpen[sleutel]) wrap.appendChild(renderChipEditor(state.macros[sleutel], bewaarMacros, herteken));
-  wrap.appendChild(grid);
-  return wrap;
+  return grid;
 }
 function renderPopupKenmerkenGrid(woonlaag, sleutel, label, herteken) {
   return el('div', { class: 'snel-invullen-blok' }, el('div', { class: 'bouwdeel-veld-label bouwdeel-veld-kop' }, label), bouwPopupKenmerkenGrid(woonlaag, sleutel, herteken));
@@ -2934,14 +2946,13 @@ function bouwkundigVeldVoorBijgebouwType(type) {
 // renderBouwdeelChips gebruikt (bouwdeelChipEditorOpen/renderChipEditor), hier losstaand aanroepbaar
 // omdat Bijgebouwen geen def/bouwdeel-object heeft om dat via het bestaande pad te hergebruiken
 // (17-09-2026, Arno's verzoek: Type/Extra's/Materiaal "als macrolijst weergeven, uitbreidbaar en
-// aanpasbaar" — rechtstreeks vanuit Indeling i.p.v. via het aparte Macros-tabblad).
-// herRender (20-09-2026, "Snel invullen"-pop-up): die leeft BUITEN #app (net als de foto-lightbox),
-// dus de globale render() zou 'm niet zelf verversen — standaard nog gewoon de globale render(),
-// bestaande aanroepen hoeven niets te wijzigen.
-function renderMacroBewerkKnop(macroSleutel, herRender = render) {
+// aanpasbaar" — rechtstreeks vanuit Indeling i.p.v. via het aparte Macros-tabblad). Bewust NIET in de
+// "Snel invullen"-pop-up gebruikt (21-09-2026, Arno: "macro's bewerken niet in snel invullen zetten,
+// maar alleen via opnamestaat") — die pop-up toont dus alleen bouwPopupKenmerkenGrid() zonder knop.
+function renderMacroBewerkKnop(macroSleutel) {
   return el('button', {
     type: 'button', class: 'chip-bewerk-knop', title: 'Lijst bewerken',
-    onclick: (e) => { e.stopPropagation(); bouwdeelChipEditorOpen[macroSleutel] = !bouwdeelChipEditorOpen[macroSleutel]; herRender(); },
+    onclick: (e) => { e.stopPropagation(); bouwdeelChipEditorOpen[macroSleutel] = !bouwdeelChipEditorOpen[macroSleutel]; render(); },
   }, '✎');
 }
 function renderBijgebouwKaart(item, idx, verwijder) {
@@ -4852,9 +4863,7 @@ function renderDetailVeld(bouwdeel, d) {
 // bouwdeelChipEditorOpen: welk bouwdeel z'n editor nu openstaat — bewust NIET in state/opgeslagen,
 // puur een tijdelijke UI-schakelaar die bij een paginaherlaad weer dichtklapt.
 const bouwdeelChipEditorOpen = {};
-// herRender (20-09-2026, zie renderMacroBewerkKnop hierboven) — idem: standaard de globale render(),
-// de "Snel invullen"-pop-up geeft hier straks zijn eigen herteken() aan mee.
-function renderChipEditor(lijst, opslaanFn, herRender = render) {
+function renderChipEditor(lijst, opslaanFn) {
   const wrap = el('div', { class: 'chip-editor' });
   const chipRij = el('div', { class: 'chip-rij' });
   lijst.forEach((item, i) => {
@@ -4864,7 +4873,7 @@ function renderChipEditor(lijst, opslaanFn, herRender = render) {
       el('button', {
         onclick: () => {
           if (!confirm(`"${item}" verwijderen uit deze macro-lijst?`)) return;
-          lijst.splice(i, 1); opslaanFn(); herRender();
+          lijst.splice(i, 1); opslaanFn(); render();
         },
       }, '✕'),
     );
@@ -4879,7 +4888,7 @@ function renderChipEditor(lijst, opslaanFn, herRender = render) {
       if (isNaN(van) || van === i) return;
       const [verplaatst] = lijst.splice(van, 1);
       lijst.splice(i, 0, verplaatst);
-      opslaanFn(); herRender();
+      opslaanFn(); render();
     });
     chipRij.appendChild(chip);
   });
@@ -4888,7 +4897,7 @@ function renderChipEditor(lijst, opslaanFn, herRender = render) {
   invoer.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !invoer.value.trim()) return;
     lijst.push(invoer.value.trim());
-    opslaanFn(); herRender();
+    opslaanFn(); render();
   });
   wrap.appendChild(el('div', { class: 'chip-toevoegen' }, invoer));
   return wrap;
@@ -5249,8 +5258,8 @@ function renderBouwdeelKaart(sectieObj, def) {
         kaart.appendChild(el('button', {
           type: 'button', class: 'knop spook klein',
           style: 'margin-bottom:8px;',
-          onclick: () => { bouwdeel.omschrijving = nederlandseLijst(trapTypes); planOpslaan(); render(); },
-        }, `↺ Overnemen uit Indeling (${nederlandseLijst(trapTypes)})`));
+          onclick: () => { bouwdeel.omschrijving = nederlandseLijstChips(trapTypes); planOpslaan(); render(); },
+        }, `↺ Overnemen uit Indeling (${nederlandseLijstChips(trapTypes)})`));
       }
     }
     // Schuur/berging, Garage en Overige bijgebouwen: zelfde "↺ Overnemen"-idee, nu vanuit de nieuwe
@@ -5842,7 +5851,7 @@ function renderMultiselectGridGekoppeld(def, bkVeld, enVeld, opmerkingenVeld) {
       wrap.appendChild(el('button', {
         type: 'button', class: 'knop spook klein', style: 'margin-top:6px;',
         onclick: () => {
-          const regel = def.label + ': ' + nederlandseLijst(gekozen) + '.';
+          const regel = def.label + ': ' + nederlandseLijstChips(gekozen) + '.';
           doelOpmerkingen.opmerkingen = (doelOpmerkingen.opmerkingen || '').trim() ? doelOpmerkingen.opmerkingen.trim() + '\n' + regel : regel;
           planOpslaan(); render();
         },
