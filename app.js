@@ -815,15 +815,28 @@ function woonlaagTotaal(woonlaag) {
 // hieronder.
 function standaardMacros() {
   return {
+    // Verdiepingen/Ruimtes 21-09-2026 aangevuld — macro-audit tegen Taxatieweb's eigen "Macro's
+    // (Indeling)"-paneel (live vergeleken bij De Wiersse 25, Arno's verzoek: "moet overeenkomen met
+    // de macrolijst op Taxatieweb"). Alleen ONTBREKENDE items toegevoegd (zie ook
+    // voegNieuweOptiesSamen() hieronder voor bestaande taxaties), niets van de bestaande lijst
+    // veranderd of verwijderd.
     verdiepingen: [
       'Kelder', 'Souterrain', 'Begane grond', 'Eerste verdieping', 'Tweede verdieping',
-      'Derde verdieping', 'Vierde verdieping', 'Zolderverdieping', 'Bergzolder', 'Vliering',
+      'Derde verdieping', 'Vierde verdieping', 'Vijfde verdieping', 'Zesde verdieping',
+      'Zevende verdieping', 'Zolderverdieping', 'Bergzolder', 'Vliering',
     ],
     ruimtes: [
       'Entree/hal', 'Toiletruimte', 'Woonkamer', 'Keuken', 'Overloop', 'Slaapkamer', 'Badkamer',
       'Achterkamer', 'Bergruimte', 'Berging', 'Bijkeuken', 'CV-ruimte', 'Eetkamer', 'Gang',
       'Garage', 'Hal', 'Hobbyruimte', 'Inloopkast', 'Kantoor', 'Kelderruimte', 'Serre',
       'Studeerkamer', 'Technische ruimte', 'Vide', 'Voorzolder', 'Werkkamer', 'Zolderkamer',
+      'Tussenhal', 'Achterhal', 'Atelier', 'Bergkamer', 'Bergzolder', 'Deel', 'Entresol',
+      'Garage (dubbel)', 'Gastenverblijf', 'Kantoorkamer', 'Kleedkamer', 'Multifunctionele ruimte',
+      'Open ruimte', 'Opkamer', 'Portaal', 'Praktijkruimte', 'Provisiekelder', 'Speelkamer',
+      'Stookruimte', 'TV kamer', 'Tuinkamer', 'Tussenkamer', 'Vestibule', 'Voorkamer', 'Wasruimte',
+      'Werkplaats', 'Wijnkelder', 'Zitkamer', 'Zwembadruimte', 'Bar', 'Fitnessruimte', 'Kamer',
+      'Kast', 'Kelder', 'Mancave', 'Ontspanruimte', 'Overloop/vide', 'Pantry', 'Relaxruimte',
+      'Studio', 'Voorportaal', 'Zijhal',
     ],
     ruimteblokken: [
       'Basis', 'Aanbouw', 'Erker', 'Bijkeuken', 'Zijbouw', 'Kelder', 'Garage', 'Berging', 'Carport',
@@ -845,19 +858,24 @@ function standaardMacros() {
       'rolluiken', 'screens', 'sauna', 'schouw', 'serre', 'uitstortgootsteen', 'verlaagd plafond',
       'vide', 'videofoon', 'vloerverwarming', 'dakramen', 'taatsdeuren', 'tuindeur', 'tuindeuren',
       'bergruimte', 'bergvliering', 'bergzolder', 'inbouwspots', 'waterontharder',
+      'balkon', 'dakterras',
     ],
     // Alleen bij badkamer/toiletruimte gesuggereerd (naast de algemene toevoegingen).
     sanitair: [
       'douche', 'douchecabine', 'inloopdouche', 'ligbad', 'douche/ligbad', 'hoekbad', 'whirlpool',
       'jacuzzi', 'staand toilet', 'hangend toilet', 'urinoir', 'fonteintje', 'wastafel',
       'dubbele wastafel', 'wastafelmeubel', 'dubbel wastafelmeubel', 'designradiator',
-      'handdoekradiator',
+      'handdoekradiator', 'toilet', 'toiletmeubel met wastafelje', 'wasmachine aansluiting',
+      'wasmachine-/drogeraansluiting',
     ],
     // Alleen bij de keuken gesuggereerd (naast de algemene toevoegingen).
     keuken: [
       'gas 4-pits kookplaat', 'gas 5-pits kookplaat', 'keramische kookplaat', 'inductiekookplaat',
       'oven', 'magnetron', 'combi-oven', 'combi-magnetron', 'stoomoven', 'koelkast', 'vriezer',
-      'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker',
+      'koel-vriescombinatie', 'afzuigkap', 'vaatwasser', 'quooker', '6-pits gaskookplaat',
+      'kokend waterkraan', 'inductiekookplaat met geïntegreerde afzuiging',
+      'vrijstaande fornuis met oven', 'vrijstaand fornuis met ovens', 'schouw met afzuigkap',
+      'wijnklimaatkast', 'apothekerskast',
     ],
     // "Kenmerken verdieping" (Indeling, Arno's verzoek 16-09-2026) — dezelfde 5 keuzelijsten worden
     // ook gebruikt als opties bij de bijbehorende bouwkundige/energetische velden (zie
@@ -1087,6 +1105,14 @@ function metNieuweMacroCategorieen(m) {
   m.vloerafwerking = voegNieuweOptiesSamen(m.vloerafwerking, standaard.vloerafwerking);
   m.bouwdeelChips.wandenEnBinnenmuren = voegNieuweOptiesSamen(m.bouwdeelChips.wandenEnBinnenmuren, standaard.bouwdeelChips.wandenEnBinnenmuren);
   m.bouwdeelChips.plafonds = voegNieuweOptiesSamen(m.bouwdeelChips.plafonds, standaard.bouwdeelChips.plafonds);
+  // Macro-audit tegen Taxatieweb (21-09-2026, Arno's verzoek: "moet overeenkomen met de macrolijst
+  // op Taxatieweb") — live vergeleken met Taxatieweb's eigen "Macro's (Indeling)"-paneel bij De
+  // Wiersse 25. Zelfde additieve/idempotente aanpak als hierboven.
+  m.verdiepingen = voegNieuweOptiesSamen(m.verdiepingen, standaard.verdiepingen);
+  m.ruimtes = voegNieuweOptiesSamen(m.ruimtes, standaard.ruimtes);
+  m.toevoegingen = voegNieuweOptiesSamen(m.toevoegingen, standaard.toevoegingen);
+  m.sanitair = voegNieuweOptiesSamen(m.sanitair, standaard.sanitair);
+  m.keuken = voegNieuweOptiesSamen(m.keuken, standaard.keuken);
   return m;
 }
 
