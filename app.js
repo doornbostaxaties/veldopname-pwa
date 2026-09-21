@@ -2788,7 +2788,7 @@ function renderIndelingTab() {
           woonlaag.ruimtes.splice(rIdx, 1); planOpslaan(); render();
         }, {
           collapseKey: wIdx + ':' + rIdx, ruimtesArray: woonlaag.ruimtes, index: rIdx,
-          huidigeWoonlaagNaam: woonlaag.naam,
+          huidigeWoonlaagNaam: woonlaag.naam, huidigeWoonlaagIdx: wIdx,
         }));
       });
       inhoud.appendChild(el('button', {
@@ -2894,13 +2894,19 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
   }, '🎨'));
   if (ruimteAfwerkingOpen.has(ruimte)) afwerkingWrap.appendChild(renderRuimteAfwerkingPanel(ruimte));
   rijBoven.appendChild(afwerkingWrap);
-  const andereWoonlagen = (state.taxatie.data.indeling.woonlagen || []).filter((w) => w.naam && w.naam.trim() && w.naam !== sleepInfo?.huidigeWoonlaagNaam);
+  const alleWoonlagen = state.taxatie.data.indeling.woonlagen || [];
+  const andereWoonlagen = alleWoonlagen.filter((w) => w.naam && w.naam.trim() && w.naam !== sleepInfo?.huidigeWoonlaagNaam);
   if (andereWoonlagen.length) {
+    // Standaard de VOLGENDE woonlaag geselecteerd (21-09-2026, Arno: "als je de trapknop selecteert
+    // zorg dan dat standaard de volgende woonlaag geselecteerd is") — de trap in een woonlaag leidt
+    // bijna altijd naar de verdieping erboven, niet terug naar de begane grond.
+    const volgende = typeof sleepInfo?.huidigeWoonlaagIdx === 'number' ? alleWoonlagen[sleepInfo.huidigeWoonlaagIdx + 1] : null;
+    const standaardDoelNaam = (volgende && volgende.naam && volgende.naam.trim() && andereWoonlagen.includes(volgende)) ? volgende.naam : andereWoonlagen[0].naam;
     const trapWrap = el('span', { class: 'ruimte-mini-wrap' }, el('button', {
       type: 'button', class: 'ruimte-mini-knop', title: 'Trap toevoegen',
       onclick: (e) => { e.stopPropagation(); if (ruimteTrapOpen.has(ruimte)) ruimteTrapOpen.delete(ruimte); else ruimteTrapOpen.add(ruimte); render(); },
     }, '🪜'));
-    if (ruimteTrapOpen.has(ruimte)) trapWrap.appendChild(renderRuimteTrapPanel(ruimte, andereWoonlagen));
+    if (ruimteTrapOpen.has(ruimte)) trapWrap.appendChild(renderRuimteTrapPanel(ruimte, andereWoonlagen, standaardDoelNaam));
     rijBoven.appendChild(trapWrap);
   }
   rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
@@ -2996,8 +3002,8 @@ function renderRuimteAfwerkingPanel(ruimte) {
 // samengestelde zin echt in ruimte.toevoegingen opgeslagen.
 const TRAP_TYPES = ['vaste trap', 'vlizotrap', 'losse trap'];
 const trapKeuzeState = new Map();
-function renderRuimteTrapPanel(ruimte, andereWoonlagen) {
-  if (!trapKeuzeState.has(ruimte)) trapKeuzeState.set(ruimte, { type: TRAP_TYPES[0], doelNaam: andereWoonlagen[0].naam });
+function renderRuimteTrapPanel(ruimte, andereWoonlagen, standaardDoelNaam) {
+  if (!trapKeuzeState.has(ruimte)) trapKeuzeState.set(ruimte, { type: TRAP_TYPES[0], doelNaam: standaardDoelNaam || andereWoonlagen[0].naam });
   const keuze = trapKeuzeState.get(ruimte);
   const typeSelect = el('select', {
     class: 'energetisch-select', onchange: (e) => { keuze.type = e.target.value; },
@@ -6650,7 +6656,13 @@ const MACRO_GROEPEN = [
   { sleutel: 'kozijnen', titel: 'Kozijnen', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en tik-suggesties bij Bouwkundig > Kozijnen.' },
   { sleutel: 'glastypes', titel: 'Glastypes', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Energetisch > Glas.' },
   { sleutel: 'verwarmingssysteem', titel: 'Verwarmingssysteem', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij Bouwkundig/Energetisch > Verwarmingssysteem.' },
-  { sleutel: 'vloerafwerking', titel: 'Vloerafwerking', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling).' },
+  { sleutel: 'vloerafwerking', titel: 'Vloerafwerking', uitleg: 'Keuzeopties bij "Kenmerken verdieping" (Indeling) en bij "Afwerking" per ruimte (Indeling).' },
+  // Muren/Plafond (21-09-2026, Arno: "volledig aanpasbare macro's via de macro-instellingen, net als
+  // de rest") — zelfde lijst als Bouwkundig's Muren/Plafond-chips (state.macros.bouwdeelChips), nu
+  // ook hier zichtbaar/bewerkbaar i.p.v. alleen via het ✎-knopje bij die bouwdelen. Pad-sleutel
+  // ('bouwdeelChips.x') i.p.v. plat, zie macroLijst() in renderMacrosTab().
+  { sleutel: 'bouwdeelChips.wandenEnBinnenmuren', titel: 'Afwerking — muren', uitleg: 'Keuzeopties bij Muren (Bouwkundig) en bij "Afwerking" per ruimte (Indeling).' },
+  { sleutel: 'bouwdeelChips.plafonds', titel: 'Afwerking — plafond', uitleg: 'Keuzeopties bij Plafonds (Bouwkundig) en bij "Afwerking" per ruimte (Indeling).' },
   { sleutel: 'ventilatie', titel: 'Ventilatie', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Ventilatie (1 gedeelde selectie).' },
   { sleutel: 'koeling', titel: 'Koeling', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Koeling (1 gedeelde selectie).' },
   { sleutel: 'warmwatertoestel', titel: 'Warmwatertoestel', uitleg: 'Keuzeopties bij Bouwkundig én Energetisch > Warmwatertoestel (1 gedeelde selectie).' },
@@ -6659,6 +6671,22 @@ const MACRO_GROEPEN = [
   { sleutel: 'bijgebouwExtras', titel: "Bijgebouwen — extra's", uitleg: 'Keuzeopties bij "Bij-/aanbouwen en buitenvoorzieningen" (Indeling).' },
 ];
 
+// Haalt een macro-lijst op via een platte sleutel ('vloerafwerking') of een pad-sleutel
+// ('bouwdeelChips.wandenEnBinnenmuren') — laat renderMacrosTab() ook lijsten tonen/bewerken die
+// intern genest zitten (Muren/Plafond, gedeeld met Bouwkundig's eigen chip-editors), zonder de
+// opslagplek van die lijsten te hoeven verplaatsen (21-09-2026, Arno: "volledig aanpasbaar via de
+// macro-instellingen, net als de rest").
+function macroLijst(sleutel) {
+  const delen = sleutel.split('.');
+  let obj = state.macros;
+  for (let i = 0; i < delen.length - 1; i++) {
+    if (!obj[delen[i]] || typeof obj[delen[i]] !== 'object') obj[delen[i]] = {};
+    obj = obj[delen[i]];
+  }
+  const laatsteSleutel = delen[delen.length - 1];
+  if (!Array.isArray(obj[laatsteSleutel])) obj[laatsteSleutel] = [];
+  return obj[laatsteSleutel];
+}
 function renderMacrosTab() {
   const wrap = el('div', {});
   wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Eigen keuzelijsten — gelden voor alle taxaties. Pas ze hier aan; de suggesties bij Meting en Indeling volgen automatisch mee. Sleep een chip om te verplaatsen, klik erop om te hernoemen.'));
@@ -6666,11 +6694,10 @@ function renderMacrosTab() {
     const groep = el('div', { class: 'macro-groep' });
     groep.appendChild(el('h3', {}, titel));
     groep.appendChild(el('p', { class: 'macro-uitleg', style: 'margin-bottom:8px;' }, uitleg));
-    if (!state.macros[sleutel]) state.macros[sleutel] = [];
     // Hergebruikt dezelfde editor als overal elders in de app (21-09-2026, Arno: "ik wil ze in de
     // PWA ook kunnen verplaatsen en hernoemen") — sleep-herordenen + hernoemen kwamen zo gratis mee
     // i.p.v. hier een eigen, eenvoudigere chip-weergave te onderhouden.
-    groep.appendChild(renderChipEditor(state.macros[sleutel], bewaarMacros));
+    groep.appendChild(renderChipEditor(macroLijst(sleutel), bewaarMacros));
     wrap.appendChild(groep);
   });
   return wrap;
