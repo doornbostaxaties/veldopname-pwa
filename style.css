@@ -313,6 +313,13 @@ h1, h2, h3, p { margin: 0; }
 }
 .chip-sleepbaar { cursor: grab; }
 .chip-handvat { opacity: .55; margin-right: 2px; }
+/* Hernoemen (21-09-2026, Arno: "ik wil ze in de PWA ook kunnen verplaatsen en hernoemen") — de
+   chiptekst zelf is klikbaar en wisselt naar een inline invoerveld, zie renderChipEditor(). */
+.chip-tekst { cursor: text; }
+.chip-hernoem-invoer {
+  font: inherit; font-size: 12px; font-weight: 500; color: var(--goud-700); background: #fff;
+  border: 1px solid var(--goud-700); border-radius: 6px; padding: 1px 4px; min-width: 60px;
+}
 .chip-toevoegen { display: flex; }
 .toevoeging-invoeren { display: flex; gap: 6px; width: 100%; }
 .toevoeging-invoeren input {

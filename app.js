@@ -1012,6 +1012,15 @@ function standaardMacros() {
         'Dicht gelegen bij alle voorzieningen, zoals het centrum, winkelcentrum, gezondheidscentrum, scholen, winkels en uitvalswegen.',
         'In de nabijheid van het getaxeerde zijn veel voorzieningen te vinden, zoals supermarkten, winkels, scholen, diverse zorgfaciliteiten (o.a. huisarts) en (sport)verenigingen.',
       ],
+      // Objectkenmerken' Ja/Nee-toelichtingen (21-09-2026, Arno n.a.v. Provadie/taXapi: "op nog veel
+      // meer plekken staan macro's, wat kun je daar mee?") — zelfde tik-chip-idee als bij Bouwkundig/
+      // Energetisch, nu voor de A/G/H/J-toelichtingen die tot nu toe pure vrije tekst waren.
+      gezochtEigenaarBewoner: ['Eigenaar/bewoner aanwezig bij de inspectie', 'Telefonisch contact gehad', 'Informatie per e-mail ontvangen'],
+      gezochtMakelaar: ['Informatie ontvangen van de verkopend makelaar', 'Contact gehad met de verkopend makelaar'],
+      gezochtAndereBronnen: ['Kadaster geraadpleegd', 'Funda geraadpleegd', 'Gemeente/BAG geraadpleegd', 'Bestemmingsplan geraadpleegd'],
+      aanvragerWoontAl: ['Woning wordt na aankoop betrokken', 'Huidige bewoner is huurder', 'Woning staat leeg'],
+      aanvragerBlijftWonen: ['Verkoop wegens verhuizing', 'Verkoop wegens echtscheiding', 'Verkoop wegens overlijden', 'Verkoop wegens financiële omstandigheden'],
+      andereInfoOntdekt: ['Geen bijzonderheden', 'Erfpacht van toepassing', 'Bestemmingsplan wijkt af van het huidige gebruik'],
     },
   };
 }
@@ -4610,7 +4619,11 @@ function renderBijlagenSectie(t) {
 // --- Bewoning (L, Fase 1 van "volledige opname") ---
 // Herbruikbaar bouwsteentje: een Ja/Nee-vraag, met een toelichting-tekstveld dat verschijnt zodra
 // "Ja, toelichten" gekozen is — exact het patroon dat Taxatieweb's L. Bewoning zelf overal gebruikt.
-function renderJaNeeVraag(label, taxatie, veld, toelichtingVeld, { toelichtBij = true } = {}) {
+// chipSleutel (21-09-2026, Arno n.a.v. Provadie/taXapi: "op nog veel meer plekken staan macro's")
+// — optioneel: als state.macros.bouwdeelChips[chipSleutel] bestaat, toont dit dezelfde tik-chip +
+// ✎-bewerkbalk als Bouwkundig/Energetisch boven de toelichting. Zonder lijst (of zonder sleutel)
+// verschijnt er niets — dus geen extra drukte bij vragen waar nog geen suggesties voor zijn ingevuld.
+function renderJaNeeVraag(label, taxatie, veld, toelichtingVeld, { toelichtBij = true, chipSleutel } = {}) {
   const wrap = el('div', { class: 'bewoning-vraag' });
   wrap.appendChild(el('div', { class: 'bewoning-label' }, label));
   const wissel = el('div', { class: 'weergave-wissel' });
@@ -4622,6 +4635,7 @@ function renderJaNeeVraag(label, taxatie, veld, toelichtingVeld, { toelichtBij =
   });
   wrap.appendChild(wissel);
   if (taxatie.bewoning[veld] === toelichtBij && toelichtingVeld) {
+    if (chipSleutel) wrap.appendChild(renderChipsVoorVeld(taxatie.bewoning, toelichtingVeld, chipSleutel));
     const veldEl = el('textarea', {
       class: 'bewoning-toelichting', placeholder: 'Toelichting…',
       oninput: (e) => { taxatie.bewoning[toelichtingVeld] = e.target.value; planOpslaan(); },
@@ -4704,9 +4718,9 @@ function renderObjectkenmerkenTab() {
 
   const groepA = el('div', { class: 'macro-groep' });
   groepA.appendChild(el('h3', {}, 'A. Waar heb ik gezocht naar informatie?'));
-  groepA.appendChild(renderJaNeeVraag('Bij de eigenaar of de bewoner', t, 'gezochtEigenaarBewoner', 'gezochtEigenaarBewonerToelichting'));
-  groepA.appendChild(renderJaNeeVraag('Bij de verkopende makelaar', t, 'gezochtMakelaar', 'gezochtMakelaarToelichting'));
-  groepA.appendChild(renderJaNeeVraag('Andere bronnen', t, 'gezochtAndereBronnen', 'gezochtAndereBronnenToelichting'));
+  groepA.appendChild(renderJaNeeVraag('Bij de eigenaar of de bewoner', t, 'gezochtEigenaarBewoner', 'gezochtEigenaarBewonerToelichting', { chipSleutel: 'gezochtEigenaarBewoner' }));
+  groepA.appendChild(renderJaNeeVraag('Bij de verkopende makelaar', t, 'gezochtMakelaar', 'gezochtMakelaarToelichting', { chipSleutel: 'gezochtMakelaar' }));
+  groepA.appendChild(renderJaNeeVraag('Andere bronnen', t, 'gezochtAndereBronnen', 'gezochtAndereBronnenToelichting', { chipSleutel: 'gezochtAndereBronnen' }));
   wrap.appendChild(groepA);
 
   const groepF = el('div', { class: 'macro-groep' });
@@ -4728,13 +4742,13 @@ function renderObjectkenmerkenTab() {
   wrap.appendChild(groepF);
 
   const groepGH = el('div', { class: 'macro-groep' });
-  groepGH.appendChild(renderJaNeeVraag('G. Woont de aanvrager van de lening al in de woning?', t, 'aanvragerWoontAl', 'aanvragerWoontAlToelichting', { toelichtBij: false }));
+  groepGH.appendChild(renderJaNeeVraag('G. Woont de aanvrager van de lening al in de woning?', t, 'aanvragerWoontAl', 'aanvragerWoontAlToelichting', { toelichtBij: false, chipSleutel: 'aanvragerWoontAl' }));
   groepGH.appendChild(el('div', { style: 'height:10px' }));
-  groepGH.appendChild(renderJaNeeVraag('H. Gaat of blijft de aanvrager van de lening zelf in de woning wonen?', t, 'aanvragerBlijftWonen', 'aanvragerBlijftWonenToelichting', { toelichtBij: false }));
+  groepGH.appendChild(renderJaNeeVraag('H. Gaat of blijft de aanvrager van de lening zelf in de woning wonen?', t, 'aanvragerBlijftWonen', 'aanvragerBlijftWonenToelichting', { toelichtBij: false, chipSleutel: 'aanvragerBlijftWonen' }));
   wrap.appendChild(groepGH);
 
   const groepJ = el('div', { class: 'macro-groep' });
-  groepJ.appendChild(renderJaNeeVraag('J. Heb ik andere informatie ontdekt dan de informatie die hierboven staat?', t, 'andereInfoOntdekt', 'andereInfoOntdektToelichting'));
+  groepJ.appendChild(renderJaNeeVraag('J. Heb ik andere informatie ontdekt dan de informatie die hierboven staat?', t, 'andereInfoOntdekt', 'andereInfoOntdektToelichting', { chipSleutel: 'andereInfoOntdekt' }));
   wrap.appendChild(groepJ);
 
   return wrap;
@@ -4868,9 +4882,36 @@ function renderChipEditor(lijst, opslaanFn) {
   const wrap = el('div', { class: 'chip-editor' });
   const chipRij = el('div', { class: 'chip-rij' });
   lijst.forEach((item, i) => {
+    // Hernoemen (21-09-2026, Arno: "ik wil ze in de PWA ook kunnen verplaatsen en hernoemen") — op
+    // de chiptekst zelf klikken (niet het sleephandvat of de ✕) zet 'm om in een invoerveld, Enter/
+    // wegklikken bewaart, Escape annuleert. Verplaatsen kon al via het bestaande sleep-patroon
+    // hieronder.
+    const tekstSpan = el('span', {
+      class: 'chip-tekst', title: 'Klik om te hernoemen',
+      onclick: (e) => {
+        e.stopPropagation();
+        const invoer = document.createElement('input');
+        invoer.className = 'chip-hernoem-invoer';
+        invoer.value = item;
+        invoer.size = Math.max(item.length, 4);
+        tekstSpan.replaceWith(invoer);
+        invoer.focus();
+        invoer.select();
+        const bewaarHernoemd = () => {
+          const nieuw = invoer.value.trim();
+          if (nieuw && nieuw !== item) { lijst[i] = nieuw; opslaanFn(); }
+          render();
+        };
+        invoer.addEventListener('blur', bewaarHernoemd);
+        invoer.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); invoer.blur(); }
+          if (ev.key === 'Escape') { invoer.value = item; invoer.blur(); }
+        });
+      },
+    }, item);
     const chip = el('span', { class: 'chip chip-sleepbaar', draggable: 'true' },
       el('span', { class: 'chip-handvat' }, '⠿'),
-      item,
+      tekstSpan,
       el('button', {
         onclick: () => {
           if (!confirm(`"${item}" verwijderen uit deze macro-lijst?`)) return;
@@ -4920,9 +4961,14 @@ function voegOmschrijvingChipToe(veld, tekst, veldNaam = 'omschrijving') {
 // 13-09-2026: "graag ook voor energetisch". Geeft een lege wrapper terug (geen zichtbaar effect)
 // als dit def.key geen chip-lijst heeft — zo hoeft de aanroeper zelf niet te controleren of er iets
 // te tonen valt.
-function renderBouwdeelChips(veld, def, veldNaam) {
+// Generieke versie van renderBouwdeelChips, los van een bouwdeel-`def` (21-09-2026, Arno n.a.v. de
+// Provadie/taXapi-vergelijking: "op nog veel meer plekken staan macro's, wat kun je daar mee?") —
+// zelfde tik-chip + ✎-bewerkpatroon, nu met een losse `sleutel` zodat ook vrije-tekstvelden buiten
+// Bouwkundig/Energetisch (bv. Objectkenmerken' Ja/Nee-toelichtingen) hiervan gebruik kunnen maken
+// zonder een heel bouwdeel-object te hoeven veinzen.
+function renderChipsVoorVeld(veld, veldNaam, sleutel) {
   const wrap = el('div', {});
-  const chipLijst = state.macros.bouwdeelChips && state.macros.bouwdeelChips[def.key];
+  const chipLijst = state.macros.bouwdeelChips && state.macros.bouwdeelChips[sleutel];
   if (!chipLijst) return wrap;
   const header = el('div', { class: 'bouwdeel-chip-header' });
   const chipRij = el('div', { class: 'chip-rij bouwdeel-chip-rij' });
@@ -4937,13 +4983,16 @@ function renderBouwdeelChips(veld, def, veldNaam) {
   // voor PRECIES deze ene chip-lijst, i.p.v. naar een aparte instellingenpagina te moeten.
   header.appendChild(el('button', {
     type: 'button', class: 'chip-bewerk-knop', title: 'Chips bewerken',
-    onclick: () => { bouwdeelChipEditorOpen[def.key] = !bouwdeelChipEditorOpen[def.key]; render(); },
+    onclick: () => { bouwdeelChipEditorOpen[sleutel] = !bouwdeelChipEditorOpen[sleutel]; render(); },
   }, '✎'));
   wrap.appendChild(header);
-  if (bouwdeelChipEditorOpen[def.key]) {
+  if (bouwdeelChipEditorOpen[sleutel]) {
     wrap.appendChild(renderChipEditor(chipLijst, bewaarMacros));
   }
   return wrap;
+}
+function renderBouwdeelChips(veld, def, veldNaam) {
+  return renderChipsVoorVeld(veld, veldNaam, def.key);
 }
 // "Overnemen"-knop bij Trappen (13-09-2026, Arno's verzoek): leest de trap-toevoegingen die al bij
 // losse ruimtes in Indeling staan (bv. "vaste trap naar de eerste verdieping" bij Hal, "vlizotrap
@@ -5763,6 +5812,10 @@ function renderConditieEnAandachtRij(bkDef, bkVeld) {
   const wrap = el('div', { class: 'gecombineerd-conditie-stapel' }, conditieRij(bkVeld), fotoEnAandachtRij);
   if (slechteConditie) wrap.appendChild(renderFotoKnopRij('Achterstallig onderhoud ' + bkDef.label, 'Achterstallig onderhoud ' + bkDef.label, true));
   if (bkVeld.aandachtspuntenAanwezig === true) {
+    // Zelfde chip-lijst als de hoofdomschrijving van dit bouwdeel hergebruikt (21-09-2026, Arno
+    // n.a.v. Provadie/taXapi: "wat kun je daar mee?") — geen nieuwe macro-lijst nodig, een
+    // aandachtspunt bij bv. Kozijnen vraagt om dezelfde soort suggesties als de omschrijving zelf.
+    wrap.appendChild(renderChipsVoorVeld(bkVeld, 'aandachtspuntenToelichting', bkDef.key));
     const toelichting = el('textarea', {
       class: 'bouwdeel-omschrijving', placeholder: 'Toelichting aandachtspunt…',
       oninput: (e) => { bkVeld.aandachtspuntenToelichting = e.target.value; planOpslaan(); },
@@ -6484,26 +6537,16 @@ const MACRO_GROEPEN = [
 
 function renderMacrosTab() {
   const wrap = el('div', {});
-  wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Eigen keuzelijsten — gelden voor alle taxaties. Pas ze hier aan; de suggesties bij Meting en Indeling volgen automatisch mee.'));
+  wrap.appendChild(el('p', { class: 'macro-uitleg' }, 'Eigen keuzelijsten — gelden voor alle taxaties. Pas ze hier aan; de suggesties bij Meting en Indeling volgen automatisch mee. Sleep een chip om te verplaatsen, klik erop om te hernoemen.'));
   MACRO_GROEPEN.forEach(({ sleutel, titel, uitleg }) => {
     const groep = el('div', { class: 'macro-groep' });
     groep.appendChild(el('h3', {}, titel));
     groep.appendChild(el('p', { class: 'macro-uitleg', style: 'margin-bottom:8px;' }, uitleg));
-    const chipRij = el('div', { class: 'chip-rij' });
-    (state.macros[sleutel] || []).forEach((item, i) => {
-      chipRij.appendChild(el('span', { class: 'chip' }, item,
-        el('button', { onclick: () => { state.macros[sleutel].splice(i, 1); bewaarMacros(); render(); } }, '✕'),
-      ));
-    });
-    groep.appendChild(chipRij);
-    const invoer = el('input', { placeholder: 'Nieuw item toevoegen…' });
-    invoer.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || !invoer.value.trim()) return;
-      if (!state.macros[sleutel]) state.macros[sleutel] = [];
-      state.macros[sleutel].push(invoer.value.trim());
-      bewaarMacros(); render();
-    });
-    groep.appendChild(el('div', { class: 'chip-toevoegen' }, invoer));
+    if (!state.macros[sleutel]) state.macros[sleutel] = [];
+    // Hergebruikt dezelfde editor als overal elders in de app (21-09-2026, Arno: "ik wil ze in de
+    // PWA ook kunnen verplaatsen en hernoemen") — sleep-herordenen + hernoemen kwamen zo gratis mee
+    // i.p.v. hier een eigen, eenvoudigere chip-weergave te onderhouden.
+    groep.appendChild(renderChipEditor(state.macros[sleutel], bewaarMacros));
     wrap.appendChild(groep);
   });
   return wrap;
