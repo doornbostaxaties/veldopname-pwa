@@ -2882,26 +2882,29 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
   });
   koppelDatalist(ruimteNaamInput, 'ruimtes');
   rijBoven.appendChild(ruimteNaamInput);
-  // Afwerking + Trap (21-09-2026, Arno n.a.v. de Provadie-rondgang, tweede ronde: "mini pop-up
-  // direct bij de knop, niet het hele scherm bedekken") — geen lightbox-overlay meer, maar een klein
-  // paneeltje dat gewoon INLINE onder de ruimte-titelbalk verschijnt (zelfde in-/uitklap-patroon als
-  // de chip-editors elders: bouwdeelChipEditorOpen). Trap alleen tonen als er iets is om "naartoe"
-  // te wijzen.
-  rijBoven.appendChild(el('button', {
+  // Afwerking + Trap (21-09-2026, Arno n.a.v. de Provadie-rondgang; tweede ronde: "mini pop-up
+  // direct bij de knop, niet het hele scherm bedekken"; derde ronde: "rechterzijde, compact, meer
+  // kleur, bij ernaast klikken dichtklappen") — een eigen .ruimte-mini-wrap per knop, zodat (a) het
+  // paneel via align-self:flex-end rechts uitlijnt i.p.v. de volle kaartbreedte te pakken, en (b) de
+  // globale buiten-klik-sluiter hieronder kan herkennen of een klik BINNEN zo'n wrap viel. Trap
+  // alleen tonen als er iets is om "naartoe" te wijzen.
+  const afwerkingWrap = el('span', { class: 'ruimte-mini-wrap' }, el('button', {
     type: 'button', class: 'ruimte-mini-knop', title: 'Afwerking (vloer/muren/plafond)',
-    onclick: () => { if (ruimteAfwerkingOpen.has(ruimte)) ruimteAfwerkingOpen.delete(ruimte); else ruimteAfwerkingOpen.add(ruimte); render(); },
+    onclick: (e) => { e.stopPropagation(); if (ruimteAfwerkingOpen.has(ruimte)) ruimteAfwerkingOpen.delete(ruimte); else ruimteAfwerkingOpen.add(ruimte); render(); },
   }, '🎨'));
+  if (ruimteAfwerkingOpen.has(ruimte)) afwerkingWrap.appendChild(renderRuimteAfwerkingPanel(ruimte));
+  rijBoven.appendChild(afwerkingWrap);
   const andereWoonlagen = (state.taxatie.data.indeling.woonlagen || []).filter((w) => w.naam && w.naam.trim() && w.naam !== sleepInfo?.huidigeWoonlaagNaam);
   if (andereWoonlagen.length) {
-    rijBoven.appendChild(el('button', {
+    const trapWrap = el('span', { class: 'ruimte-mini-wrap' }, el('button', {
       type: 'button', class: 'ruimte-mini-knop', title: 'Trap toevoegen',
-      onclick: () => { if (ruimteTrapOpen.has(ruimte)) ruimteTrapOpen.delete(ruimte); else ruimteTrapOpen.add(ruimte); render(); },
+      onclick: (e) => { e.stopPropagation(); if (ruimteTrapOpen.has(ruimte)) ruimteTrapOpen.delete(ruimte); else ruimteTrapOpen.add(ruimte); render(); },
     }, '🪜'));
+    if (ruimteTrapOpen.has(ruimte)) trapWrap.appendChild(renderRuimteTrapPanel(ruimte, andereWoonlagen));
+    rijBoven.appendChild(trapWrap);
   }
   rijBoven.appendChild(el('button', { class: 'verwijder', onclick: verwijder }, '✕'));
   kaart.appendChild(rijBoven);
-  if (ruimteAfwerkingOpen.has(ruimte)) kaart.appendChild(renderRuimteAfwerkingPanel(ruimte));
-  if (ruimteTrapOpen.has(ruimte)) kaart.appendChild(renderRuimteTrapPanel(ruimte, andereWoonlagen));
   // Arno (13-09-2026): "Graag in de app de foto waar ie gemaakt is gelijk als miniatuur daar
   // weergeven. En optie voor nog een foto toevoegen." — zelfde bouwsteen als bij Bouwkundig/
   // Energetisch (renderFotoKnopRij): toont meteen miniaturen van al gemaakte foto's bij DEZE ruimte
@@ -2959,6 +2962,14 @@ function renderRuimteKaart(ruimte, verwijder, sleepInfo) {
 // bijhouden welk paneel openstaat — ephemere UI-status, niet opgeslagen.
 const ruimteAfwerkingOpen = new Set();
 const ruimteTrapOpen = new Set();
+// Buiten het paneel klikken sluit het weer (21-09-2026, derde ronde) — zelfde patroon als
+// instellingenMenuOpen's window-click-listener hierboven: de knoppen zelf roepen e.stopPropagation()
+// aan zodat het OPENEN-klikje deze listener niet meteen weer laat sluiten.
+window.addEventListener('click', (e) => {
+  if (!ruimteAfwerkingOpen.size && !ruimteTrapOpen.size) return;
+  const binnenWrap = e.composedPath().some((el) => el.classList && el.classList.contains('ruimte-mini-wrap'));
+  if (!binnenWrap) { ruimteAfwerkingOpen.clear(); ruimteTrapOpen.clear(); trapKeuzeState.clear(); render(); }
+});
 function renderRuimteAfwerkingPanel(ruimte) {
   const maakSelect = (label, huidig, opties, onChange) => {
     const sel = el('select', {

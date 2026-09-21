@@ -274,20 +274,27 @@ h1, h2, h3, p { margin: 0; }
 }
 .ruimte-status-badge.ok { background: var(--ok-bg); opacity: 1; }
 /* Afwerking/Trap mini-pop-up-knoppen (21-09-2026) — zelfde ronde, subtiele knop-look als
-   .chip-bewerk-knop, in de ruimte-titelbalk naast het invoerveld. */
+   .chip-bewerk-knop, in de ruimte-titelbalk naast het invoerveld. .ruimte-mini-wrap is het
+   positioneringsanker voor het paneel eronder (derde ronde: "rechterzijde, compact, bij ernaast
+   klikken dichtklappen") én de scope die de globale buiten-klik-sluiter herkent. */
+.ruimte-mini-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
 .ruimte-mini-knop {
   flex-shrink: 0; border: none; background: var(--bg); color: var(--text-faint); width: 26px; height: 26px;
   border-radius: 50%; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .ruimte-mini-knop:active { background: var(--navy-100); }
 /* Afwerking-/Trap-paneel (21-09-2026, tweede ronde: "mini pop-up direct bij de knop, niet het hele
-   scherm bedekken") — GEEN lightbox meer, gewoon inline onder de ruimte-titelbalk, zelfde look als
-   de bestaande chip-editor ".chip-editor" (stippellijn-kadertje) zodat meteen duidelijk is dat dit
-   een tijdelijk open klapblokje is, geen vast onderdeel van de kaart. */
+   scherm bedekken"; derde ronde: "rechterzijde (compact), meer kleur/nadruk") — zweeft als compact
+   kaartje rechts uitgelijnd onder de knop die 'm opende (position:absolute t.o.v. .ruimte-mini-wrap),
+   met de goud-accentkleur (dezelfde als de chips) i.p.v. het neutrale grijs van de eerdere versie. */
 .ruimte-mini-paneel {
-  display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px;
-  padding: 10px; border: 1px dashed var(--divider); border-radius: 10px; background: var(--surface-2);
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  width: 230px; max-width: 75vw; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  border: 1.5px solid var(--goud-700); border-radius: 12px; background: var(--goud-100);
+  box-shadow: 0 8px 22px rgba(0,0,0,.35);
 }
+.ruimte-mini-paneel .energetisch-veld-label { color: var(--goud-700); }
 .bijgebouw-info-ingeklapt { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .bijgebouw-info-ingeklapt .ruimte-naam-ingeklapt { font-size: 12.5px; }
 .bouwdeel-veld-label-rij { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
